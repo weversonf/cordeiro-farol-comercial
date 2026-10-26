@@ -104,6 +104,7 @@ const USUARIOS_PADRAO = [
 let currentUser = null;
 let usersList = [];
 let editingUserId = null;
+let editingUserEmail = null;
 let usuarioParaExcluir = null;
 
 // Inicialização
@@ -131,27 +132,40 @@ async function initStorage() {
             const e = String(row.email || '').toLowerCase();
             return e !== 'marcio.funghi@cordeiroguindastes.com' && e !== 'comercial@cordeiroguindastes.com.br';
           })
-          .map(row => ({
-            id: String(row.id),
-            nome: row.nome || 'Colaborador',
-            email: String(row.email).toLowerCase(),
-            cargo: row.cargo || (row.email.toLowerCase() === ADMIN_MASTER_EMAIL ? 'Administrador Master' : 'Colaborador'),
-            status: row.ativo === false ? 'inativo' : 'ativo',
-            permissoes: {
-              mapa: {
-                liberado: row.permissao_mapa !== false,
-                perfil: row.perfil_mapa || 'Operação'
-              },
-              nps: {
-                liberado: row.permissao_nps !== false,
-                perfil: row.perfil_nps || 'Visualizador'
-              },
-              funil: {
-                liberado: row.permissao_funil !== false,
-                perfil: row.perfil_funil || 'Comercial'
+          .map(row => {
+            const emailLow = String(row.email || '').toLowerCase();
+            const isNpsLiberado = row.perfil && row.perfil !== 'bloqueado' && row.perfil !== 'sem_acesso';
+            let npsPerfilLabel = 'Visualizador';
+            if (row.perfil === 'admin' || row.perfil === 'admin_master') npsPerfilLabel = 'Admin';
+            else if (row.perfil === 'comercial') npsPerfilLabel = 'Comercial';
+
+            let defaultCargo = 'Colaborador';
+            if (emailLow === ADMIN_MASTER_EMAIL) defaultCargo = 'Administrador Master';
+            else if (emailLow.includes('marcio')) defaultCargo = 'Head Comercial';
+            else if (emailLow.includes('erika')) defaultCargo = 'Gestão NPS & Qualidade';
+
+            return {
+              id: String(row.id),
+              nome: row.nome || 'Colaborador',
+              email: emailLow,
+              cargo: row.cargo || defaultCargo,
+              status: row.ativo === false ? 'inativo' : 'ativo',
+              permissoes: {
+                mapa: {
+                  liberado: row.permissao_mapa !== false,
+                  perfil: row.perfil_mapa || 'Operação'
+                },
+                nps: {
+                  liberado: isNpsLiberado,
+                  perfil: isNpsLiberado ? npsPerfilLabel : 'Sem Acesso'
+                },
+                funil: {
+                  liberado: row.permissao_funil !== false,
+                  perfil: row.perfil_funil || 'Comercial'
+                }
               }
-            }
-          }));
+            };
+          });
 
         loadedFromCloud = true;
       }
@@ -580,16 +594,15 @@ async function handleSalvarNovoUsuario(e) {
   // Salva no Supabase se disponível
   if (sbClient) {
     try {
+      const perfilNpsDb = !npsLiberado ? 'bloqueado' : (npsPerfil === 'Admin' ? 'admin' : (npsPerfil === 'Comercial' ? 'comercial' : 'visualizador'));
       await sbClient.from('usuarios_nps').insert([{
         nome,
         email,
-        cargo,
         senha: 'Cordeiro@2026',
         ativo: true,
+        perfil: perfilNpsDb,
         permissao_mapa: mapaLiberado,
         perfil_mapa: mapaPerfil,
-        permissao_nps: npsLiberado,
-        perfil_nps: npsPerfil,
         permissao_funil: funilLiberado,
         perfil_funil: funilPerfil
       }]);
@@ -606,10 +619,14 @@ async function handleSalvarNovoUsuario(e) {
 }
 
 window.abrirEdicaoUsuario = function(id) {
-  const u = usersList.find(x => x.id === id);
-  if (!u) return;
+  const u = usersList.find(x => String(x.id) === String(id) || String(x.email).toLowerCase() === String(id).toLowerCase());
+  if (!u) {
+    console.error('Usuário não encontrado para edição:', id);
+    return;
+  }
 
-  editingUserId = id;
+  editingUserId = String(u.id);
+  editingUserEmail = String(u.email).toLowerCase();
 
   const nomeDisplay = document.getElementById('editNomeDisplay');
   const emailDisplay = document.getElementById('editEmailDisplay');
@@ -658,57 +675,81 @@ window.abrirEdicaoUsuario = function(id) {
 
 async function handleSalvarEdicaoUsuario(e) {
   e.preventDefault();
-  const u = usersList.find(x => x.id === editingUserId);
-  if (!u) return;
+  const btnSubmit = document.getElementById('btnSalvarEdicaoUsuario');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<i class="ph ph-spinner-gap animate-spin"></i> <span>Salvando...</span>';
+  }
 
-  u.cargo = document.getElementById('editCargo').value.trim();
+  try {
+    const emailAlvo = (document.getElementById('editEmail').value || editingUserEmail || '').trim().toLowerCase();
+    const u = usersList.find(x => String(x.id) === String(editingUserId) || String(x.email).toLowerCase() === emailAlvo);
+    if (!u) {
+      showToast('Erro: Colaborador não encontrado para salvar.', 'error');
+      return;
+    }
 
-  const mapaLiberado = document.getElementById('editPermMapa').checked;
-  const mapaPerfil = document.getElementById('editPerfilMapa').value;
+    const novoCargo = (document.getElementById('editCargo').value || '').trim();
+    if (novoCargo) u.cargo = novoCargo;
 
-  const npsLiberado = document.getElementById('editPermNps').checked;
-  const npsPerfil = document.getElementById('editPerfilNps').value;
+    const mapaLiberado = document.getElementById('editPermMapa').checked;
+    const mapaPerfil = document.getElementById('editPerfilMapa').value;
 
-  const funilLiberado = document.getElementById('editPermFunil').checked;
-  const funilPerfil = document.getElementById('editPerfilFunil').value;
+    const npsLiberado = document.getElementById('editPermNps').checked;
+    const npsPerfil = document.getElementById('editPerfilNps').value;
 
-  u.permissoes = {
-    mapa: { liberado: mapaLiberado, perfil: mapaLiberado ? mapaPerfil : 'Sem Acesso' },
-    nps: { liberado: npsLiberado, perfil: npsLiberado ? npsPerfil : 'Sem Acesso' },
-    funil: { liberado: funilLiberado, perfil: funilLiberado ? funilPerfil : 'Sem Acesso' }
-  };
+    const funilLiberado = document.getElementById('editPermFunil').checked;
+    const funilPerfil = document.getElementById('editPerfilFunil').value;
 
-  // Salva no Supabase se conectado
-  if (sbClient) {
-    try {
-      await sbClient
-        .from('usuarios_nps')
-        .update({
-          cargo: u.cargo,
-          permissao_mapa: mapaLiberado,
-          perfil_mapa: mapaPerfil,
-          permissao_nps: npsLiberado,
-          perfil_nps: npsPerfil,
-          permissao_funil: funilLiberado,
-          perfil_funil: funilPerfil
-        })
-        .ilike('email', u.email);
-    } catch (err) {
-      console.warn('Erro ao atualizar Supabase, mantendo local.', err);
+    u.permissoes = {
+      mapa: { liberado: mapaLiberado, perfil: mapaLiberado ? mapaPerfil : 'Sem Acesso' },
+      nps: { liberado: npsLiberado, perfil: npsLiberado ? npsPerfil : 'Sem Acesso' },
+      funil: { liberado: funilLiberado, perfil: funilLiberado ? funilPerfil : 'Sem Acesso' }
+    };
+
+    // Salva no Supabase se conectado (usando colunas válidas)
+    if (sbClient) {
+      try {
+        const perfilNpsDb = !npsLiberado ? 'bloqueado' : (npsPerfil === 'Admin' ? 'admin' : (npsPerfil === 'Comercial' ? 'comercial' : 'visualizador'));
+        const { error: dbError } = await sbClient
+          .from('usuarios_nps')
+          .update({
+            perfil: perfilNpsDb,
+            permissao_mapa: mapaLiberado,
+            perfil_mapa: mapaPerfil,
+            permissao_funil: funilLiberado,
+            perfil_funil: funilPerfil
+          })
+          .ilike('email', u.email);
+
+        if (dbError) {
+          console.warn('Aviso Supabase ao sincronizar:', dbError);
+        }
+      } catch (err) {
+        console.warn('Erro ao atualizar Supabase, mantendo sincronização local.', err);
+      }
+    }
+
+    salvarUsuariosStorage();
+    fecharModal('modalEditarUsuario');
+    renderTabelaUsuarios();
+
+    if (currentUser && (String(currentUser.id) === String(u.id) || currentUser.email.toLowerCase() === u.email.toLowerCase())) {
+      currentUser = u;
+      localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(currentUser));
+      renderLauncher();
+    }
+
+    showToast(`Permissões de ${u.nome} sincronizadas com sucesso!`, 'success');
+  } catch (errGeral) {
+    console.error('Erro ao salvar permissões:', errGeral);
+    showToast('Falha ao salvar: ' + errGeral.message, 'error');
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = '<i class="ph ph-check-bold"></i> <span>Salvar Alterações</span>';
     }
   }
-
-  salvarUsuariosStorage();
-  fecharModal('modalEditarUsuario');
-  renderTabelaUsuarios();
-
-  if (currentUser && currentUser.id === u.id) {
-    currentUser = u;
-    localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(currentUser));
-    renderLauncher();
-  }
-
-  showToast(`Permissões de ${u.nome} sincronizadas com sucesso!`, 'success');
 }
 
 async function toggleStatusUsuario(id) {
