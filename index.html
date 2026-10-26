@@ -60,7 +60,7 @@
               required 
               placeholder="••••••••"
               autocomplete="current-password"
-              value="cordeiro2026"
+              value="Cordeiro@2026"
             >
             <button type="button" id="btnToggleEye" class="btn-toggle-eye" title="Mostrar/Ocultar Senha">
               <i class="ph ph-eye"></i>
@@ -292,14 +292,14 @@
 
 
   <!-- ======================================================================
-       3. MODAIS
+       3. MODAIS REFINADOS & SEM SCROLLBAR RUIM
        ====================================================================== -->
 
   <!-- Modal Esqueci Minha Senha -->
   <div id="modalEsqueci" class="modal-overlay">
     <div class="modal-content" style="max-width: 420px;">
       <div class="modal-header">
-        <h3>Recuperação de Senha</h3>
+        <h3><i class="ph ph-key"></i> Recuperação de Senha</h3>
         <button type="button" id="btnFecharEsqueci" class="btn-close-modal"><i class="ph ph-x"></i></button>
       </div>
       <form id="formEsqueci" class="modal-form-grid">
@@ -317,179 +317,250 @@
     </div>
   </div>
 
-  <!-- Modal Novo Colaborador -->
+  <!-- Modal Novo Colaborador (Refinado) -->
   <div id="modalNovoUsuario" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Cadastrar Novo Colaborador no Farol</h3>
-        <button type="button" id="btnFecharNovo" class="btn-close-modal"><i class="ph ph-x"></i></button>
+        <h3><i class="ph ph-user-plus"></i> Novo Colaborador</h3>
+        <button type="button" id="btnFecharNovo" class="btn-close-modal" title="Fechar"><i class="ph ph-x"></i></button>
       </div>
-      <form id="formNovoUsuario" class="modal-form-grid">
-        <div class="form-field">
-          <label for="novoNome">Nome Completo *</label>
-          <input type="text" id="novoNome" required placeholder="Ex: Roberto Silva">
+      <form id="formNovoUsuario">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div class="form-field">
+            <label for="novoNome">Nome Completo *</label>
+            <input type="text" id="novoNome" required placeholder="Ex: Roberto Silva">
+          </div>
+
+          <div class="form-field">
+            <label for="novoEmail">E-mail Corporativo *</label>
+            <input type="email" id="novoEmail" required placeholder="roberto.silva@cordeiroguindastes.com.br">
+          </div>
         </div>
 
-        <div class="form-field">
-          <label for="novoEmail">E-mail Corporativo *</label>
-          <input type="email" id="novoEmail" required placeholder="roberto.silva@cordeiroguindastes.com.br">
-        </div>
-
-        <div class="form-field">
+        <div class="form-field" style="margin-bottom: 18px;">
           <label for="novoCargo">Cargo / Função *</label>
           <input type="text" id="novoCargo" required placeholder="Ex: Supervisor Operacional">
         </div>
 
-        <h4 style="font-size: 13px; font-weight: 700; margin-top: 10px; color: var(--accent-gold);">
-          Matriz de Permissões no Farol
-        </h4>
-
-        <!-- Permissão Mapa de Ocupação -->
-        <div class="app-permission-box">
-          <div class="permission-toggle-header">
-            <span class="permission-title"><i class="ph ph-crane" style="color:#38bdf8;"></i> Mapa de Ocupação</span>
-            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px;">
-              <input type="checkbox" id="novoPermMapa" checked> Liberar Acesso
-            </label>
-          </div>
-          <div class="form-field">
-            <label for="novoPerfilMapa">Nível de Permissão:</label>
-            <select id="novoPerfilMapa">
-              <option value="Operação">Operação / CCO</option>
-              <option value="Comercial">Comercial</option>
-              <option value="Manutenção">Manutenção</option>
-              <option value="Admin">Administrador Master</option>
-            </select>
-          </div>
+        <div class="modal-section-title">
+          <i class="ph ph-shield-check"></i>
+          <span>Matriz de Permissões no Farol</span>
         </div>
 
-        <!-- Permissão NPS -->
-        <div class="app-permission-box">
-          <div class="permission-toggle-header">
-            <span class="permission-title"><i class="ph ph-star" style="color:#f59e0b;"></i> Pesquisa NPS</span>
-            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px;">
-              <input type="checkbox" id="novoPermNps"> Liberar Acesso
-            </label>
+        <div class="app-permissions-stack">
+          <!-- Mapa -->
+          <div class="app-permission-card ativo" id="cardNovoMapa">
+            <div class="perm-card-top">
+              <div class="perm-card-brand">
+                <div class="perm-card-icon icon-mapa"><i class="ph ph-crane"></i></div>
+                <div>
+                  <div class="perm-card-title">Mapa de Ocupação</div>
+                  <div class="perm-card-sub">Logística, Frota & Alocação</div>
+                </div>
+              </div>
+              <label class="switch-control" title="Liberar Acesso">
+                <input type="checkbox" id="novoPermMapa" checked onchange="document.getElementById('cardNovoMapa').className = this.checked ? 'app-permission-card ativo' : 'app-permission-card inativo'">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <div class="perm-card-bottom">
+              <label for="novoPerfilMapa">Nível de Permissão:</label>
+              <select id="novoPerfilMapa" class="select-role-custom">
+                <option value="Operação">Operação / CCO</option>
+                <option value="Comercial">Comercial</option>
+                <option value="Manutenção">Manutenção</option>
+                <option value="Admin">Administrador Master</option>
+              </select>
+            </div>
           </div>
-          <div class="form-field">
-            <label for="novoPerfilNps">Nível de Permissão:</label>
-            <select id="novoPerfilNps">
-              <option value="Comercial">Comercial NPS</option>
-              <option value="Visualizador">Visualizador de Relatórios</option>
-              <option value="Admin">Administrador NPS</option>
-            </select>
-          </div>
-        </div>
 
-        <!-- Permissão Funil de Vendas -->
-        <div class="app-permission-box">
-          <div class="permission-toggle-header">
-            <span class="permission-title"><i class="ph ph-chart-pie-slice" style="color:#10b981;"></i> Funil de Vendas</span>
-            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px;">
-              <input type="checkbox" id="novoPermFunil" checked> Liberar Acesso
-            </label>
+          <!-- NPS -->
+          <div class="app-permission-card inativo" id="cardNovoNps">
+            <div class="perm-card-top">
+              <div class="perm-card-brand">
+                <div class="perm-card-icon icon-nps"><i class="ph ph-star"></i></div>
+                <div>
+                  <div class="perm-card-title">Pesquisa NPS</div>
+                  <div class="perm-card-sub">Satisfação & Relacionamento</div>
+                </div>
+              </div>
+              <label class="switch-control" title="Liberar Acesso">
+                <input type="checkbox" id="novoPermNps" onchange="document.getElementById('cardNovoNps').className = this.checked ? 'app-permission-card ativo' : 'app-permission-card inativo'">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <div class="perm-card-bottom">
+              <label for="novoPerfilNps">Nível de Permissão:</label>
+              <select id="novoPerfilNps" class="select-role-custom">
+                <option value="Comercial">Comercial NPS</option>
+                <option value="Visualizador">Visualizador de Relatórios</option>
+                <option value="Admin">Administrador NPS</option>
+              </select>
+            </div>
           </div>
-          <div class="form-field">
-            <label for="novoPerfilFunil">Nível de Permissão:</label>
-            <select id="novoPerfilFunil">
-              <option value="Comercial">Executivo Comercial</option>
-              <option value="Gestor">Gestor / Diretoria</option>
-              <option value="Admin">Administrador Geral</option>
-            </select>
+
+          <!-- Funil -->
+          <div class="app-permission-card ativo" id="cardNovoFunil">
+            <div class="perm-card-top">
+              <div class="perm-card-brand">
+                <div class="perm-card-icon icon-funil"><i class="ph ph-chart-pie-slice"></i></div>
+                <div>
+                  <div class="perm-card-title">Funil de Vendas</div>
+                  <div class="perm-card-sub">Comercial, Pipeline & Metas</div>
+                </div>
+              </div>
+              <label class="switch-control" title="Liberar Acesso">
+                <input type="checkbox" id="novoPermFunil" checked onchange="document.getElementById('cardNovoFunil').className = this.checked ? 'app-permission-card ativo' : 'app-permission-card inativo'">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <div class="perm-card-bottom">
+              <label for="novoPerfilFunil">Nível de Permissão:</label>
+              <select id="novoPerfilFunil" class="select-role-custom">
+                <option value="Comercial">Executivo Comercial</option>
+                <option value="Gestor">Gestor / Diretoria</option>
+                <option value="Admin">Administrador Geral</option>
+              </select>
+            </div>
           </div>
         </div>
 
         <div class="modal-footer">
           <button type="button" id="btnCancelarNovo" class="btn-modal-cancel">Cancelar</button>
-          <button type="submit" class="btn-modal-submit">Cadastrar Colaborador</button>
+          <button type="submit" class="btn-modal-submit">
+            <i class="ph ph-plus-circle"></i>
+            <span>Cadastrar Colaborador</span>
+          </button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Modal Editar Permissões -->
+  <!-- Modal Editar Permissões (Totalmente Redesenhado) -->
   <div id="modalEditarUsuario" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Editar Acessos no Farol</h3>
-        <button type="button" id="btnFecharEditar" class="btn-close-modal"><i class="ph ph-x"></i></button>
+        <h3><i class="ph ph-sliders-horizontal"></i> Editar Acessos no Farol</h3>
+        <button type="button" id="btnFecharEditar" class="btn-close-modal" title="Fechar"><i class="ph ph-x"></i></button>
       </div>
-      <form id="formEditarUsuario" class="modal-form-grid">
-        <div class="form-field">
-          <label>Colaborador</label>
-          <input type="text" id="editNome" disabled style="opacity: 0.7;">
-        </div>
-        <div class="form-field">
-          <label>E-mail Corporativo</label>
-          <input type="email" id="editEmail" disabled style="opacity: 0.7;">
-        </div>
-        <div class="form-field">
-          <label for="editCargo">Cargo / Função *</label>
-          <input type="text" id="editCargo" required>
-        </div>
-
-        <h4 style="font-size: 13px; font-weight: 700; margin-top: 10px; color: var(--accent-gold);">
-          Atualizar Permissões por Sistema
-        </h4>
-
-        <!-- Mapa -->
-        <div class="app-permission-box">
-          <div class="permission-toggle-header">
-            <span class="permission-title"><i class="ph ph-crane" style="color:#38bdf8;"></i> Mapa de Ocupação</span>
-            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px;">
-              <input type="checkbox" id="editPermMapa"> Liberar Acesso
-            </label>
+      <form id="formEditarUsuario">
+        
+        <!-- Card Resumo do Usuário (Substitui inputs feios) -->
+        <div class="user-modal-summary">
+          <div class="summary-left">
+            <div class="summary-avatar">
+              <i class="ph ph-user"></i>
+            </div>
+            <div class="summary-details">
+              <div id="editNomeDisplay" class="summary-name">Colaborador</div>
+              <div id="editEmailDisplay" class="summary-email">
+                <i class="ph ph-envelope-simple"></i>
+                <span>email@cordeiroguindastes.com.br</span>
+              </div>
+            </div>
           </div>
-          <div class="form-field">
-            <label for="editPerfilMapa">Nível:</label>
-            <select id="editPerfilMapa">
-              <option value="Operação">Operação / CCO</option>
-              <option value="Comercial">Comercial</option>
-              <option value="Manutenção">Manutenção</option>
-              <option value="Admin">Administrador Master</option>
-            </select>
+          <div class="summary-cargo-box">
+            <label for="editCargo">Cargo / Função *</label>
+            <input type="text" id="editCargo" required placeholder="Ex: Executivo Comercial">
           </div>
         </div>
 
-        <!-- NPS -->
-        <div class="app-permission-box">
-          <div class="permission-toggle-header">
-            <span class="permission-title"><i class="ph ph-star" style="color:#f59e0b;"></i> Pesquisa NPS</span>
-            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px;">
-              <input type="checkbox" id="editPermNps"> Liberar Acesso
-            </label>
-          </div>
-          <div class="form-field">
-            <label for="editPerfilNps">Nível:</label>
-            <select id="editPerfilNps">
-              <option value="Comercial">Comercial NPS</option>
-              <option value="Visualizador">Visualizador de Relatórios</option>
-              <option value="Admin">Administrador NPS</option>
-            </select>
-          </div>
+        <!-- Campos ocultos para integridade -->
+        <input type="hidden" id="editNome">
+        <input type="hidden" id="editEmail">
+
+        <div class="modal-section-title">
+          <i class="ph ph-shield-check"></i>
+          <span>Permissões por Ferramenta</span>
         </div>
 
-        <!-- Funil -->
-        <div class="app-permission-box">
-          <div class="permission-toggle-header">
-            <span class="permission-title"><i class="ph ph-chart-pie-slice" style="color:#10b981;"></i> Funil de Vendas</span>
-            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px;">
-              <input type="checkbox" id="editPermFunil"> Liberar Acesso
-            </label>
+        <div class="app-permissions-stack">
+          
+          <!-- Card Mapa -->
+          <div class="app-permission-card" id="cardEditMapa">
+            <div class="perm-card-top">
+              <div class="perm-card-brand">
+                <div class="perm-card-icon icon-mapa"><i class="ph ph-crane"></i></div>
+                <div>
+                  <div class="perm-card-title">Mapa de Ocupação</div>
+                  <div class="perm-card-sub">Logística, Frota & Alocação</div>
+                </div>
+              </div>
+              <label class="switch-control" title="Ativar ou desativar acesso">
+                <input type="checkbox" id="editPermMapa">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <div class="perm-card-bottom">
+              <label for="editPerfilMapa">Nível de Acesso:</label>
+              <select id="editPerfilMapa" class="select-role-custom">
+                <option value="Operação">Operação / CCO</option>
+                <option value="Comercial">Comercial</option>
+                <option value="Manutenção">Manutenção</option>
+                <option value="Admin">Administrador Master</option>
+              </select>
+            </div>
           </div>
-          <div class="form-field">
-            <label for="editPerfilFunil">Nível:</label>
-            <select id="editPerfilFunil">
-              <option value="Comercial">Executivo Comercial</option>
-              <option value="Gestor">Gestor / Diretoria</option>
-              <option value="Admin">Administrador Geral</option>
-            </select>
+
+          <!-- Card NPS -->
+          <div class="app-permission-card" id="cardEditNps">
+            <div class="perm-card-top">
+              <div class="perm-card-brand">
+                <div class="perm-card-icon icon-nps"><i class="ph ph-star"></i></div>
+                <div>
+                  <div class="perm-card-title">Pesquisa NPS</div>
+                  <div class="perm-card-sub">Satisfação & Relacionamento</div>
+                </div>
+              </div>
+              <label class="switch-control" title="Ativar ou desativar acesso">
+                <input type="checkbox" id="editPermNps">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <div class="perm-card-bottom">
+              <label for="editPerfilNps">Nível de Acesso:</label>
+              <select id="editPerfilNps" class="select-role-custom">
+                <option value="Comercial">Comercial NPS</option>
+                <option value="Visualizador">Visualizador de Relatórios</option>
+                <option value="Admin">Administrador NPS</option>
+              </select>
+            </div>
           </div>
+
+          <!-- Card Funil -->
+          <div class="app-permission-card" id="cardEditFunil">
+            <div class="perm-card-top">
+              <div class="perm-card-brand">
+                <div class="perm-card-icon icon-funil"><i class="ph ph-chart-pie-slice"></i></div>
+                <div>
+                  <div class="perm-card-title">Funil de Vendas</div>
+                  <div class="perm-card-sub">Comercial, Pipeline & Metas</div>
+                </div>
+              </div>
+              <label class="switch-control" title="Ativar ou desativar acesso">
+                <input type="checkbox" id="editPermFunil">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <div class="perm-card-bottom">
+              <label for="editPerfilFunil">Nível de Acesso:</label>
+              <select id="editPerfilFunil" class="select-role-custom">
+                <option value="Comercial">Executivo Comercial</option>
+                <option value="Gestor">Gestor / Diretoria</option>
+                <option value="Admin">Administrador Geral</option>
+              </select>
+            </div>
+          </div>
+
         </div>
 
         <div class="modal-footer">
           <button type="button" id="btnCancelarEditar" class="btn-modal-cancel">Cancelar</button>
-          <button type="submit" class="btn-modal-submit">Salvar Alterações</button>
+          <button type="submit" class="btn-modal-submit">
+            <i class="ph ph-check-bold"></i>
+            <span>Salvar Alterações</span>
+          </button>
         </div>
       </form>
     </div>

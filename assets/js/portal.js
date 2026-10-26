@@ -105,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initStorage();
   checkSession();
   setupEventListeners();
+  setupModalSwitches();
 });
 
 function initStorage() {
@@ -115,7 +116,6 @@ function initStorage() {
   } else {
     try {
       usersList = JSON.parse(storedUsers);
-      // Remove e-mails excluídos pelo Weverson se ainda existirem em cache
       usersList = usersList.filter(u => {
         const e = u.email.toLowerCase();
         return e !== 'marcio.funghi@cordeiroguindastes.com' && e !== 'comercial@cordeiroguindastes.com.br';
@@ -153,7 +153,7 @@ function showAppScreen() {
   document.getElementById('headerUserName').textContent = currentUser.nome;
   document.getElementById('headerUserRole').textContent = currentUser.cargo;
 
-  // REGRA DE OURO: Apenas Weverson Feitosa tem acesso à Gestão de Perfis & Acessos (IAM)
+  // Apenas Weverson Feitosa tem acesso à aba de Gestão de Perfis & Acessos
   const tabGestaoBtn = document.getElementById('tabGestaoBtn');
   const isMasterAdmin = currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL;
 
@@ -189,7 +189,6 @@ function setupEventListeners() {
   // Abas
   document.getElementById('tabLauncherBtn').addEventListener('click', () => switchTab('launcher'));
   document.getElementById('tabGestaoBtn').addEventListener('click', () => {
-    // Segurança: trava caso outro usuário tente forçar clique
     if (currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
       switchTab('gestao');
     }
@@ -220,6 +219,24 @@ function setupEventListeners() {
   });
 }
 
+function setupModalSwitches() {
+  // Toggle dinâmico para edição
+  const setupSwitch = (switchId, cardId, selectId) => {
+    const el = document.getElementById(switchId);
+    if (!el) return;
+    el.addEventListener('change', () => {
+      const card = document.getElementById(cardId);
+      const sel = document.getElementById(selectId);
+      if (card) card.className = el.checked ? 'app-permission-card ativo' : 'app-permission-card inativo';
+      if (sel) sel.disabled = !el.checked;
+    });
+  };
+
+  setupSwitch('editPermMapa', 'cardEditMapa', 'editPerfilMapa');
+  setupSwitch('editPermNps', 'cardEditNps', 'editPerfilNps');
+  setupSwitch('editPermFunil', 'cardEditFunil', 'editPerfilFunil');
+}
+
 async function handleLogin(e) {
   e.preventDefault();
   const email = document.getElementById('loginEmail').value.trim().toLowerCase();
@@ -228,21 +245,18 @@ async function handleLogin(e) {
 
   erroBox.style.display = 'none';
 
-  // 1. Validação estrita do domínio corporativo
   if (!validarDominioCorporativo(email)) {
     erroBox.textContent = 'Acesso restrito. Utilize seu e-mail oficial @cordeiroguindastes.com.br ou @cordeiroguindastes.com';
     erroBox.style.display = 'flex';
     return;
   }
 
-  // 2. Bloqueio de e-mails excluídos
   if (email === 'marcio.funghi@cordeiroguindastes.com' || email === 'comercial@cordeiroguindastes.com.br') {
     erroBox.textContent = 'Este e-mail corporativo não está ativo no Farol.';
     erroBox.style.display = 'flex';
     return;
   }
 
-  // 3. Busca na base de usuários
   const user = usersList.find(u => u.email.toLowerCase() === email);
 
   if (!user) {
@@ -257,7 +271,6 @@ async function handleLogin(e) {
     return;
   }
 
-  // 4. Autenticação e Sessão
   currentUser = user;
   localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(currentUser));
   showToast(`Autenticado com sucesso. Bem-vindo, ${user.nome}!`, 'success');
@@ -366,7 +379,6 @@ function getSSORedirectUrl(appKey) {
 }
 
 function renderTabelaUsuarios(termoBusca = '') {
-  // Proteção: apenas Weverson pode renderizar e manipular a tabela IAM
   if (currentUser.email.toLowerCase() !== ADMIN_MASTER_EMAIL) return;
 
   const tbody = document.getElementById('tbodyUsuarios');
@@ -386,15 +398,15 @@ function renderTabelaUsuarios(termoBusca = '') {
   filtrados.forEach(u => {
     const tr = document.createElement('tr');
 
-    const permMapa = u.permissoes.mapa.liberado 
+    const permMapa = u.permissoes.mapa && u.permissoes.mapa.liberado 
       ? `<span class="badge-role-app ativo-mapa"><i class="ph ph-check-circle"></i> ${u.permissoes.mapa.perfil}</span>`
       : `<span class="badge-role-app bloqueado"><i class="ph ph-x"></i> Bloqueado</span>`;
 
-    const permNps = u.permissoes.nps.liberado 
+    const permNps = u.permissoes.nps && u.permissoes.nps.liberado 
       ? `<span class="badge-role-app ativo-nps"><i class="ph ph-check-circle"></i> ${u.permissoes.nps.perfil}</span>`
       : `<span class="badge-role-app bloqueado"><i class="ph ph-x"></i> Bloqueado</span>`;
 
-    const permFunil = u.permissoes.funil.liberado 
+    const permFunil = u.permissoes.funil && u.permissoes.funil.liberado 
       ? `<span class="badge-role-app ativo-funil"><i class="ph ph-check-circle"></i> ${u.permissoes.funil.perfil}</span>`
       : `<span class="badge-role-app bloqueado"><i class="ph ph-x"></i> Bloqueado</span>`;
 
@@ -486,18 +498,49 @@ window.abrirEdicaoUsuario = function(id) {
   if (!u) return;
 
   editingUserId = id;
+
+  // Atualiza Card de Resumo do Usuário
+  const nomeDisplay = document.getElementById('editNomeDisplay');
+  const emailDisplay = document.getElementById('editEmailDisplay');
+  if (nomeDisplay) nomeDisplay.textContent = u.nome;
+  if (emailDisplay) emailDisplay.innerHTML = `<i class="ph ph-envelope-simple"></i> <span>${u.email}</span>`;
+
   document.getElementById('editNome').value = u.nome;
   document.getElementById('editEmail').value = u.email;
   document.getElementById('editCargo').value = u.cargo;
 
-  document.getElementById('editPermMapa').checked = u.permissoes.mapa.liberado;
-  document.getElementById('editPerfilMapa').value = u.permissoes.mapa.liberado ? u.permissoes.mapa.perfil : 'Operação';
+  // Mapa
+  const mapaEl = document.getElementById('editPermMapa');
+  mapaEl.checked = !!(u.permissoes.mapa && u.permissoes.mapa.liberado);
+  const cardMapa = document.getElementById('cardEditMapa');
+  if (cardMapa) cardMapa.className = mapaEl.checked ? 'app-permission-card ativo' : 'app-permission-card inativo';
+  const selMapa = document.getElementById('editPerfilMapa');
+  if (selMapa) {
+    selMapa.value = mapaEl.checked ? u.permissoes.mapa.perfil : 'Operação';
+    selMapa.disabled = !mapaEl.checked;
+  }
 
-  document.getElementById('editPermNps').checked = u.permissoes.nps.liberado;
-  document.getElementById('editPerfilNps').value = u.permissoes.nps.liberado ? u.permissoes.nps.perfil : 'Comercial';
+  // NPS
+  const npsEl = document.getElementById('editPermNps');
+  npsEl.checked = !!(u.permissoes.nps && u.permissoes.nps.liberado);
+  const cardNps = document.getElementById('cardEditNps');
+  if (cardNps) cardNps.className = npsEl.checked ? 'app-permission-card ativo' : 'app-permission-card inativo';
+  const selNps = document.getElementById('editPerfilNps');
+  if (selNps) {
+    selNps.value = npsEl.checked ? u.permissoes.nps.perfil : 'Comercial';
+    selNps.disabled = !npsEl.checked;
+  }
 
-  document.getElementById('editPermFunil').checked = u.permissoes.funil.liberado;
-  document.getElementById('editPerfilFunil').value = u.permissoes.funil.liberado ? u.permissoes.funil.perfil : 'Comercial';
+  // Funil
+  const funilEl = document.getElementById('editPermFunil');
+  funilEl.checked = !!(u.permissoes.funil && u.permissoes.funil.liberado);
+  const cardFunil = document.getElementById('cardEditFunil');
+  if (cardFunil) cardFunil.className = funilEl.checked ? 'app-permission-card ativo' : 'app-permission-card inativo';
+  const selFunil = document.getElementById('editPerfilFunil');
+  if (selFunil) {
+    selFunil.value = funilEl.checked ? u.permissoes.funil.perfil : 'Comercial';
+    selFunil.disabled = !funilEl.checked;
+  }
 
   abrirModal('modalEditarUsuario');
 };
