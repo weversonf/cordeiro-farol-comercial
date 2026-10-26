@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farol Cordeiro Comercial · Grupo Cordeiro</title>
+  
+  <!-- Favicon Cordeiro -->
+  <link rel="icon" type="image/png" href="assets/img/logo-cordeiro-icon.png">
+  
+  <!-- Phosphor Icons CDN Oficial -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <!-- Estilos Principais -->
+  <link rel="stylesheet" href="assets/css/portal.css">
+</head>
+<body>
+
+  <!-- ======================================================================
+       1. TELA DE LOGIN OFICIAL - FAROL CORDEIRO COMERCIAL
+       ====================================================================== -->
+  <div id="telaLogin" class="tela-login-cordeiro">
+    <div class="login-card-cordeiro">
+      
+      <!-- Logotipo Cordeiro -->
+      <div class="login-logo-box-cordeiro">
+        <img src="assets/img/logo-cordeiro-branca.png" alt="Grupo Cordeiro" onerror="this.src='assets/img/logo-cordeiro-full-branca.png'">
+      </div>
+
+      <div class="login-header-cordeiro">
+        <h2>Farol Comercial</h2>
+        <p>Visão Integrada de Indicadores, Ocupação & Vendas</p>
+      </div>
+
+      <!-- Caixa de Erro -->
+      <div id="loginErro" class="login-erro-cordeiro" style="display: none;"></div>
+
+      <form id="formLogin" class="login-form-cordeiro">
+        
+        <!-- Campo E-mail -->
+        <div class="login-field-cordeiro">
+          <label for="loginEmail">E-mail corporativo</label>
+          <input 
+            type="email" 
+            id="loginEmail" 
+            required 
+            placeholder="seu.email@cordeiroguindastes.com.br"
+            autocomplete="username"
+            value="weverson.feitosa@cordeiroguindastes.com.br"
+          >
+        </div>
+
+        <!-- Campo Senha (largura total 100% igual ao e-mail) -->
+        <div class="login-field-cordeiro">
+          <label for="loginSenha">Senha</label>
+          <div class="password-input-wrapper">
+            <input 
+              type="password" 
+              id="loginSenha" 
+              required 
+              placeholder="••••••••"
+              autocomplete="current-password"
+              value="cordeiro2026"
+            >
+            <button type="button" id="btnToggleEye" class="btn-toggle-eye" title="Mostrar/Ocultar Senha">
+              <i class="ph ph-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Botão Acessar Painel -->
+        <button type="submit" class="login-btn-submit-cordeiro">
+          <span>Acessar Painel</span>
+          <i class="ph ph-arrow-right"></i>
+        </button>
+
+        <!-- "Esqueci minha senha" centralizado logo abaixo do botão -->
+        <div class="esqueci-senha-box">
+          <button type="button" id="btnAbrirEsqueci" class="btn-link-auth">
+            Esqueci minha senha
+          </button>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+
+
+  <!-- ======================================================================
+       2. APLICAÇÃO INTERNA - FAROL CORDEIRO COMERCIAL
+       ====================================================================== -->
+  <div id="portalApp" style="display: none;">
+    
+    <!-- Header Corporativo -->
+    <header class="portal-header">
+      <div class="header-left">
+        <div class="header-logo-box">
+          <img src="assets/img/logo-cordeiro-branca.png" alt="Grupo Cordeiro">
+          <span class="header-brand-title">FAROL CORDEIRO COMERCIAL</span>
+        </div>
+
+        <nav class="header-nav">
+          <button type="button" id="tabLauncherBtn" class="nav-tab-btn active">
+            <i class="ph ph-lighthouse"></i>
+            <span>Painel Farol</span>
+          </button>
+          <button type="button" id="tabGestaoBtn" class="nav-tab-btn">
+            <i class="ph ph-users-three"></i>
+            <span>Gestão de Perfis & Acessos</span>
+            <span class="badge-admin">Admin</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="header-right">
+        <div class="user-profile-widget">
+          <div class="user-avatar-circle">
+            <i class="ph ph-user-circle-gear" style="font-size:22px; color:var(--accent-gold);"></i>
+          </div>
+          <div class="user-info-text">
+            <span id="headerUserName" class="user-name">Weverson Feitosa</span>
+            <span id="headerUserRole" class="user-role">Administrador Master</span>
+          </div>
+        </div>
+
+        <button type="button" id="btnLogout" class="btn-logout" title="Sair do Farol">
+          <i class="ph ph-sign-out"></i>
+          <span>Sair</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="portal-main">
+      
+      <!-- ==================================================================
+           VISÃO 1: LAUNCHER / FAROL DAS 3 FERRAMENTAS
+           ================================================================== -->
+      <section id="viewLauncher" class="tab-view active">
+        <div class="section-header">
+          <div>
+            <h1 class="section-title">Farol Comercial · Indicadores e Operação</h1>
+            <p class="section-desc">Acompanhe a temperatura, ocupação de equipamentos e resultados do Grupo Cordeiro com seu login unificado.</p>
+          </div>
+        </div>
+
+        <div class="launcher-grid">
+          
+          <!-- Card 1: Mapa de Ocupação -->
+          <div class="app-card card-mapa">
+            <div>
+              <div class="app-card-top">
+                <div class="app-icon-box">
+                  <i class="ph ph-crane"></i>
+                </div>
+                <span id="badgeStatusMapa" class="badge-status-app liberado">
+                  <i class="ph ph-check-circle"></i> Liberado (Admin)
+                </span>
+              </div>
+
+              <div class="app-card-body">
+                <h3>Mapa de Ocupação</h3>
+                <div class="app-subtitle">Logística, Frota & Alocação</div>
+                <p>Ocupação operacional de guindastes e carretas em tempo real, frentes de obra ativas, manutenção e cronogramas de içamento.</p>
+                <ul class="app-features-list">
+                  <li><i class="ph ph-check"></i> Timeline dinâmica por ativo</li>
+                  <li><i class="ph ph-check"></i> Alocação de operadores e manutenção</li>
+                  <li><i class="ph ph-check"></i> Negócios quentes integrados ao CRM</li>
+                </ul>
+              </div>
+            </div>
+
+            <a id="btnLaunchMapa" href="https://cordeiro-mapa-ocupacao.vercel.app" target="_blank" class="btn-launch-app btn-primary-launch">
+              <span>Acessar Mapa de Ocupação</span>
+              <i class="ph ph-arrow-square-out"></i>
+            </a>
+          </div>
+
+          <!-- Card 2: Pesquisa NPS -->
+          <div class="app-card card-nps">
+            <div>
+              <div class="app-card-top">
+                <div class="app-icon-box">
+                  <i class="ph ph-star"></i>
+                </div>
+                <span id="badgeStatusNps" class="badge-status-app liberado">
+                  <i class="ph ph-check-circle"></i> Liberado (Admin)
+                </span>
+              </div>
+
+              <div class="app-card-body">
+                <h3>Pesquisa NPS</h3>
+                <div class="app-subtitle">Satisfação & Relacionamento</div>
+                <p>Termômetro de satisfação Net Promoter Score, formulário oficial de avaliação dos clientes e monitoramento de detração.</p>
+                <ul class="app-features-list">
+                  <li><i class="ph ph-check"></i> Painel consolidado com Tremor UI</li>
+                  <li><i class="ph ph-check"></i> Rota de formulário público para clientes</li>
+                  <li><i class="ph ph-check"></i> Alertas de detratores e promotores</li>
+                </ul>
+              </div>
+            </div>
+
+            <a id="btnLaunchNps" href="https://cordeiro-nps.vercel.app" target="_blank" class="btn-launch-app btn-primary-launch">
+              <span>Acessar Painel NPS</span>
+              <i class="ph ph-arrow-square-out"></i>
+            </a>
+          </div>
+
+          <!-- Card 3: Funil de Vendas -->
+          <div class="app-card card-funil">
+            <div>
+              <div class="app-card-top">
+                <div class="app-icon-box">
+                  <i class="ph ph-chart-pie-slice"></i>
+                </div>
+                <span id="badgeStatusFunil" class="badge-status-app liberado">
+                  <i class="ph ph-check-circle"></i> Liberado (Admin)
+                </span>
+              </div>
+
+              <div class="app-card-body">
+                <h3>Funil de Vendas</h3>
+                <div class="app-subtitle">Comercial, Pipeline & Forecast</div>
+                <p>Relatório comercial executivo com 5 slides interativos, pipeline de fechamento de negócios e detalhamento por consultor.</p>
+                <ul class="app-features-list">
+                  <li><i class="ph ph-check"></i> Sincronização horária ao vivo com Bitrix</li>
+                  <li><i class="ph ph-check"></i> Modal de equipamentos e produtos</li>
+                  <li><i class="ph ph-check"></i> Metas de faturamento e forecast</li>
+                </ul>
+              </div>
+            </div>
+
+            <a id="btnLaunchFunil" href="https://cordeiro-funil-vendas.vercel.app" target="_blank" class="btn-launch-app btn-primary-launch">
+              <span>Acessar Funil de Vendas</span>
+              <i class="ph ph-arrow-square-out"></i>
+            </a>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           VISÃO 2: GESTÃO DE PERFIS & ACESSOS (IAM / ADMIN WEVERSON)
+           ================================================================== -->
+      <section id="viewGestao" class="tab-view">
+        <div class="section-header">
+          <div>
+            <h1 class="section-title">Gestão de Perfis & Permissões (IAM)</h1>
+            <p class="section-desc">Controle de acessos, permissões e bloqueios instantâneos em todas as ferramentas do Farol Comercial.</p>
+          </div>
+        </div>
+
+        <!-- Barra de Controle e Busca -->
+        <div class="iam-controls-bar">
+          <div class="search-filter-box">
+            <div class="search-input-wrapper">
+              <i class="ph ph-magnifying-glass"></i>
+              <input type="text" id="buscaUsuarios" placeholder="Buscar por nome, e-mail ou cargo...">
+            </div>
+          </div>
+
+          <button type="button" id="btnNovoColaborador" class="btn-novo-usuario">
+            <i class="ph ph-user-plus"></i>
+            <span>Novo Colaborador</span>
+          </button>
+        </div>
+
+        <!-- Tabela de Usuários e Permissões -->
+        <div class="tabela-card">
+          <table class="tabela-perfis">
+            <thead>
+              <tr>
+                <th>Colaborador</th>
+                <th>Cargo / Área</th>
+                <th>Status</th>
+                <th>Mapa Ocupação</th>
+                <th>Pesquisa NPS</th>
+                <th>Funil Vendas</th>
+                <th style="text-align: right;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyUsuarios">
+              <!-- Injetado via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+
+  <!-- ======================================================================
+       3. MODAIS
+       ====================================================================== -->
+
+  <!-- Modal Esqueci Minha Senha -->
+  <div id="modalEsqueci" class="modal-overlay">
+    <div class="modal-content" style="max-width: 420px;">
+      <div class="modal-header">
+        <h3>Recuperação de Senha</h3>
+        <button type="button" id="btnFecharEsqueci" class="btn-close-modal"><i class="ph ph-x"></i></button>
+      </div>
+      <form id="formEsqueci" class="modal-form-grid">
+        <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+          Informe seu e-mail corporativo (@cordeiroguindastes.com.br ou @cordeiroguindastes.com) para receber as instruções oficiais de redefinição de acesso.
+        </p>
+        <div class="form-field">
+          <label for="inputEmailEsqueci">E-mail corporativo</label>
+          <input type="email" id="inputEmailEsqueci" required placeholder="seu.email@cordeiroguindastes.com.br">
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn-modal-submit">Enviar Link de Recuperação</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Novo Colaborador -->
+  <div id="modalNovoUsuario" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Cadastrar Novo Colaborador no Farol</h3>
+        <button type="button" id="btnFecharNovo" class="btn-close-modal"><i class="ph ph-x"></i></button>
+      </div>
+      <form id="formNovoUsuario" class="modal-form-grid">
+        <div class="form-field">
+          <label for="novoNome">Nome Completo *</label>
+          <input type="text" id="novoNome" required placeholder="Ex: Roberto Silva">
+        </div>
+
+        <div class="form-field">
+          <label for="novoEmail">E-mail Corporativo *</label>
+          <input type="email" id="novoEmail" required placeholder="roberto.silva@cordeiroguindastes.com.br">
+        </div>
+
+        <div class="form-field">
+          <label for="novoCargo">Cargo / Função *</label>
+          <input type="text" id="novoCargo" required placeholder="Ex: Supervisor Operacional">
+        </div>
+
+        <h4 style="font-size: 13px; font-weight: 700; margin-top: 10px; color: var(--accent-gold);">
+          Matriz de Permissões no Farol
+        </h4>
+
+        <!-- Permissão Mapa de Ocupação -->
+        <div class="app-permission-box">
+          <div class="permission-toggle-header">
+            <span class="permission-title"><i class="ph ph-crane" style="color:#38bdf8;"></i> Mapa de Ocupação</span>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px;">
+              <input type="checkbox" id="novoPermMapa" checked> Liberar Acesso
+            </label>
+          </div>
+          <div class="form-field">
+            <label for="novoPerfilMapa">Nível de Permissão:</label>
+            <select id="novoPerfilMapa">
+              <option value="Operação">Operação / CCO</option>
+              <option value="Comercial">Comercial</option>
+              <option value="Manutenção">Manutenção</option>
+              <option value="Admin">Administrador Master</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Permissão NPS -->
+        <div class="app-permission-box">
+          <div class="permission-toggle-header">
+            <span class="permission-title"><i class="ph ph-star" style="color:#f59e0b;"></i> Pesquisa NPS</span>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px;">
+              <input type="checkbox" id="novoPermNps"> Liberar Acesso
+            </label>
+          </div>
+          <div class="form-field">
+            <label for="novoPerfilNps">Nível de Permissão:</label>
+            <select id="novoPerfilNps">
+              <option value="Comercial">Comercial NPS</option>
+              <option value="Visualizador">Visualizador de Relatórios</option>
+              <option value="Admin">Administrador NPS</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Permissão Funil de Vendas -->
+        <div class="app-permission-box">
+          <div class="permission-toggle-header">
+            <span class="permission-title"><i class="ph ph-chart-pie-slice" style="color:#10b981;"></i> Funil de Vendas</span>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px;">
+              <input type="checkbox" id="novoPermFunil" checked> Liberar Acesso
+            </label>
+          </div>
+          <div class="form-field">
+            <label for="novoPerfilFunil">Nível de Permissão:</label>
+            <select id="novoPerfilFunil">
+              <option value="Comercial">Executivo Comercial</option>
+              <option value="Gestor">Gestor / Diretoria</option>
+              <option value="Admin">Administrador Geral</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnCancelarNovo" class="btn-modal-cancel">Cancelar</button>
+          <button type="submit" class="btn-modal-submit">Cadastrar Colaborador</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Editar Permissões -->
+  <div id="modalEditarUsuario" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Editar Acessos no Farol</h3>
+        <button type="button" id="btnFecharEditar" class="btn-close-modal"><i class="ph ph-x"></i></button>
+      </div>
+      <form id="formEditarUsuario" class="modal-form-grid">
+        <div class="form-field">
+          <label>Colaborador</label>
+          <input type="text" id="editNome" disabled style="opacity: 0.7;">
+        </div>
+        <div class="form-field">
+          <label>E-mail Corporativo</label>
+          <input type="email" id="editEmail" disabled style="opacity: 0.7;">
+        </div>
+        <div class="form-field">
+          <label for="editCargo">Cargo / Função *</label>
+          <input type="text" id="editCargo" required>
+        </div>
+
+        <h4 style="font-size: 13px; font-weight: 700; margin-top: 10px; color: var(--accent-gold);">
+          Atualizar Permissões por Sistema
+        </h4>
+
+        <!-- Mapa -->
+        <div class="app-permission-box">
+          <div class="permission-toggle-header">
+            <span class="permission-title"><i class="ph ph-crane" style="color:#38bdf8;"></i> Mapa de Ocupação</span>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px;">
+              <input type="checkbox" id="editPermMapa"> Liberar Acesso
+            </label>
+          </div>
+          <div class="form-field">
+            <label for="editPerfilMapa">Nível:</label>
+            <select id="editPerfilMapa">
+              <option value="Operação">Operação / CCO</option>
+              <option value="Comercial">Comercial</option>
+              <option value="Manutenção">Manutenção</option>
+              <option value="Admin">Administrador Master</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- NPS -->
+        <div class="app-permission-box">
+          <div class="permission-toggle-header">
+            <span class="permission-title"><i class="ph ph-star" style="color:#f59e0b;"></i> Pesquisa NPS</span>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px;">
+              <input type="checkbox" id="editPermNps"> Liberar Acesso
+            </label>
+          </div>
+          <div class="form-field">
+            <label for="editPerfilNps">Nível:</label>
+            <select id="editPerfilNps">
+              <option value="Comercial">Comercial NPS</option>
+              <option value="Visualizador">Visualizador de Relatórios</option>
+              <option value="Admin">Administrador NPS</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Funil -->
+        <div class="app-permission-box">
+          <div class="permission-toggle-header">
+            <span class="permission-title"><i class="ph ph-chart-pie-slice" style="color:#10b981;"></i> Funil de Vendas</span>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px;">
+              <input type="checkbox" id="editPermFunil"> Liberar Acesso
+            </label>
+          </div>
+          <div class="form-field">
+            <label for="editPerfilFunil">Nível:</label>
+            <select id="editPerfilFunil">
+              <option value="Comercial">Executivo Comercial</option>
+              <option value="Gestor">Gestor / Diretoria</option>
+              <option value="Admin">Administrador Geral</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnCancelarEditar" class="btn-modal-cancel">Cancelar</button>
+          <button type="submit" class="btn-modal-submit">Salvar Alterações</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Container de Toasts -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Script Principal -->
+  <script src="assets/js/portal.js"></script>
+</body>
+</html>

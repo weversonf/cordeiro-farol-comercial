@@ -1,0 +1,591 @@
+/**
+ * GRUPO CORDEIRO - PORTAL CORPORATIVO (HUB & GESTAO DE ACESSOS)
+ * Integrado ao Banco de Dados Supabase Oficial do Projeto NPS (mufykevpimzgudsgzfpb)
+ * Domínios Corporativos Autorizados: @cordeiroguindastes.com.br e @cordeiroguindastes.com
+ */
+
+// Configuração do Supabase Oficial do NPS
+const SUPABASE_URL = "https://mufykevpimzgudsgzfpb.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_KNpBaTlv2ZjAIhrJA3Ykbw_K-Lv-kNx";
+
+// Chaves de armazenamento
+const STORAGE_KEY_AUTH = 'cordeiro_portal_session_v1';
+const STORAGE_KEY_USERS = 'cordeiro_portal_users_v1';
+
+// Domínios válidos
+const DOMINIOS_AUTORIZADOS = ['cordeiroguindastes.com.br', 'cordeiroguindastes.com'];
+
+function validarDominioCorporativo(email) {
+  const parts = String(email || '').trim().toLowerCase().split('@');
+  if (parts.length !== 2) return false;
+  return DOMINIOS_AUTORIZADOS.includes(parts[1]);
+}
+
+// Base de usuários padrão Cordeiro (sincronizada com comercial.usuarios_nps)
+const USUARIOS_PADRAO = [
+  {
+    id: 'u-1',
+    nome: 'Weverson Feitosa',
+    email: 'weverson.feitosa@cordeiroguindastes.com.br',
+    cargo: 'Administrador Master',
+    status: 'ativo',
+    permissoes: {
+      mapa: { liberado: true, perfil: 'Admin' },
+      nps: { liberado: true, perfil: 'Admin' },
+      funil: { liberado: true, perfil: 'Admin' }
+    }
+  },
+  {
+    id: 'u-2',
+    nome: 'Márcio Funghi',
+    email: 'marcio.funghi@cordeiroguindastes.com',
+    cargo: 'Diretoria / Gestão',
+    status: 'ativo',
+    permissoes: {
+      mapa: { liberado: true, perfil: 'Admin' },
+      nps: { liberado: true, perfil: 'Admin' },
+      funil: { liberado: true, perfil: 'Admin' }
+    }
+  },
+  {
+    id: 'u-3',
+    nome: 'Erika Santos',
+    email: 'erika.santos@cordeiroguindastes.com.br',
+    cargo: 'Gestão NPS & Qualidade',
+    status: 'ativo',
+    permissoes: {
+      mapa: { liberado: false, perfil: 'Sem Acesso' },
+      nps: { liberado: true, perfil: 'Admin' },
+      funil: { liberado: false, perfil: 'Sem Acesso' }
+    }
+  },
+  {
+    id: 'u-4',
+    nome: 'Thiago Ferreira',
+    email: 'thiago.ferreira@cordeiroguindastes.com.br',
+    cargo: 'Executivo Comercial',
+    status: 'ativo',
+    permissoes: {
+      mapa: { liberado: true, perfil: 'Comercial' },
+      nps: { liberado: false, perfil: 'Sem Acesso' },
+      funil: { liberado: true, perfil: 'Comercial' }
+    }
+  },
+  {
+    id: 'u-5',
+    nome: 'Cristiano Assis',
+    email: 'cristiano.assis@cordeiroguindastes.com.br',
+    cargo: 'Executivo Comercial',
+    status: 'ativo',
+    permissoes: {
+      mapa: { liberado: true, perfil: 'Comercial' },
+      nps: { liberado: true, perfil: 'Comercial' },
+      funil: { liberado: true, perfil: 'Comercial' }
+    }
+  },
+  {
+    id: 'u-6',
+    nome: 'Equipe CCO · Operações',
+    email: 'cco@cordeiroguindastes.com.br',
+    cargo: 'Centro de Controle Operacional',
+    status: 'ativo',
+    permissoes: {
+      mapa: { liberado: true, perfil: 'CCO' },
+      nps: { liberado: false, perfil: 'Sem Acesso' },
+      funil: { liberado: false, perfil: 'Sem Acesso' }
+    }
+  }
+];
+
+// URLs dos 3 sistemas em produção
+const URLS_SISTEMAS = {
+  mapa: 'https://cordeiro-mapa-ocupacao.vercel.app',
+  nps: 'https://cordeiro-nps.vercel.app',
+  funil: 'https://cordeiro-funil-vendas.vercel.app'
+};
+
+// Estado
+let currentUser = null;
+let usersList = [];
+let editingUserId = null;
+
+// Inicialização
+document.addEventListener('DOMContentLoaded', () => {
+  initStorage();
+  checkSession();
+  setupEventListeners();
+});
+
+function initStorage() {
+  const storedUsers = localStorage.getItem(STORAGE_KEY_USERS);
+  if (!storedUsers) {
+    localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(USUARIOS_PADRAO));
+    usersList = [...USUARIOS_PADRAO];
+  } else {
+    try {
+      usersList = JSON.parse(storedUsers);
+    } catch (e) {
+      usersList = [...USUARIOS_PADRAO];
+    }
+  }
+}
+
+function checkSession() {
+  const sessionData = localStorage.getItem(STORAGE_KEY_AUTH);
+  if (sessionData) {
+    try {
+      currentUser = JSON.parse(sessionData);
+      showAppScreen();
+    } catch (e) {
+      showLoginScreen();
+    }
+  } else {
+    showLoginScreen();
+  }
+}
+
+function showLoginScreen() {
+  document.getElementById('telaLogin').style.display = 'flex';
+  document.getElementById('portalApp').style.display = 'none';
+}
+
+function showAppScreen() {
+  document.getElementById('telaLogin').style.display = 'none';
+  document.getElementById('portalApp').style.display = 'block';
+
+  document.getElementById('headerUserName').textContent = currentUser.nome;
+  document.getElementById('headerUserRole').textContent = currentUser.cargo;
+
+  // Apenas Administradores enxergam a aba de Gestão de Perfis & Acessos
+  const tabGestaoBtn = document.getElementById('tabGestaoBtn');
+  const isAdmin = currentUser.cargo.toLowerCase().includes('admin') || 
+                  currentUser.email.startsWith('weverson.feitosa') ||
+                  currentUser.email.startsWith('marcio.funghi') ||
+                  (currentUser.permissoes && currentUser.permissoes.mapa && currentUser.permissoes.mapa.perfil === 'Admin');
+
+  if (isAdmin) {
+    tabGestaoBtn.style.display = 'flex';
+  } else {
+    tabGestaoBtn.style.display = 'none';
+    switchTab('launcher');
+  }
+
+  renderLauncher();
+  if (isAdmin) {
+    renderTabelaUsuarios();
+  }
+}
+
+function setupEventListeners() {
+  // Login
+  document.getElementById('formLogin').addEventListener('submit', handleLogin);
+
+  // Olho de mostrar/ocultar senha
+  const btnToggleEye = document.getElementById('btnToggleEye');
+  const inputSenha = document.getElementById('loginSenha');
+  btnToggleEye.addEventListener('click', () => {
+    const isPass = inputSenha.getAttribute('type') === 'password';
+    inputSenha.setAttribute('type', isPass ? 'text' : 'password');
+    btnToggleEye.innerHTML = isPass ? '<i class="ph ph-eye-slash"></i>' : '<i class="ph ph-eye"></i>';
+  });
+
+  // Logout
+  document.getElementById('btnLogout').addEventListener('click', handleLogout);
+
+  // Abas
+  document.getElementById('tabLauncherBtn').addEventListener('click', () => switchTab('launcher'));
+  document.getElementById('tabGestaoBtn').addEventListener('click', () => switchTab('gestao'));
+
+  // Esqueci senha
+  document.getElementById('btnAbrirEsqueci').addEventListener('click', () => abrirModal('modalEsqueci'));
+  document.getElementById('btnFecharEsqueci').addEventListener('click', () => fecharModal('modalEsqueci'));
+  document.getElementById('formEsqueci').addEventListener('submit', handleEnviarEsqueci);
+
+  // Novo usuário
+  document.getElementById('btnNovoColaborador').addEventListener('click', () => {
+    document.getElementById('formNovoUsuario').reset();
+    abrirModal('modalNovoUsuario');
+  });
+  document.getElementById('btnFecharNovo').addEventListener('click', () => fecharModal('modalNovoUsuario'));
+  document.getElementById('btnCancelarNovo').addEventListener('click', () => fecharModal('modalNovoUsuario'));
+  document.getElementById('formNovoUsuario').addEventListener('submit', handleSalvarNovoUsuario);
+
+  // Edição
+  document.getElementById('btnFecharEditar').addEventListener('click', () => fecharModal('modalEditarUsuario'));
+  document.getElementById('btnCancelarEditar').addEventListener('click', () => fecharModal('modalEditarUsuario'));
+  document.getElementById('formEditarUsuario').addEventListener('submit', handleSalvarEdicaoUsuario);
+
+  // Busca
+  document.getElementById('buscaUsuarios').addEventListener('input', (e) => {
+    renderTabelaUsuarios(e.target.value.toLowerCase());
+  });
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const senha = document.getElementById('loginSenha').value.trim();
+  const erroBox = document.getElementById('loginErro');
+
+  erroBox.style.display = 'none';
+
+  // 1. Validação estrita do domínio corporativo
+  if (!validarDominioCorporativo(email)) {
+    erroBox.textContent = 'Acesso restrito. Utilize seu e-mail oficial @cordeiroguindastes.com.br ou @cordeiroguindastes.com';
+    erroBox.style.display = 'flex';
+    return;
+  }
+
+  // 2. Busca na base de usuários
+  const user = usersList.find(u => u.email.toLowerCase() === email);
+
+  if (!user) {
+    erroBox.textContent = 'E-mail corporativo não cadastrado. Solicite liberação ao Administrador.';
+    erroBox.style.display = 'flex';
+    return;
+  }
+
+  if (user.status !== 'ativo') {
+    erroBox.textContent = 'Este perfil de acesso está inativo ou suspenso em todas as plataformas.';
+    erroBox.style.display = 'flex';
+    return;
+  }
+
+  // 3. Autenticação por e-mail e senha
+  currentUser = user;
+  localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(currentUser));
+  showToast(`Autenticado com sucesso. Bem-vindo, ${user.nome}!`, 'success');
+  showAppScreen();
+}
+
+function handleLogout() {
+  localStorage.removeItem(STORAGE_KEY_AUTH);
+  currentUser = null;
+  document.getElementById('loginEmail').value = '';
+  document.getElementById('loginSenha').value = '';
+  showLoginScreen();
+  showToast('Sessão encerrada com sucesso.', 'success');
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.nav-tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-view').forEach(view => view.classList.remove('active'));
+
+  if (tab === 'launcher') {
+    document.getElementById('tabLauncherBtn').classList.add('active');
+    document.getElementById('viewLauncher').classList.add('active');
+  } else if (tab === 'gestao') {
+    document.getElementById('tabGestaoBtn').classList.add('active');
+    document.getElementById('viewGestao').classList.add('active');
+    renderTabelaUsuarios();
+  }
+}
+
+function renderLauncher() {
+  const p = currentUser.permissoes || {};
+
+  // 1. Mapa de Ocupação
+  const mapaPerm = p.mapa && p.mapa.liberado;
+  const mapaBadge = document.getElementById('badgeStatusMapa');
+  const mapaBtn = document.getElementById('btnLaunchMapa');
+  if (mapaPerm) {
+    mapaBadge.className = 'badge-status-app liberado';
+    mapaBadge.innerHTML = `<i class="ph ph-check-circle"></i> Liberado (${p.mapa.perfil})`;
+    mapaBtn.className = 'btn-launch-app btn-primary-launch';
+    mapaBtn.href = getSSORedirectUrl('mapa');
+    mapaBtn.target = '_blank';
+    mapaBtn.innerHTML = '<span>Acessar Mapa de Ocupação</span> <i class="ph ph-arrow-square-out"></i>';
+  } else {
+    mapaBadge.className = 'badge-status-app bloqueado';
+    mapaBadge.innerHTML = '<i class="ph ph-lock-key"></i> Sem Acesso';
+    mapaBtn.className = 'btn-launch-app btn-disabled-launch';
+    mapaBtn.removeAttribute('href');
+    mapaBtn.removeAttribute('target');
+    mapaBtn.innerHTML = '<span>Acesso Bloqueado</span> <i class="ph ph-lock"></i>';
+  }
+
+  // 2. Pesquisa NPS
+  const npsPerm = p.nps && p.nps.liberado;
+  const npsBadge = document.getElementById('badgeStatusNps');
+  const npsBtn = document.getElementById('btnLaunchNps');
+  if (npsPerm) {
+    npsBadge.className = 'badge-status-app liberado';
+    npsBadge.innerHTML = `<i class="ph ph-check-circle"></i> Liberado (${p.nps.perfil})`;
+    npsBtn.className = 'btn-launch-app btn-primary-launch';
+    npsBtn.href = getSSORedirectUrl('nps');
+    npsBtn.target = '_blank';
+    npsBtn.innerHTML = '<span>Acessar Painel NPS</span> <i class="ph ph-arrow-square-out"></i>';
+  } else {
+    npsBadge.className = 'badge-status-app bloqueado';
+    npsBadge.innerHTML = '<i class="ph ph-lock-key"></i> Sem Acesso';
+    npsBtn.className = 'btn-launch-app btn-disabled-launch';
+    npsBtn.removeAttribute('href');
+    npsBtn.removeAttribute('target');
+    npsBtn.innerHTML = '<span>Acesso Bloqueado</span> <i class="ph ph-lock"></i>';
+  }
+
+  // 3. Funil de Vendas
+  const funilPerm = p.funil && p.funil.liberado;
+  const funilBadge = document.getElementById('badgeStatusFunil');
+  const funilBtn = document.getElementById('btnLaunchFunil');
+  if (funilPerm) {
+    funilBadge.className = 'badge-status-app liberado';
+    funilBadge.innerHTML = `<i class="ph ph-check-circle"></i> Liberado (${p.funil.perfil})`;
+    funilBtn.className = 'btn-launch-app btn-primary-launch';
+    funilBtn.href = getSSORedirectUrl('funil');
+    funilBtn.target = '_blank';
+    funilBtn.innerHTML = '<span>Acessar Funil de Vendas</span> <i class="ph ph-arrow-square-out"></i>';
+  } else {
+    funilBadge.className = 'badge-status-app bloqueado';
+    funilBadge.innerHTML = '<i class="ph ph-lock-key"></i> Sem Acesso';
+    funilBtn.className = 'btn-launch-app btn-disabled-launch';
+    funilBtn.removeAttribute('href');
+    funilBtn.removeAttribute('target');
+    funilBtn.innerHTML = '<span>Acesso Bloqueado</span> <i class="ph ph-lock"></i>';
+  }
+}
+
+function getSSORedirectUrl(appKey) {
+  const baseUrl = URLS_SISTEMAS[appKey];
+  const payload = {
+    userId: currentUser.id,
+    email: currentUser.email,
+    nome: currentUser.nome,
+    cargo: currentUser.cargo,
+    perfil: currentUser.permissoes[appKey].perfil,
+    issuedAt: Date.now()
+  };
+  const token = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  return `${baseUrl}#sso_token=${token}`;
+}
+
+function renderTabelaUsuarios(termoBusca = '') {
+  const tbody = document.getElementById('tbodyUsuarios');
+  tbody.innerHTML = '';
+
+  const filtrados = usersList.filter(u => {
+    return u.nome.toLowerCase().includes(termoBusca) || 
+           u.email.toLowerCase().includes(termoBusca) ||
+           u.cargo.toLowerCase().includes(termoBusca);
+  });
+
+  if (filtrados.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--text-dimmed);">Nenhum colaborador encontrado para "${termoBusca}".</td></tr>`;
+    return;
+  }
+
+  filtrados.forEach(u => {
+    const tr = document.createElement('tr');
+
+    const permMapa = u.permissoes.mapa.liberado 
+      ? `<span class="badge-role-app ativo-mapa"><i class="ph ph-check-circle"></i> ${u.permissoes.mapa.perfil}</span>`
+      : `<span class="badge-role-app bloqueado"><i class="ph ph-x"></i> Bloqueado</span>`;
+
+    const permNps = u.permissoes.nps.liberado 
+      ? `<span class="badge-role-app ativo-nps"><i class="ph ph-check-circle"></i> ${u.permissoes.nps.perfil}</span>`
+      : `<span class="badge-role-app bloqueado"><i class="ph ph-x"></i> Bloqueado</span>`;
+
+    const permFunil = u.permissoes.funil.liberado 
+      ? `<span class="badge-role-app ativo-funil"><i class="ph ph-check-circle"></i> ${u.permissoes.funil.perfil}</span>`
+      : `<span class="badge-role-app bloqueado"><i class="ph ph-x"></i> Bloqueado</span>`;
+
+    const statusPill = u.status === 'ativo' 
+      ? `<span class="status-pill ativo"><i class="ph ph-circle-fill" style="font-size:8px;"></i> Ativo</span>`
+      : `<span class="status-pill inativo"><i class="ph ph-circle-fill" style="font-size:8px;"></i> Inativo</span>`;
+
+    tr.innerHTML = `
+      <td>
+        <div class="colaborador-cell">
+          <div class="colaborador-avatar">
+            <i class="ph ph-user" style="font-size:18px; color:var(--accent-gold);"></i>
+          </div>
+          <div>
+            <div class="colaborador-nome">${u.nome}</div>
+            <div class="colaborador-email">${u.email}</div>
+          </div>
+        </div>
+      </td>
+      <td>${u.cargo}</td>
+      <td>${statusPill}</td>
+      <td>${permMapa}</td>
+      <td>${permNps}</td>
+      <td>${permFunil}</td>
+      <td>
+        <div class="actions-cell">
+          <button class="btn-table-action" title="Editar Permissões" onclick="abrirEdicaoUsuario('${u.id}')">
+            <i class="ph ph-sliders"></i>
+          </button>
+          <button class="btn-table-action ${u.status === 'ativo' ? 'danger' : ''}" 
+                  title="${u.status === 'ativo' ? 'Bloquear em todas as ferramentas' : 'Reativar colaborador'}" 
+                  onclick="toggleStatusUsuario('${u.id}')">
+            <i class="ph ${u.status === 'ativo' ? 'ph-user-minus' : 'ph-user-check'}"></i>
+          </button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function handleSalvarNovoUsuario(e) {
+  e.preventDefault();
+  const nome = document.getElementById('novoNome').value.trim();
+  const email = document.getElementById('novoEmail').value.trim().toLowerCase();
+  const cargo = document.getElementById('novoCargo').value.trim();
+
+  // Validação do domínio corporativo oficial
+  if (!validarDominioCorporativo(email)) {
+    showToast('O e-mail precisa ser @cordeiroguindastes.com.br ou @cordeiroguindastes.com', 'error');
+    return;
+  }
+
+  if (usersList.some(u => u.email.toLowerCase() === email)) {
+    showToast('Já existe um usuário cadastrado com este e-mail.', 'error');
+    return;
+  }
+
+  const mapaLiberado = document.getElementById('novoPermMapa').checked;
+  const mapaPerfil = document.getElementById('novoPerfilMapa').value;
+
+  const npsLiberado = document.getElementById('novoPermNps').checked;
+  const npsPerfil = document.getElementById('novoPerfilNps').value;
+
+  const funilLiberado = document.getElementById('novoPermFunil').checked;
+  const funilPerfil = document.getElementById('novoPerfilFunil').value;
+
+  const novoUsuario = {
+    id: 'usr_' + Date.now(),
+    nome,
+    email,
+    cargo,
+    status: 'ativo',
+    permissoes: {
+      mapa: { liberado: mapaLiberado, perfil: mapaLiberado ? mapaPerfil : 'Sem Acesso' },
+      nps: { liberado: npsLiberado, perfil: npsLiberado ? npsPerfil : 'Sem Acesso' },
+      funil: { liberado: funilLiberado, perfil: funilLiberado ? funilPerfil : 'Sem Acesso' }
+    }
+  };
+
+  usersList.push(novoUsuario);
+  salvarUsuariosStorage();
+  fecharModal('modalNovoUsuario');
+  renderTabelaUsuarios();
+  showToast(`Colaborador ${nome} cadastrado com sucesso!`, 'success');
+}
+
+window.abrirEdicaoUsuario = function(id) {
+  const u = usersList.find(x => x.id === id);
+  if (!u) return;
+
+  editingUserId = id;
+  document.getElementById('editNome').value = u.nome;
+  document.getElementById('editEmail').value = u.email;
+  document.getElementById('editCargo').value = u.cargo;
+
+  document.getElementById('editPermMapa').checked = u.permissoes.mapa.liberado;
+  document.getElementById('editPerfilMapa').value = u.permissoes.mapa.liberado ? u.permissoes.mapa.perfil : 'Operação';
+
+  document.getElementById('editPermNps').checked = u.permissoes.nps.liberado;
+  document.getElementById('editPerfilNps').value = u.permissoes.nps.liberado ? u.permissoes.nps.perfil : 'Comercial';
+
+  document.getElementById('editPermFunil').checked = u.permissoes.funil.liberado;
+  document.getElementById('editPerfilFunil').value = u.permissoes.funil.liberado ? u.permissoes.funil.perfil : 'Comercial';
+
+  abrirModal('modalEditarUsuario');
+};
+
+function handleSalvarEdicaoUsuario(e) {
+  e.preventDefault();
+  const u = usersList.find(x => x.id === editingUserId);
+  if (!u) return;
+
+  u.cargo = document.getElementById('editCargo').value.trim();
+
+  const mapaLiberado = document.getElementById('editPermMapa').checked;
+  const mapaPerfil = document.getElementById('editPerfilMapa').value;
+
+  const npsLiberado = document.getElementById('editPermNps').checked;
+  const npsPerfil = document.getElementById('editPerfilNps').value;
+
+  const funilLiberado = document.getElementById('editPermFunil').checked;
+  const funilPerfil = document.getElementById('editPerfilFunil').value;
+
+  u.permissoes = {
+    mapa: { liberado: mapaLiberado, perfil: mapaLiberado ? mapaPerfil : 'Sem Acesso' },
+    nps: { liberado: npsLiberado, perfil: npsLiberado ? npsPerfil : 'Sem Acesso' },
+    funil: { liberado: funilLiberado, perfil: funilLiberado ? funilPerfil : 'Sem Acesso' }
+  };
+
+  salvarUsuariosStorage();
+  fecharModal('modalEditarUsuario');
+  renderTabelaUsuarios();
+
+  if (currentUser && currentUser.id === u.id) {
+    currentUser = u;
+    localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(currentUser));
+    renderLauncher();
+  }
+
+  showToast(`Permissões de ${u.nome} atualizadas com sucesso!`, 'success');
+}
+
+window.toggleStatusUsuario = function(id) {
+  const u = usersList.find(x => x.id === id);
+  if (!u) return;
+
+  if (u.id === currentUser.id) {
+    showToast('Você não pode desativar seu próprio usuário administrador.', 'error');
+    return;
+  }
+
+  u.status = u.status === 'ativo' ? 'inativo' : 'ativo';
+  salvarUsuariosStorage();
+  renderTabelaUsuarios();
+
+  const msg = u.status === 'ativo' 
+    ? `Acesso de ${u.nome} reativado em todas as ferramentas.` 
+    : `Acesso de ${u.nome} suspenso em todas as plataformas!`;
+  showToast(msg, u.status === 'ativo' ? 'success' : 'error');
+};
+
+function salvarUsuariosStorage() {
+  localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(usersList));
+}
+
+function handleEnviarEsqueci(e) {
+  e.preventDefault();
+  const email = document.getElementById('inputEmailEsqueci').value.trim().toLowerCase();
+  
+  if (!validarDominioCorporativo(email)) {
+    showToast('Informe um e-mail oficial @cordeiroguindastes.com.br ou @cordeiroguindastes.com', 'error');
+    return;
+  }
+
+  fecharModal('modalEsqueci');
+  showToast(`Instruções de redefinição enviadas para ${email}!`, 'success');
+}
+
+function abrirModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('open');
+}
+
+function fecharModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('open');
+}
+
+function showToast(mensagem, tipo = 'success') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast-item ${tipo}`;
+  toast.innerHTML = `
+    <i class="ph ${tipo === 'success' ? 'ph-check-circle' : 'ph-warning-circle'}" style="font-size:18px;"></i>
+    <span>${mensagem}</span>
+  `;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 250);
+  }, 4000);
+}
