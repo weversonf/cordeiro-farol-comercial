@@ -110,6 +110,7 @@ let usuarioParaExcluir = null;
 document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   setupModalSwitches();
+  checkPasswordRecovery();
   await initStorage();
   checkSession();
 });
@@ -250,6 +251,12 @@ function setupEventListeners() {
   document.getElementById('btnAbrirEsqueci').addEventListener('click', () => abrirModal('modalEsqueci'));
   document.getElementById('btnFecharEsqueci').addEventListener('click', () => fecharModal('modalEsqueci'));
   document.getElementById('formEsqueci').addEventListener('submit', handleEnviarEsqueci);
+
+  // Redefinir Senha (Recovery)
+  const btnFecharRec = document.getElementById('btnFecharRecovery');
+  if (btnFecharRec) btnFecharRec.addEventListener('click', () => fecharModal('modalNovaSenhaRecovery'));
+  const formRec = document.getElementById('formNovaSenhaRecovery');
+  if (formRec) formRec.addEventListener('submit', handleSalvarNovaSenhaRecovery);
 
   // Novo usuário
   document.getElementById('btnNovoColaborador').addEventListener('click', () => {
@@ -774,7 +781,7 @@ function salvarUsuariosStorage() {
   localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(usersList));
 }
 
-function handleEnviarEsqueci(e) {
+async function handleEnviarEsqueci(e) {
   e.preventDefault();
   const email = document.getElementById('inputEmailEsqueci').value.trim().toLowerCase();
   
@@ -783,8 +790,79 @@ function handleEnviarEsqueci(e) {
     return;
   }
 
+  if (supabase) {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin
+      });
+      if (error) {
+        showToast('Erro ao solicitar redefinição: ' + error.message, 'error');
+        return;
+      }
+    } catch (err) {
+      console.warn('Erro ao chamar resetPasswordForEmail:', err);
+    }
+  }
+
   fecharModal('modalEsqueci');
-  showToast(`Instruções de redefinição enviadas para ${email}!`, 'success');
+  showToast(`Instruções de redefinição enviadas para ${email}! Verifique sua caixa de entrada.`, 'success');
+}
+
+function checkPasswordRecovery() {
+  const hash = window.location.hash || '';
+  if (hash.includes('type=recovery') || hash.includes('access_token=')) {
+    setTimeout(() => {
+      abrirModal('modalNovaSenhaRecovery');
+    }, 400);
+  }
+}
+
+async function handleSalvarNovaSenhaRecovery(e) {
+  e.preventDefault();
+  const novaSenha = document.getElementById('inputNovaSenha').value;
+  const confirmaSenha = document.getElementById('inputConfirmaNovaSenha').value;
+  const erroBox = document.getElementById('erroRecovery');
+
+  erroBox.style.display = 'none';
+
+  if (novaSenha.length < 6) {
+    erroBox.textContent = 'A nova senha deve ter no mínimo 6 caracteres.';
+    erroBox.style.display = 'block';
+    return;
+  }
+
+  if (novaSenha !== confirmaSenha) {
+    erroBox.textContent = 'As senhas digitadas não coincidem.';
+    erroBox.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('btnSalvarNovaSenha');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  try {
+    if (supabase) {
+      const { error } = await supabase.auth.updateUser({ password: novaSenha });
+      if (error) {
+        erroBox.textContent = 'Falha ao atualizar senha: ' + error.message;
+        erroBox.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Salvar Nova Senha';
+        return;
+      }
+    }
+    fecharModal('modalNovaSenhaRecovery');
+    // Limpa o hash de recuperação da URL
+    window.history.replaceState(null, '', window.location.pathname);
+    showToast('Senha redefinida com sucesso! Você já pode entrar.', 'success');
+  } catch (err) {
+    erroBox.textContent = 'Erro inesperado: ' + err.message;
+    erroBox.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar Nova Senha';
+  }
 }
 
 function abrirModal(id) {

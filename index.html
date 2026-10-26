@@ -320,6 +320,33 @@
     </div>
   </div>
 
+  <!-- Modal Redefinir Nova Senha (Acionado ao abrir link de e-mail do Supabase) -->
+  <div id="modalNovaSenhaRecovery" class="modal-overlay">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3><i class="ph ph-shield-check" style="color:var(--accent-gold);"></i> Cadastrar Nova Senha</h3>
+        <button type="button" id="btnFecharRecovery" class="btn-close-modal"><i class="ph ph-x"></i></button>
+      </div>
+      <form id="formNovaSenhaRecovery" class="modal-form-grid">
+        <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+          Você acessou o link oficial de redefinição de acesso. Digite a sua nova senha pessoal abaixo:
+        </p>
+        <div class="form-field">
+          <label for="inputNovaSenha">Nova Senha (mínimo 6 caracteres)</label>
+          <input type="password" id="inputNovaSenha" required minlength="6" placeholder="Digite sua nova senha">
+        </div>
+        <div class="form-field">
+          <label for="inputConfirmaNovaSenha">Confirmar Nova Senha</label>
+          <input type="password" id="inputConfirmaNovaSenha" required minlength="6" placeholder="Repita a nova senha">
+        </div>
+        <div id="erroRecovery" class="alert-box alert-danger" style="display:none;"></div>
+        <div class="modal-footer">
+          <button type="submit" class="btn-modal-submit" id="btnSalvarNovaSenha">Salvar Nova Senha</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Modal Novo Colaborador (Refinado) -->
   <div id="modalNovoUsuario" class="modal-overlay">
     <div class="modal-content">
