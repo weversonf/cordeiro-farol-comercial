@@ -8,8 +8,8 @@
 const SUPABASE_URL = "https://mufykevpimzgudsgzfpb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_KNpBaTlv2ZjAIhrJA3Ykbw_K-Lv-kNx";
 
-// Inicializa o cliente Supabase oficial se a biblioteca estiver presente
-const supabase = (window.supabase && typeof window.supabase.createClient === 'function')
+// Inicializa o cliente Supabase oficial sem colidir com o escopo global window.supabase
+const sbClient = (window.supabase && typeof window.supabase.createClient === 'function')
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
@@ -119,9 +119,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function initStorage() {
   let loadedFromCloud = false;
 
-  if (supabase) {
+  if (sbClient) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await sbClient
         .from('usuarios_nps')
         .select('*');
 
@@ -153,7 +153,6 @@ async function initStorage() {
             }
           }));
 
-        localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(usersList));
         loadedFromCloud = true;
       }
     } catch (err) {
@@ -164,16 +163,26 @@ async function initStorage() {
   if (!loadedFromCloud) {
     const storedUsers = localStorage.getItem(STORAGE_KEY_USERS);
     if (!storedUsers) {
-      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(USUARIOS_PADRAO));
       usersList = [...USUARIOS_PADRAO];
     } else {
       try {
-        usersList = JSON.parse(storedUsers);
+        const parsed = JSON.parse(storedUsers);
+        usersList = Array.isArray(parsed) && parsed.length > 0 ? parsed : [...USUARIOS_PADRAO];
       } catch (e) {
         usersList = [...USUARIOS_PADRAO];
       }
     }
   }
+
+  // Garante sempre que a base padrão (incluindo Weverson Master e Erika) esteja presente
+  USUARIOS_PADRAO.forEach(padrao => {
+    const existe = usersList.some(u => u.email.toLowerCase() === padrao.email.toLowerCase());
+    if (!existe) {
+      usersList.push(padrao);
+    }
+  });
+
+  localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(usersList));
 }
 
 function checkSession() {
@@ -569,9 +578,9 @@ async function handleSalvarNovoUsuario(e) {
   };
 
   // Salva no Supabase se disponível
-  if (supabase) {
+  if (sbClient) {
     try {
-      await supabase.from('usuarios_nps').insert([{
+      await sbClient.from('usuarios_nps').insert([{
         nome,
         email,
         cargo,
@@ -670,9 +679,9 @@ async function handleSalvarEdicaoUsuario(e) {
   };
 
   // Salva no Supabase se conectado
-  if (supabase) {
+  if (sbClient) {
     try {
-      await supabase
+      await sbClient
         .from('usuarios_nps')
         .update({
           cargo: u.cargo,
@@ -713,9 +722,9 @@ async function toggleStatusUsuario(id) {
 
   u.status = u.status === 'ativo' ? 'inativo' : 'ativo';
 
-  if (supabase) {
+  if (sbClient) {
     try {
-      await supabase
+      await sbClient
         .from('usuarios_nps')
         .update({ ativo: u.status === 'ativo' })
         .ilike('email', u.email);
@@ -757,9 +766,9 @@ async function executarExclusaoConfirmada() {
   const email = usuarioParaExcluir.email;
   const id = usuarioParaExcluir.id;
 
-  if (supabase) {
+  if (sbClient) {
     try {
-      await supabase
+      await sbClient
         .from('usuarios_nps')
         .delete()
         .ilike('email', email);
@@ -790,9 +799,9 @@ async function handleEnviarEsqueci(e) {
     return;
   }
 
-  if (supabase) {
+  if (sbClient) {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await sbClient.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin
       });
       if (error) {
@@ -842,8 +851,8 @@ async function handleSalvarNovaSenhaRecovery(e) {
   btn.textContent = 'Salvando...';
 
   try {
-    if (supabase) {
-      const { error } = await supabase.auth.updateUser({ password: novaSenha });
+    if (sbClient) {
+      const { error } = await sbClient.auth.updateUser({ password: novaSenha });
       if (error) {
         erroBox.textContent = 'Falha ao atualizar senha: ' + error.message;
         erroBox.style.display = 'block';
