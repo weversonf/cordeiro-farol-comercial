@@ -99,6 +99,7 @@ const URLS_SISTEMAS = {
 let currentUser = null;
 let usersList = [];
 let editingUserId = null;
+let usuarioParaExcluir = null;
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
@@ -213,6 +214,14 @@ function setupEventListeners() {
   document.getElementById('btnCancelarEditar').addEventListener('click', () => fecharModal('modalEditarUsuario'));
   document.getElementById('formEditarUsuario').addEventListener('submit', handleSalvarEdicaoUsuario);
 
+  // Exclusão de Colaborador
+  const btnFecharExclusao = document.getElementById('btnFecharConfirmExclusao');
+  if (btnFecharExclusao) btnFecharExclusao.addEventListener('click', () => fecharModal('modalConfirmExclusao'));
+  const btnCancelarExclusao = document.getElementById('btnCancelarExclusao');
+  if (btnCancelarExclusao) btnCancelarExclusao.addEventListener('click', () => fecharModal('modalConfirmExclusao'));
+  const btnConfirmarExclusao = document.getElementById('btnConfirmarExclusaoAcao');
+  if (btnConfirmarExclusao) btnConfirmarExclusao.addEventListener('click', executarExclusaoConfirmada);
+
   // Busca
   document.getElementById('buscaUsuarios').addEventListener('input', (e) => {
     renderTabelaUsuarios(e.target.value.toLowerCase());
@@ -220,7 +229,6 @@ function setupEventListeners() {
 }
 
 function setupModalSwitches() {
-  // Toggle dinâmico para edição
   const setupSwitch = (switchId, cardId, selectId) => {
     const el = document.getElementById(switchId);
     if (!el) return;
@@ -336,7 +344,7 @@ function renderLauncher() {
     npsBtn.innerHTML = '<span>Acessar Painel NPS</span> <i class="ph ph-arrow-square-out"></i>';
   } else {
     npsBadge.className = 'badge-status-app bloqueado';
-    npsBadge.innerHTML = '<i class="ph ph-lock-key"></i> Sem Acesso';
+    mapaBadge.innerHTML = '<i class="ph ph-lock-key"></i> Sem Acesso';
     npsBtn.className = 'btn-launch-app btn-disabled-launch';
     npsBtn.removeAttribute('href');
     npsBtn.removeAttribute('target');
@@ -397,6 +405,7 @@ function renderTabelaUsuarios(termoBusca = '') {
 
   filtrados.forEach(u => {
     const tr = document.createElement('tr');
+    const isMaster = u.email.toLowerCase() === ADMIN_MASTER_EMAIL;
 
     const permMapa = u.permissoes.mapa && u.permissoes.mapa.liberado 
       ? `<span class="badge-role-app ativo-mapa"><i class="ph ph-check-circle"></i> ${u.permissoes.mapa.perfil}</span>`
@@ -433,13 +442,25 @@ function renderTabelaUsuarios(termoBusca = '') {
       <td>${permFunil}</td>
       <td>
         <div class="actions-cell">
+          <!-- 1. Editar Permissões -->
           <button class="btn-table-action" title="Editar Permissões" onclick="abrirEdicaoUsuario('${u.id}')">
             <i class="ph ph-sliders"></i>
           </button>
-          <button class="btn-table-action ${u.status === 'ativo' ? 'danger' : ''}" 
-                  title="${u.status === 'ativo' ? 'Bloquear em todas as ferramentas' : 'Reativar colaborador'}" 
-                  onclick="toggleStatusUsuario('${u.id}')">
+
+          <!-- 2. Ativar / Desativar -->
+          <button class="btn-table-action ${u.status === 'ativo' ? 'warning' : 'success'}" 
+                  title="${isMaster ? 'Conta Master Imutável' : (u.status === 'ativo' ? 'Suspender / Desativar Colaborador' : 'Reativar Colaborador')}" 
+                  onclick="${isMaster ? '' : `toggleStatusUsuario('${u.id}')`}"
+                  ${isMaster ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : ''}>
             <i class="ph ${u.status === 'ativo' ? 'ph-user-minus' : 'ph-user-check'}"></i>
+          </button>
+
+          <!-- 3. Excluir Colaborador -->
+          <button class="btn-table-action danger" 
+                  title="${isMaster ? 'Não é possível excluir o Administrador Master' : 'Excluir Colaborador Definitivamente'}" 
+                  onclick="${isMaster ? '' : `solicitarExclusaoUsuario('${u.id}')`}"
+                  ${isMaster ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : ''}>
+            <i class="ph ph-trash"></i>
           </button>
         </div>
       </td>
@@ -499,7 +520,6 @@ window.abrirEdicaoUsuario = function(id) {
 
   editingUserId = id;
 
-  // Atualiza Card de Resumo do Usuário
   const nomeDisplay = document.getElementById('editNomeDisplay');
   const emailDisplay = document.getElementById('editEmailDisplay');
   if (nomeDisplay) nomeDisplay.textContent = u.nome;
@@ -584,7 +604,7 @@ window.toggleStatusUsuario = function(id) {
   const u = usersList.find(x => x.id === id);
   if (!u) return;
 
-  if (u.id === currentUser.id) {
+  if (u.id === currentUser.id || u.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
     showToast('Você não pode desativar seu próprio usuário administrador.', 'error');
     return;
   }
@@ -595,9 +615,39 @@ window.toggleStatusUsuario = function(id) {
 
   const msg = u.status === 'ativo' 
     ? `Acesso de ${u.nome} reativado em todas as ferramentas.` 
-    : `Acesso de ${u.nome} suspenso em todas as plataformas!`;
+    : `Acesso de ${u.nome} suspenso no Farol!`;
   showToast(msg, u.status === 'ativo' ? 'success' : 'error');
 };
+
+// Exclusão com Confirmação
+window.solicitarExclusaoUsuario = function(id) {
+  const u = usersList.find(x => x.id === id);
+  if (!u) return;
+
+  if (u.id === currentUser.id || u.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
+    showToast('Você não pode excluir o Administrador Master.', 'error');
+    return;
+  }
+
+  usuarioParaExcluir = u;
+  document.getElementById('nomeExcluirDisplay').textContent = u.nome;
+  abrirModal('modalConfirmExclusao');
+};
+
+function executarExclusaoConfirmada() {
+  if (!usuarioParaExcluir) return;
+
+  const nome = usuarioParaExcluir.nome;
+  const id = usuarioParaExcluir.id;
+
+  usersList = usersList.filter(x => x.id !== id);
+  salvarUsuariosStorage();
+  fecharModal('modalConfirmExclusao');
+  renderTabelaUsuarios();
+
+  showToast(`Colaborador ${nome} excluído permanentemente do Farol.`, 'success');
+  usuarioParaExcluir = null;
+}
 
 function salvarUsuariosStorage() {
   localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(usersList));

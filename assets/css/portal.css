@@ -848,6 +848,18 @@ body {
   color: #fca5a5;
 }
 
+.btn-table-action.warning:hover {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #fcd34d;
+}
+
+.btn-table-action.success:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #6ee7b7;
+}
+
 /* ==========================================================================
    MODAIS REFINADOS & PREMIUM (SEM SCROLLBAR FEIA DO WINDOWS)
    ========================================================================== */

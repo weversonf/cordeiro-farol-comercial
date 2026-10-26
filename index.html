@@ -566,6 +566,31 @@
     </div>
   </div>
 
+  <!-- Modal Confirmar Exclusão -->
+  <div id="modalConfirmExclusao" class="modal-overlay">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 style="color: #fca5a5;"><i class="ph ph-warning-circle" style="color: var(--accent-red);"></i> Confirmar Exclusão</h3>
+        <button type="button" id="btnFecharConfirmExclusao" class="btn-close-modal"><i class="ph ph-x"></i></button>
+      </div>
+      <div style="padding: 10px 0 16px;">
+        <p style="font-size: 14px; color: #fff; line-height: 1.5;">
+          Tem certeza que deseja excluir permanentemente o colaborador <strong id="nomeExcluirDisplay" style="color: var(--accent-gold);"></strong>?
+        </p>
+        <p style="font-size: 12px; color: var(--text-dimmed); margin-top: 8px; line-height: 1.5;">
+          Esta ação revogará todos os acessos ao Mapa de Ocupação, Pesquisa NPS e Funil de Vendas de forma definitiva.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btnCancelarExclusao" class="btn-modal-cancel">Cancelar</button>
+        <button type="button" id="btnConfirmarExclusaoAcao" class="btn-modal-submit" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);">
+          <i class="ph ph-trash"></i>
+          <span>Excluir Permanentemente</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Container de Toasts -->
   <div id="toastContainer" class="toast-container"></div>
 
