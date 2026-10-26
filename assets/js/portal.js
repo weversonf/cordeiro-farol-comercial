@@ -1,12 +1,17 @@
 /**
  * GRUPO CORDEIRO - FAROL CORDEIRO COMERCIAL
- * Integrado ao Banco de Dados Supabase Oficial do Projeto NPS (mufykevpimzgudsgzfpb)
+ * Sincronização em Tempo Real com Supabase (mufykevpimzgudsgzfpb)
  * Acesso Exclusivo de Gestão Geral (IAM): weverson.feitosa@cordeiroguindastes.com.br
  */
 
-// Configuração do Supabase Oficial do NPS
+// Configuração do Supabase Oficial
 const SUPABASE_URL = "https://mufykevpimzgudsgzfpb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_KNpBaTlv2ZjAIhrJA3Ykbw_K-Lv-kNx";
+
+// Inicializa o cliente Supabase oficial se a biblioteca estiver presente
+const supabase = (window.supabase && typeof window.supabase.createClient === 'function')
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
 
 // Chaves de armazenamento
 const STORAGE_KEY_AUTH = 'cordeiro_farol_session_v1';
@@ -24,7 +29,14 @@ function validarDominioCorporativo(email) {
   return DOMINIOS_AUTORIZADOS.includes(parts[1]);
 }
 
-// Base de usuários padrão limpa e alinhada
+// URLs dos 3 sistemas em produção
+const URLS_SISTEMAS = {
+  mapa: 'https://cordeiro-mapa-ocupacao.vercel.app',
+  nps: 'https://cordeiro-nps.vercel.app',
+  funil: 'https://cordeiro-funil-vendas.vercel.app'
+};
+
+// Base inicial padrão de contingência (fallback local caso banco offline)
 const USUARIOS_PADRAO = [
   {
     id: 'u-1',
@@ -57,9 +69,9 @@ const USUARIOS_PADRAO = [
     cargo: 'Gestão NPS & Qualidade',
     status: 'ativo',
     permissoes: {
-      mapa: { liberado: false, perfil: 'Sem Acesso' },
-      nps: { liberado: true, perfil: 'Admin' },
-      funil: { liberado: false, perfil: 'Sem Acesso' }
+      mapa: { liberado: true, perfil: 'Operação / CCO' },
+      nps: { liberado: true, perfil: 'Visualizador de Relatórios' },
+      funil: { liberado: true, perfil: 'Executivo Comercial' }
     }
   },
   {
@@ -88,13 +100,6 @@ const USUARIOS_PADRAO = [
   }
 ];
 
-// URLs dos 3 sistemas em produção
-const URLS_SISTEMAS = {
-  mapa: 'https://cordeiro-mapa-ocupacao.vercel.app',
-  nps: 'https://cordeiro-nps.vercel.app',
-  funil: 'https://cordeiro-funil-vendas.vercel.app'
-};
-
 // Estado
 let currentUser = null;
 let usersList = [];
@@ -102,28 +107,70 @@ let editingUserId = null;
 let usuarioParaExcluir = null;
 
 // Inicialização
-document.addEventListener('DOMContentLoaded', () => {
-  initStorage();
-  checkSession();
+document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   setupModalSwitches();
+  await initStorage();
+  checkSession();
 });
 
-function initStorage() {
-  const storedUsers = localStorage.getItem(STORAGE_KEY_USERS);
-  if (!storedUsers) {
-    localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(USUARIOS_PADRAO));
-    usersList = [...USUARIOS_PADRAO];
-  } else {
+// Carrega usuários da nuvem (Supabase) ou fallback local
+async function initStorage() {
+  let loadedFromCloud = false;
+
+  if (supabase) {
     try {
-      usersList = JSON.parse(storedUsers);
-      usersList = usersList.filter(u => {
-        const e = u.email.toLowerCase();
-        return e !== 'marcio.funghi@cordeiroguindastes.com' && e !== 'comercial@cordeiroguindastes.com.br';
-      });
-      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(usersList));
-    } catch (e) {
+      const { data, error } = await supabase
+        .from('usuarios_nps')
+        .select('*');
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        usersList = data
+          .filter(row => {
+            const e = String(row.email || '').toLowerCase();
+            return e !== 'marcio.funghi@cordeiroguindastes.com' && e !== 'comercial@cordeiroguindastes.com.br';
+          })
+          .map(row => ({
+            id: String(row.id),
+            nome: row.nome || 'Colaborador',
+            email: String(row.email).toLowerCase(),
+            cargo: row.cargo || (row.email.toLowerCase() === ADMIN_MASTER_EMAIL ? 'Administrador Master' : 'Colaborador'),
+            status: row.ativo === false ? 'inativo' : 'ativo',
+            permissoes: {
+              mapa: {
+                liberado: row.permissao_mapa !== false,
+                perfil: row.perfil_mapa || 'Operação'
+              },
+              nps: {
+                liberado: row.permissao_nps !== false,
+                perfil: row.perfil_nps || 'Visualizador'
+              },
+              funil: {
+                liberado: row.permissao_funil !== false,
+                perfil: row.perfil_funil || 'Comercial'
+              }
+            }
+          }));
+
+        localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(usersList));
+        loadedFromCloud = true;
+      }
+    } catch (err) {
+      console.warn('Aviso: Supabase em sincronização local temporária.', err);
+    }
+  }
+
+  if (!loadedFromCloud) {
+    const storedUsers = localStorage.getItem(STORAGE_KEY_USERS);
+    if (!storedUsers) {
+      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(USUARIOS_PADRAO));
       usersList = [...USUARIOS_PADRAO];
+    } else {
+      try {
+        usersList = JSON.parse(storedUsers);
+      } catch (e) {
+        usersList = [...USUARIOS_PADRAO];
+      }
     }
   }
 }
@@ -132,7 +179,11 @@ function checkSession() {
   const sessionData = localStorage.getItem(STORAGE_KEY_AUTH);
   if (sessionData) {
     try {
-      currentUser = JSON.parse(sessionData);
+      const cached = JSON.parse(sessionData);
+      // Atualiza os dados da sessão com a versão mais recente da lista de usuários
+      const updatedUser = usersList.find(u => u.email.toLowerCase() === cached.email.toLowerCase());
+      currentUser = updatedUser || cached;
+      localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(currentUser));
       showAppScreen();
     } catch (e) {
       showLoginScreen();
@@ -265,6 +316,9 @@ async function handleLogin(e) {
     return;
   }
 
+  // Tenta recarregar a versão mais atual do Supabase antes de validar
+  await initStorage();
+
   const user = usersList.find(u => u.email.toLowerCase() === email);
 
   if (!user) {
@@ -344,7 +398,7 @@ function renderLauncher() {
     npsBtn.innerHTML = '<span>Acessar Painel NPS</span> <i class="ph ph-arrow-square-out"></i>';
   } else {
     npsBadge.className = 'badge-status-app bloqueado';
-    mapaBadge.innerHTML = '<i class="ph ph-lock-key"></i> Sem Acesso';
+    npsBadge.innerHTML = '<i class="ph ph-lock-key"></i> Sem Acesso';
     npsBtn.className = 'btn-launch-app btn-disabled-launch';
     npsBtn.removeAttribute('href');
     npsBtn.removeAttribute('target');
@@ -469,7 +523,7 @@ function renderTabelaUsuarios(termoBusca = '') {
   });
 }
 
-function handleSalvarNovoUsuario(e) {
+async function handleSalvarNovoUsuario(e) {
   e.preventDefault();
   const nome = document.getElementById('novoNome').value.trim();
   const email = document.getElementById('novoEmail').value.trim().toLowerCase();
@@ -507,6 +561,27 @@ function handleSalvarNovoUsuario(e) {
     }
   };
 
+  // Salva no Supabase se disponível
+  if (supabase) {
+    try {
+      await supabase.from('usuarios_nps').insert([{
+        nome,
+        email,
+        cargo,
+        senha: 'Cordeiro@2026',
+        ativo: true,
+        permissao_mapa: mapaLiberado,
+        perfil_mapa: mapaPerfil,
+        permissao_nps: npsLiberado,
+        perfil_nps: npsPerfil,
+        permissao_funil: funilLiberado,
+        perfil_funil: funilPerfil
+      }]);
+    } catch (err) {
+      console.warn('Erro ao inserir no Supabase, mantendo local.', err);
+    }
+  }
+
   usersList.push(novoUsuario);
   salvarUsuariosStorage();
   fecharModal('modalNovoUsuario');
@@ -536,7 +611,7 @@ window.abrirEdicaoUsuario = function(id) {
   if (cardMapa) cardMapa.className = mapaEl.checked ? 'app-permission-card ativo' : 'app-permission-card inativo';
   const selMapa = document.getElementById('editPerfilMapa');
   if (selMapa) {
-    selMapa.value = mapaEl.checked ? u.permissoes.mapa.perfil : 'Operação';
+    selMapa.value = mapaEl.checked ? u.permissoes.mapa.perfil : 'Operação / CCO';
     selMapa.disabled = !mapaEl.checked;
   }
 
@@ -547,7 +622,7 @@ window.abrirEdicaoUsuario = function(id) {
   if (cardNps) cardNps.className = npsEl.checked ? 'app-permission-card ativo' : 'app-permission-card inativo';
   const selNps = document.getElementById('editPerfilNps');
   if (selNps) {
-    selNps.value = npsEl.checked ? u.permissoes.nps.perfil : 'Comercial';
+    selNps.value = npsEl.checked ? u.permissoes.nps.perfil : 'Visualizador de Relatórios';
     selNps.disabled = !npsEl.checked;
   }
 
@@ -558,14 +633,14 @@ window.abrirEdicaoUsuario = function(id) {
   if (cardFunil) cardFunil.className = funilEl.checked ? 'app-permission-card ativo' : 'app-permission-card inativo';
   const selFunil = document.getElementById('editPerfilFunil');
   if (selFunil) {
-    selFunil.value = funilEl.checked ? u.permissoes.funil.perfil : 'Comercial';
+    selFunil.value = funilEl.checked ? u.permissoes.funil.perfil : 'Executivo Comercial';
     selFunil.disabled = !funilEl.checked;
   }
 
   abrirModal('modalEditarUsuario');
 };
 
-function handleSalvarEdicaoUsuario(e) {
+async function handleSalvarEdicaoUsuario(e) {
   e.preventDefault();
   const u = usersList.find(x => x.id === editingUserId);
   if (!u) return;
@@ -587,6 +662,26 @@ function handleSalvarEdicaoUsuario(e) {
     funil: { liberado: funilLiberado, perfil: funilLiberado ? funilPerfil : 'Sem Acesso' }
   };
 
+  // Salva no Supabase se conectado
+  if (supabase) {
+    try {
+      await supabase
+        .from('usuarios_nps')
+        .update({
+          cargo: u.cargo,
+          permissao_mapa: mapaLiberado,
+          perfil_mapa: mapaPerfil,
+          permissao_nps: npsLiberado,
+          perfil_nps: npsPerfil,
+          permissao_funil: funilLiberado,
+          perfil_funil: funilPerfil
+        })
+        .ilike('email', u.email);
+    } catch (err) {
+      console.warn('Erro ao atualizar Supabase, mantendo local.', err);
+    }
+  }
+
   salvarUsuariosStorage();
   fecharModal('modalEditarUsuario');
   renderTabelaUsuarios();
@@ -597,10 +692,10 @@ function handleSalvarEdicaoUsuario(e) {
     renderLauncher();
   }
 
-  showToast(`Permissões de ${u.nome} atualizadas com sucesso!`, 'success');
+  showToast(`Permissões de ${u.nome} sincronizadas com sucesso!`, 'success');
 }
 
-window.toggleStatusUsuario = function(id) {
+async function toggleStatusUsuario(id) {
   const u = usersList.find(x => x.id === id);
   if (!u) return;
 
@@ -610,6 +705,18 @@ window.toggleStatusUsuario = function(id) {
   }
 
   u.status = u.status === 'ativo' ? 'inativo' : 'ativo';
+
+  if (supabase) {
+    try {
+      await supabase
+        .from('usuarios_nps')
+        .update({ ativo: u.status === 'ativo' })
+        .ilike('email', u.email);
+    } catch (err) {
+      console.warn('Erro ao atualizar status no Supabase.', err);
+    }
+  }
+
   salvarUsuariosStorage();
   renderTabelaUsuarios();
 
@@ -617,7 +724,9 @@ window.toggleStatusUsuario = function(id) {
     ? `Acesso de ${u.nome} reativado em todas as ferramentas.` 
     : `Acesso de ${u.nome} suspenso no Farol!`;
   showToast(msg, u.status === 'ativo' ? 'success' : 'error');
-};
+}
+
+window.toggleStatusUsuario = toggleStatusUsuario;
 
 // Exclusão com Confirmação
 window.solicitarExclusaoUsuario = function(id) {
@@ -634,11 +743,23 @@ window.solicitarExclusaoUsuario = function(id) {
   abrirModal('modalConfirmExclusao');
 };
 
-function executarExclusaoConfirmada() {
+async function executarExclusaoConfirmada() {
   if (!usuarioParaExcluir) return;
 
   const nome = usuarioParaExcluir.nome;
+  const email = usuarioParaExcluir.email;
   const id = usuarioParaExcluir.id;
+
+  if (supabase) {
+    try {
+      await supabase
+        .from('usuarios_nps')
+        .delete()
+        .ilike('email', email);
+    } catch (err) {
+      console.warn('Erro ao deletar no Supabase.', err);
+    }
+  }
 
   usersList = usersList.filter(x => x.id !== id);
   salvarUsuariosStorage();
