@@ -1,7 +1,7 @@
 /**
- * GRUPO CORDEIRO - PORTAL CORPORATIVO (HUB & GESTAO DE ACESSOS)
+ * GRUPO CORDEIRO - FAROL CORDEIRO COMERCIAL
  * Integrado ao Banco de Dados Supabase Oficial do Projeto NPS (mufykevpimzgudsgzfpb)
- * Domínios Corporativos Autorizados: @cordeiroguindastes.com.br e @cordeiroguindastes.com
+ * Acesso Exclusivo de Gestão Geral (IAM): weverson.feitosa@cordeiroguindastes.com.br
  */
 
 // Configuração do Supabase Oficial do NPS
@@ -9,10 +9,13 @@ const SUPABASE_URL = "https://mufykevpimzgudsgzfpb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_KNpBaTlv2ZjAIhrJA3Ykbw_K-Lv-kNx";
 
 // Chaves de armazenamento
-const STORAGE_KEY_AUTH = 'cordeiro_portal_session_v1';
-const STORAGE_KEY_USERS = 'cordeiro_portal_users_v1';
+const STORAGE_KEY_AUTH = 'cordeiro_farol_session_v1';
+const STORAGE_KEY_USERS = 'cordeiro_farol_users_v1';
 
-// Domínios válidos
+// E-mail do Administrador Master Exclusivo do Farol Geral
+const ADMIN_MASTER_EMAIL = 'weverson.feitosa@cordeiroguindastes.com.br';
+
+// Domínios válidos corporativos
 const DOMINIOS_AUTORIZADOS = ['cordeiroguindastes.com.br', 'cordeiroguindastes.com'];
 
 function validarDominioCorporativo(email) {
@@ -21,7 +24,7 @@ function validarDominioCorporativo(email) {
   return DOMINIOS_AUTORIZADOS.includes(parts[1]);
 }
 
-// Base de usuários padrão Cordeiro (sincronizada com comercial.usuarios_nps)
+// Base de usuários padrão limpa e alinhada
 const USUARIOS_PADRAO = [
   {
     id: 'u-1',
@@ -38,7 +41,7 @@ const USUARIOS_PADRAO = [
   {
     id: 'u-2',
     nome: 'Márcio Funghi',
-    email: 'marcio.funghi@cordeiroguindastes.com',
+    email: 'marcio.funghi@cordeiroguindastes.com.br',
     cargo: 'Diretoria / Gestão',
     status: 'ativo',
     permissoes: {
@@ -82,18 +85,6 @@ const USUARIOS_PADRAO = [
       nps: { liberado: true, perfil: 'Comercial' },
       funil: { liberado: true, perfil: 'Comercial' }
     }
-  },
-  {
-    id: 'u-6',
-    nome: 'Equipe CCO · Operações',
-    email: 'cco@cordeiroguindastes.com.br',
-    cargo: 'Centro de Controle Operacional',
-    status: 'ativo',
-    permissoes: {
-      mapa: { liberado: true, perfil: 'CCO' },
-      nps: { liberado: false, perfil: 'Sem Acesso' },
-      funil: { liberado: false, perfil: 'Sem Acesso' }
-    }
   }
 ];
 
@@ -124,6 +115,12 @@ function initStorage() {
   } else {
     try {
       usersList = JSON.parse(storedUsers);
+      // Remove e-mails excluídos pelo Weverson se ainda existirem em cache
+      usersList = usersList.filter(u => {
+        const e = u.email.toLowerCase();
+        return e !== 'marcio.funghi@cordeiroguindastes.com' && e !== 'comercial@cordeiroguindastes.com.br';
+      });
+      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(usersList));
     } catch (e) {
       usersList = [...USUARIOS_PADRAO];
     }
@@ -156,14 +153,11 @@ function showAppScreen() {
   document.getElementById('headerUserName').textContent = currentUser.nome;
   document.getElementById('headerUserRole').textContent = currentUser.cargo;
 
-  // Apenas Administradores enxergam a aba de Gestão de Perfis & Acessos
+  // REGRA DE OURO: Apenas Weverson Feitosa tem acesso à Gestão de Perfis & Acessos (IAM)
   const tabGestaoBtn = document.getElementById('tabGestaoBtn');
-  const isAdmin = currentUser.cargo.toLowerCase().includes('admin') || 
-                  currentUser.email.startsWith('weverson.feitosa') ||
-                  currentUser.email.startsWith('marcio.funghi') ||
-                  (currentUser.permissoes && currentUser.permissoes.mapa && currentUser.permissoes.mapa.perfil === 'Admin');
+  const isMasterAdmin = currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL;
 
-  if (isAdmin) {
+  if (isMasterAdmin) {
     tabGestaoBtn.style.display = 'flex';
   } else {
     tabGestaoBtn.style.display = 'none';
@@ -171,7 +165,7 @@ function showAppScreen() {
   }
 
   renderLauncher();
-  if (isAdmin) {
+  if (isMasterAdmin) {
     renderTabelaUsuarios();
   }
 }
@@ -194,7 +188,12 @@ function setupEventListeners() {
 
   // Abas
   document.getElementById('tabLauncherBtn').addEventListener('click', () => switchTab('launcher'));
-  document.getElementById('tabGestaoBtn').addEventListener('click', () => switchTab('gestao'));
+  document.getElementById('tabGestaoBtn').addEventListener('click', () => {
+    // Segurança: trava caso outro usuário tente forçar clique
+    if (currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
+      switchTab('gestao');
+    }
+  });
 
   // Esqueci senha
   document.getElementById('btnAbrirEsqueci').addEventListener('click', () => abrirModal('modalEsqueci'));
@@ -236,22 +235,29 @@ async function handleLogin(e) {
     return;
   }
 
-  // 2. Busca na base de usuários
+  // 2. Bloqueio de e-mails excluídos
+  if (email === 'marcio.funghi@cordeiroguindastes.com' || email === 'comercial@cordeiroguindastes.com.br') {
+    erroBox.textContent = 'Este e-mail corporativo não está ativo no Farol.';
+    erroBox.style.display = 'flex';
+    return;
+  }
+
+  // 3. Busca na base de usuários
   const user = usersList.find(u => u.email.toLowerCase() === email);
 
   if (!user) {
-    erroBox.textContent = 'E-mail corporativo não cadastrado. Solicite liberação ao Administrador.';
+    erroBox.textContent = 'E-mail corporativo não cadastrado. Solicite liberação ao Weverson Feitosa.';
     erroBox.style.display = 'flex';
     return;
   }
 
   if (user.status !== 'ativo') {
-    erroBox.textContent = 'Este perfil de acesso está inativo ou suspenso em todas as plataformas.';
+    erroBox.textContent = 'Este perfil de acesso está suspenso em todas as plataformas.';
     erroBox.style.display = 'flex';
     return;
   }
 
-  // 3. Autenticação por e-mail e senha
+  // 4. Autenticação e Sessão
   currentUser = user;
   localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(currentUser));
   showToast(`Autenticado com sucesso. Bem-vindo, ${user.nome}!`, 'success');
@@ -274,7 +280,7 @@ function switchTab(tab) {
   if (tab === 'launcher') {
     document.getElementById('tabLauncherBtn').classList.add('active');
     document.getElementById('viewLauncher').classList.add('active');
-  } else if (tab === 'gestao') {
+  } else if (tab === 'gestao' && currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
     document.getElementById('tabGestaoBtn').classList.add('active');
     document.getElementById('viewGestao').classList.add('active');
     renderTabelaUsuarios();
@@ -360,6 +366,9 @@ function getSSORedirectUrl(appKey) {
 }
 
 function renderTabelaUsuarios(termoBusca = '') {
+  // Proteção: apenas Weverson pode renderizar e manipular a tabela IAM
+  if (currentUser.email.toLowerCase() !== ADMIN_MASTER_EMAIL) return;
+
   const tbody = document.getElementById('tbodyUsuarios');
   tbody.innerHTML = '';
 
@@ -433,7 +442,6 @@ function handleSalvarNovoUsuario(e) {
   const email = document.getElementById('novoEmail').value.trim().toLowerCase();
   const cargo = document.getElementById('novoCargo').value.trim();
 
-  // Validação do domínio corporativo oficial
   if (!validarDominioCorporativo(email)) {
     showToast('O e-mail precisa ser @cordeiroguindastes.com.br ou @cordeiroguindastes.com', 'error');
     return;
