@@ -589,10 +589,14 @@ async function handleSalvarNovoUsuario(e) {
     // 2. Salva na tabela oficial de permissões (usuarios_nps)
     if (sbClient) {
       try {
+        const nextNumericId = Math.max(0, ...usersList.map(u => parseInt(u.id) || 0)) + 1;
+        novoUsuario.id = String(nextNumericId);
+
         const perfilNpsDb = !npsLiberado ? 'bloqueado' : (npsPerfil === 'Admin' ? 'admin' : (npsPerfil === 'Comercial' ? 'comercial' : 'visualizador'));
         const { data: insertedData, error: dbErr } = await sbClient
           .from('usuarios_nps')
           .insert([{
+            id: nextNumericId,
             nome,
             email,
             senha: 'Cordeiro@2026',
@@ -605,7 +609,9 @@ async function handleSalvarNovoUsuario(e) {
           }])
           .select();
 
-        if (!dbErr && Array.isArray(insertedData) && insertedData.length > 0) {
+        if (dbErr) {
+          console.warn('Aviso Supabase ao inserir na tabela:', dbErr);
+        } else if (Array.isArray(insertedData) && insertedData.length > 0) {
           novoUsuario.id = String(insertedData[0].id);
         }
       } catch (err) {
