@@ -49,54 +49,6 @@ const USUARIOS_PADRAO = [
       nps: { liberado: true, perfil: 'Admin' },
       funil: { liberado: true, perfil: 'Admin' }
     }
-  },
-  {
-    id: 'u-2',
-    nome: 'Márcio Funghi',
-    email: 'marcio.funghi@cordeiroguindastes.com.br',
-    cargo: 'Diretoria / Gestão',
-    status: 'ativo',
-    permissoes: {
-      mapa: { liberado: true, perfil: 'Admin' },
-      nps: { liberado: true, perfil: 'Admin' },
-      funil: { liberado: true, perfil: 'Admin' }
-    }
-  },
-  {
-    id: 'u-3',
-    nome: 'Erika Santos',
-    email: 'erika.santos@cordeiroguindastes.com.br',
-    cargo: 'Gestão NPS & Qualidade',
-    status: 'ativo',
-    permissoes: {
-      mapa: { liberado: true, perfil: 'Operação / CCO' },
-      nps: { liberado: true, perfil: 'Visualizador de Relatórios' },
-      funil: { liberado: true, perfil: 'Executivo Comercial' }
-    }
-  },
-  {
-    id: 'u-4',
-    nome: 'Thiago Ferreira',
-    email: 'thiago.ferreira@cordeiroguindastes.com.br',
-    cargo: 'Executivo Comercial',
-    status: 'ativo',
-    permissoes: {
-      mapa: { liberado: true, perfil: 'Comercial' },
-      nps: { liberado: false, perfil: 'Sem Acesso' },
-      funil: { liberado: true, perfil: 'Comercial' }
-    }
-  },
-  {
-    id: 'u-5',
-    nome: 'Cristiano Assis',
-    email: 'cristiano.assis@cordeiroguindastes.com.br',
-    cargo: 'Executivo Comercial',
-    status: 'ativo',
-    permissoes: {
-      mapa: { liberado: true, perfil: 'Comercial' },
-      nps: { liberado: true, perfil: 'Comercial' },
-      funil: { liberado: true, perfil: 'Comercial' }
-    }
   }
 ];
 
@@ -127,6 +79,7 @@ async function initStorage() {
         .select('*');
 
       if (!error && Array.isArray(data) && data.length > 0) {
+        window._supabaseDataCloud = data;
         usersList = data
           .filter(row => {
             const e = String(row.email || '').toLowerCase();
@@ -188,13 +141,19 @@ async function initStorage() {
     }
   }
 
-  // Garante sempre que a base padrão (incluindo Weverson Master e Erika) esteja presente
-  USUARIOS_PADRAO.forEach(padrao => {
-    const existe = usersList.some(u => u.email.toLowerCase() === padrao.email.toLowerCase());
-    if (!existe) {
-      usersList.push(padrao);
-    }
-  });
+  // Garante apenas que o Administrador Master esteja sempre na lista para evitar lockout acidental
+  const existeMaster = usersList.some(u => u.email.toLowerCase() === ADMIN_MASTER_EMAIL.toLowerCase());
+  if (!existeMaster) {
+    usersList.unshift(USUARIOS_PADRAO[0]);
+  }
+
+  // Se carregou do banco de dados na nuvem, limpa quaisquer usuários locais legados que já foram excluídos
+  if (loadedFromCloud) {
+    usersList = usersList.filter(u => {
+      const e = u.email.toLowerCase();
+      return e === ADMIN_MASTER_EMAIL.toLowerCase() || (window._supabaseDataCloud && window._supabaseDataCloud.some(row => String(row.email).toLowerCase() === e));
+    });
+  }
 
   localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(usersList));
 }
@@ -787,10 +746,10 @@ window.toggleStatusUsuario = toggleStatusUsuario;
 
 // Exclusão com Confirmação
 window.solicitarExclusaoUsuario = function(id) {
-  const u = usersList.find(x => x.id === id);
+  const u = usersList.find(x => String(x.id) === String(id) || x.email.toLowerCase() === String(id).toLowerCase());
   if (!u) return;
 
-  if (u.id === currentUser.id || u.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
+  if (String(u.id) === String(currentUser.id) || u.email.toLowerCase() === ADMIN_MASTER_EMAIL.toLowerCase()) {
     showToast('Você não pode excluir o Administrador Master.', 'error');
     return;
   }
@@ -807,24 +766,37 @@ async function executarExclusaoConfirmada() {
   const email = usuarioParaExcluir.email;
   const id = usuarioParaExcluir.id;
 
-  if (sbClient) {
-    try {
-      await sbClient
-        .from('usuarios_nps')
-        .delete()
-        .ilike('email', email);
-    } catch (err) {
-      console.warn('Erro ao deletar no Supabase.', err);
-    }
+  const btnConfirmar = document.getElementById('btnConfirmarExclusaoAcao');
+  if (btnConfirmar) {
+    btnConfirmar.disabled = true;
+    btnConfirmar.innerHTML = '<i class="ph ph-spinner-gap animate-spin"></i> <span>Excluindo...</span>';
   }
 
-  usersList = usersList.filter(x => x.id !== id);
-  salvarUsuariosStorage();
-  fecharModal('modalConfirmExclusao');
-  renderTabelaUsuarios();
+  try {
+    if (sbClient) {
+      try {
+        await sbClient
+          .from('usuarios_nps')
+          .delete()
+          .ilike('email', email);
+      } catch (err) {
+        console.warn('Erro ao deletar no Supabase.', err);
+      }
+    }
 
-  showToast(`Colaborador ${nome} excluído permanentemente do Farol.`, 'success');
-  usuarioParaExcluir = null;
+    usersList = usersList.filter(x => String(x.id) !== String(id) && x.email.toLowerCase() !== email.toLowerCase());
+    salvarUsuariosStorage();
+    fecharModal('modalConfirmExclusao');
+    renderTabelaUsuarios();
+
+    showToast(`Colaborador ${nome} excluído permanentemente do Farol.`, 'success');
+  } finally {
+    if (btnConfirmar) {
+      btnConfirmar.disabled = false;
+      btnConfirmar.innerHTML = '<i class="ph ph-trash"></i> <span>Excluir Permanentemente</span>';
+    }
+    usuarioParaExcluir = null;
+  }
 }
 
 function salvarUsuariosStorage() {
