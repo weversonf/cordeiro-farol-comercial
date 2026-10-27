@@ -528,6 +528,12 @@ async function handleSalvarNovoUsuario(e) {
     return;
   }
 
+  const btnSubmit = document.getElementById('btnSalvarNovoUsuario');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<i class="ph ph-spinner-gap animate-spin"></i> <span>Cadastrando no Auth & Farol...</span>';
+  }
+
   const mapaLiberado = document.getElementById('novoPermMapa').checked;
   const mapaPerfil = document.getElementById('novoPerfilMapa').value;
 
@@ -550,31 +556,77 @@ async function handleSalvarNovoUsuario(e) {
     }
   };
 
-  // Salva no Supabase se disponível
-  if (sbClient) {
-    try {
-      const perfilNpsDb = !npsLiberado ? 'bloqueado' : (npsPerfil === 'Admin' ? 'admin' : (npsPerfil === 'Comercial' ? 'comercial' : 'visualizador'));
-      await sbClient.from('usuarios_nps').insert([{
-        nome,
-        email,
-        senha: 'Cordeiro@2026',
-        ativo: true,
-        perfil: perfilNpsDb,
-        permissao_mapa: mapaLiberado,
-        perfil_mapa: mapaPerfil,
-        permissao_funil: funilLiberado,
-        perfil_funil: funilPerfil
-      }]);
-    } catch (err) {
-      console.warn('Erro ao inserir no Supabase, mantendo local.', err);
+  try {
+    // 1. Cria automaticamente a conta no Supabase Auth usando cliente secundário isolado (sem afetar a sessão atual)
+    const secondaryAuth = (window.supabase && typeof window.supabase.createClient === 'function')
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+        })
+      : null;
+
+    if (secondaryAuth) {
+      try {
+        const { error: authErr } = await secondaryAuth.auth.signUp({
+          email: email,
+          password: 'Cordeiro@2026',
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: {
+              nome: nome,
+              cargo: cargo,
+              precisaTrocarSenha: true
+            }
+          }
+        });
+        if (authErr && !authErr.message?.toLowerCase().includes('already')) {
+          console.warn('Aviso ao registrar no Supabase Auth:', authErr);
+        }
+      } catch (authEx) {
+        console.warn('Exceção ao criar no Supabase Auth:', authEx);
+      }
+    }
+
+    // 2. Salva na tabela oficial de permissões (usuarios_nps)
+    if (sbClient) {
+      try {
+        const perfilNpsDb = !npsLiberado ? 'bloqueado' : (npsPerfil === 'Admin' ? 'admin' : (npsPerfil === 'Comercial' ? 'comercial' : 'visualizador'));
+        const { data: insertedData, error: dbErr } = await sbClient
+          .from('usuarios_nps')
+          .insert([{
+            nome,
+            email,
+            senha: 'Cordeiro@2026',
+            ativo: true,
+            perfil: perfilNpsDb,
+            permissao_mapa: mapaLiberado,
+            perfil_mapa: mapaPerfil,
+            permissao_funil: funilLiberado,
+            perfil_funil: funilPerfil
+          }])
+          .select();
+
+        if (!dbErr && Array.isArray(insertedData) && insertedData.length > 0) {
+          novoUsuario.id = String(insertedData[0].id);
+        }
+      } catch (err) {
+        console.warn('Erro ao inserir no Supabase, mantendo local.', err);
+      }
+    }
+
+    usersList.push(novoUsuario);
+    salvarUsuariosStorage();
+    fecharModal('modalNovoUsuario');
+    renderTabelaUsuarios();
+    showToast(`Colaborador ${nome} criado com sucesso no Auth e no Farol!`, 'success');
+  } catch (errGeral) {
+    console.error('Erro ao cadastrar novo usuário:', errGeral);
+    showToast('Falha ao cadastrar: ' + errGeral.message, 'error');
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = '<i class="ph ph-plus-circle"></i> <span>Cadastrar Colaborador</span>';
     }
   }
-
-  usersList.push(novoUsuario);
-  salvarUsuariosStorage();
-  fecharModal('modalNovoUsuario');
-  renderTabelaUsuarios();
-  showToast(`Colaborador ${nome} cadastrado com sucesso!`, 'success');
 }
 
 window.abrirEdicaoUsuario = function(id) {
