@@ -347,6 +347,33 @@
     </div>
   </div>
 
+  <!-- Modal Primeiro Acesso (Troca Obrigatória de Senha Provisória) -->
+  <div id="modalPrimeiroAcesso" class="modal-overlay">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3><i class="ph ph-shield-check" style="color:var(--accent-gold);"></i> Primeiro Acesso · Nova Senha</h3>
+      </div>
+      <form id="formPrimeiroAcesso" class="modal-form-grid">
+        <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+          Por segurança corporativa, você está utilizando a senha provisória padrão. <strong>Cadastre uma senha pessoal</strong> para liberar seu acesso ao Farol Comercial e às ferramentas autorizadas:
+        </p>
+        <div class="form-field">
+          <label for="inputPrimeiroAcessoNovaSenha">Nova Senha Pessoal (mínimo 6 caracteres)</label>
+          <input type="password" id="inputPrimeiroAcessoNovaSenha" required minlength="6" placeholder="Digite sua nova senha pessoal">
+        </div>
+        <div class="form-field">
+          <label for="inputPrimeiroAcessoConfirma">Confirmar Nova Senha</label>
+          <input type="password" id="inputPrimeiroAcessoConfirma" required minlength="6" placeholder="Confirme a nova senha">
+        </div>
+        <div id="erroPrimeiroAcesso" class="alert-box alert-danger" style="display:none;"></div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+          <button type="button" id="btnCancelarPrimeiroAcesso" class="btn-modal-cancel" style="flex: 1;">Cancelar / Sair</button>
+          <button type="submit" class="btn-modal-submit" id="btnSalvarPrimeiroAcesso" style="flex: 1.4;">Salvar e Acessar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Modal Novo Colaborador (Refinado) -->
   <div id="modalNovoUsuario" class="modal-overlay">
     <div class="modal-content">

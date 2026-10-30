@@ -49,6 +49,7 @@ const USUARIOS_PADRAO = [
     email: 'weverson.feitosa@cordeiroguindastes.com.br',
     cargo: 'Administrador Master',
     status: 'ativo',
+    senha: 'Cordeiro@2026',
     permissoes: {
       mapa: { liberado: true, perfil: 'Admin' },
       nps: { liberado: true, perfil: 'Admin' },
@@ -108,6 +109,7 @@ async function initStorage() {
               email: emailLow,
               cargo: row.cargo || defaultCargo,
               status: row.ativo === false ? 'inativo' : 'ativo',
+              senha: row.senha || 'Cordeiro@2026',
               permissoes: {
                 mapa: {
                   liberado: row.permissao_mapa !== false,
@@ -173,6 +175,17 @@ function checkSession() {
       currentUser = updatedUser || cached;
       localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(currentUser));
       showAppScreen();
+
+      // Se a senha cadastrada ainda for a padrão de contingência e não for o master, exige troca
+      const isMasterAdmin = currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL.toLowerCase();
+      const senhaCadastrada = currentUser.senha || 'Cordeiro@2026';
+      if (senhaCadastrada === 'Cordeiro@2026' && !isMasterAdmin) {
+        document.getElementById('inputPrimeiroAcessoNovaSenha').value = '';
+        document.getElementById('inputPrimeiroAcessoConfirma').value = '';
+        const erroPrimeiro = document.getElementById('erroPrimeiroAcesso');
+        if (erroPrimeiro) erroPrimeiro.style.display = 'none';
+        abrirModal('modalPrimeiroAcesso');
+      }
     } catch (e) {
       showLoginScreen();
     }
@@ -244,6 +257,15 @@ function setupEventListeners() {
   if (btnFecharRec) btnFecharRec.addEventListener('click', () => fecharModal('modalNovaSenhaRecovery'));
   const formRec = document.getElementById('formNovaSenhaRecovery');
   if (formRec) formRec.addEventListener('submit', handleSalvarNovaSenhaRecovery);
+
+  // Primeiro Acesso (Troca Obrigatória de Senha)
+  const formPrimeiro = document.getElementById('formPrimeiroAcesso');
+  if (formPrimeiro) formPrimeiro.addEventListener('submit', handleSalvarPrimeiroAcesso);
+  const btnCancPrimeiro = document.getElementById('btnCancelarPrimeiroAcesso');
+  if (btnCancPrimeiro) btnCancPrimeiro.addEventListener('click', () => {
+    fecharModal('modalPrimeiroAcesso');
+    handleLogout();
+  });
 
   // Novo usuário
   document.getElementById('btnNovoColaborador').addEventListener('click', () => {
@@ -327,10 +349,31 @@ async function handleLogin(e) {
     return;
   }
 
+  // Validação de senha
+  const isMaster = email === ADMIN_MASTER_EMAIL.toLowerCase();
+  const senhaCadastrada = user.senha || 'Cordeiro@2026';
+
+  if (senha !== senhaCadastrada && !(isMaster && (senha === 'Cordeiro@2026' || senha === senhaCadastrada))) {
+    erroBox.textContent = 'Senha incorreta. Verifique os dados digitados ou utilize "Esqueci minha senha".';
+    erroBox.style.display = 'flex';
+    return;
+  }
+
   currentUser = user;
   localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(currentUser));
-  showToast(`Autenticado com sucesso. Bem-vindo, ${user.nome}!`, 'success');
   showAppScreen();
+
+  // Troca obrigatória no primeiro acesso caso ainda use a senha provisória padrão
+  if (senhaCadastrada === 'Cordeiro@2026' && !isMaster) {
+    document.getElementById('inputPrimeiroAcessoNovaSenha').value = '';
+    document.getElementById('inputPrimeiroAcessoConfirma').value = '';
+    const erroPrimeiro = document.getElementById('erroPrimeiroAcesso');
+    if (erroPrimeiro) erroPrimeiro.style.display = 'none';
+    abrirModal('modalPrimeiroAcesso');
+    return;
+  }
+
+  showToast(`Autenticado com sucesso. Bem-vindo, ${user.nome}!`, 'success');
 }
 
 function handleLogout() {
@@ -928,13 +971,19 @@ async function handleSalvarNovaSenhaRecovery(e) {
 
   try {
     if (sbClient) {
-      const { error } = await sbClient.auth.updateUser({ password: novaSenha });
+      const { data: updatedAuthUser, error } = await sbClient.auth.updateUser({ password: novaSenha });
       if (error) {
         erroBox.textContent = 'Falha ao atualizar senha: ' + error.message;
         erroBox.style.display = 'block';
         btn.disabled = false;
         btn.textContent = 'Salvar Nova Senha';
         return;
+      }
+      if (updatedAuthUser && updatedAuthUser.user && updatedAuthUser.user.email) {
+        await sbClient
+          .from('usuarios_nps')
+          .update({ senha: novaSenha })
+          .ilike('email', updatedAuthUser.user.email);
       }
     }
     fecharModal('modalNovaSenhaRecovery');
@@ -947,6 +996,96 @@ async function handleSalvarNovaSenhaRecovery(e) {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Salvar Nova Senha';
+  }
+}
+
+async function handleSalvarPrimeiroAcesso(e) {
+  e.preventDefault();
+  const novaSenha = document.getElementById('inputPrimeiroAcessoNovaSenha').value.trim();
+  const confirmaSenha = document.getElementById('inputPrimeiroAcessoConfirma').value.trim();
+  const erroBox = document.getElementById('erroPrimeiroAcesso');
+  const btn = document.getElementById('btnSalvarPrimeiroAcesso');
+
+  if (erroBox) erroBox.style.display = 'none';
+
+  if (!novaSenha || novaSenha.length < 6) {
+    if (erroBox) {
+      erroBox.textContent = 'A nova senha deve ter no mínimo 6 caracteres.';
+      erroBox.style.display = 'block';
+    }
+    return;
+  }
+
+  if (novaSenha === 'Cordeiro@2026') {
+    if (erroBox) {
+      erroBox.textContent = 'A nova senha deve ser diferente da senha provisória padrão (Cordeiro@2026).';
+      erroBox.style.display = 'block';
+    }
+    return;
+  }
+
+  if (novaSenha !== confirmaSenha) {
+    if (erroBox) {
+      erroBox.textContent = 'As senhas digitadas não coincidem. Digite com atenção.';
+      erroBox.style.display = 'block';
+    }
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-spinner-gap animate-spin"></i> <span>Salvando no banco...</span>';
+  }
+
+  try {
+    if (!currentUser || !currentUser.email) {
+      throw new Error('Sessão expirada. Faça login novamente.');
+    }
+
+    // 1. Atualiza na tabela oficial de usuários no Supabase (usuarios_nps)
+    if (sbClient) {
+      const { error: dbError } = await sbClient
+        .from('usuarios_nps')
+        .update({ senha: novaSenha })
+        .ilike('email', currentUser.email);
+
+      if (dbError) {
+        throw new Error('Falha ao atualizar no banco: ' + dbError.message);
+      }
+    }
+
+    // 2. Atualiza no Supabase Auth caso o usuário tenha sessão ativa
+    if (sbClient && sbClient.auth) {
+      try {
+        await sbClient.auth.updateUser({ password: novaSenha });
+      } catch (authEx) {
+        console.warn('Aviso ao sincronizar Auth:', authEx);
+      }
+    }
+
+    // 3. Atualiza os dados locais de sessão e da lista
+    currentUser.senha = novaSenha;
+    const uIdx = usersList.findIndex(u => u.email.toLowerCase() === currentUser.email.toLowerCase());
+    if (uIdx !== -1) {
+      usersList[uIdx].senha = novaSenha;
+    }
+    salvarUsuariosStorage();
+    localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(currentUser));
+
+    fecharModal('modalPrimeiroAcesso');
+    showToast('Senha pessoal cadastrada com sucesso! Bem-vindo ao Farol Comercial.', 'success');
+    showAppScreen();
+  } catch (err) {
+    console.error('Erro ao salvar nova senha de primeiro acesso:', err);
+    if (erroBox) {
+      erroBox.textContent = err.message || 'Erro ao salvar nova senha. Tente novamente.';
+      erroBox.style.display = 'block';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = 'Salvar e Acessar';
+    }
   }
 }
 
