@@ -21,7 +21,12 @@ const STORAGE_KEY_USERS = 'cordeiro_farol_users_v1';
 const ADMIN_MASTER_EMAIL = 'weverson.feitosa@cordeiroguindastes.com.br';
 
 // Domínios válidos corporativos
-const DOMINIOS_AUTORIZADOS = ['cordeiroguindastes.com.br', 'cordeiroguindastes.com'];
+const DOMINIOS_AUTORIZADOS = [
+  'cordeiroguindastes.com.br',
+  'cordeiroguindastes.com',
+  'grupocordeiro.com',
+  'grupocordeiro.srv.br'
+];
 
 function validarDominioCorporativo(email) {
   const parts = String(email || '').trim().toLowerCase().split('@');
@@ -294,7 +299,7 @@ async function handleLogin(e) {
   erroBox.style.display = 'none';
 
   if (!validarDominioCorporativo(email)) {
-    erroBox.textContent = 'Acesso restrito. Utilize seu e-mail oficial @cordeiroguindastes.com.br ou @cordeiroguindastes.com';
+    erroBox.textContent = 'Acesso restrito. Utilize seu e-mail corporativo autorizado (@cordeiroguindastes ou @grupocordeiro).';
     erroBox.style.display = 'flex';
     return;
   }
@@ -519,7 +524,7 @@ async function handleSalvarNovoUsuario(e) {
   const cargo = document.getElementById('novoCargo').value.trim();
 
   if (!validarDominioCorporativo(email)) {
-    showToast('O e-mail precisa ser @cordeiroguindastes.com.br ou @cordeiroguindastes.com', 'error');
+    showToast('O e-mail precisa pertencer a um dos domínios corporativos autorizados (@cordeiroguindastes ou @grupocordeiro).', 'error');
     return;
   }
 
@@ -866,7 +871,7 @@ async function handleEnviarEsqueci(e) {
   const email = document.getElementById('inputEmailEsqueci').value.trim().toLowerCase();
   
   if (!validarDominioCorporativo(email)) {
-    showToast('Informe um e-mail oficial @cordeiroguindastes.com.br ou @cordeiroguindastes.com', 'error');
+    showToast('Informe um e-mail oficial corporativo autorizado (@cordeiroguindastes ou @grupocordeiro).', 'error');
     return;
   }
 
