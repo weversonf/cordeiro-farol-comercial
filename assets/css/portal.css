@@ -1349,64 +1349,52 @@ body {
   letter-spacing: 0.005em;
 }
 
-/* Login */
+/* Login — identidade visual original preservada */
 .tela-login-cordeiro {
-  background: linear-gradient(115deg, var(--navy) 0 44%, #e9eef2 44% 100%);
-  padding: 32px;
+  background: radial-gradient(circle at 50% 20%, #163b5f 0%, #091829 100%);
+  padding: 24px;
 }
-
 .login-card-cordeiro {
   max-width: 440px;
-  background: var(--surface);
-  border: 0;
-  border-radius: 4px;
-  box-shadow: 0 22px 50px rgba(4, 22, 39, 0.22);
-  padding: 42px 38px 34px;
-  color: var(--ink);
-  position: relative;
-  overflow: hidden;
+  background: rgba(15, 34, 56, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 36px 32px;
+  color: #fff;
+  text-align: center;
 }
-
-.login-card-cordeiro::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 5px;
-  background: var(--gold);
-}
-
-.login-logo-box-cordeiro { justify-content: flex-start; margin-bottom: 34px; }
-.login-logo-box-cordeiro img {
-  height: 38px;
-  filter: brightness(0) saturate(100%) invert(14%) sepia(29%) saturate(1254%) hue-rotate(167deg) brightness(90%) contrast(94%);
-}
-.login-header-cordeiro { text-align: left; }
-.login-header-cordeiro h2 { color: var(--ink); font-size: 26px; letter-spacing: -0.03em; margin-bottom: 8px; }
-.login-header-cordeiro p { color: var(--ink-soft); font-size: 13px; line-height: 1.55; margin-bottom: 28px; }
-.login-field-cordeiro { gap: 7px; }
-.login-field-cordeiro label { color: var(--ink-soft); font-size: 10px; letter-spacing: 0.1em; }
+.login-logo-box-cordeiro { justify-content: center; margin-bottom: 20px; }
+.login-logo-box-cordeiro img { height: 44px; filter: none; }
+.login-header-cordeiro { text-align: center; }
+.login-header-cordeiro h2 { color: #fff; font-size: 22px; letter-spacing: -0.02em; margin-bottom: 6px; }
+.login-header-cordeiro p { color: rgba(255, 255, 255, 0.72); font-size: 13px; line-height: 1.5; margin-bottom: 24px; }
+.login-field-cordeiro { gap: 6px; }
+.login-field-cordeiro label { color: rgba(255, 255, 255, 0.9); font-size: 11px; letter-spacing: .04em; }
 .login-field-cordeiro input {
-  background: #fff;
-  border-color: #cbd5df;
-  color: var(--ink);
-  border-radius: 4px;
-  padding: 12px 13px;
+  background: rgba(9, 24, 41, 0.75);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border-radius: 8px;
+  padding: 11px 14px;
 }
-.login-field-cordeiro input::placeholder { color: #9aa8b6; }
-.login-field-cordeiro input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(27, 111, 168, 0.12); }
-.btn-toggle-eye { color: #718195; }
-.btn-toggle-eye:hover { color: var(--navy); }
+.login-field-cordeiro input::placeholder { color: rgba(255, 255, 255, 0.45); }
+.login-field-cordeiro input:focus { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25); }
+.btn-toggle-eye { color: rgba(255, 255, 255, 0.5); }
+.btn-toggle-eye:hover { color: #fff; }
 .login-btn-submit-cordeiro {
-  margin-top: 10px;
-  border-radius: 4px;
-  padding: 13px;
-  background: var(--navy);
-  box-shadow: none;
+  margin-top: 8px;
+  border-radius: 8px;
+  padding: 12px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
 }
-.login-btn-submit-cordeiro:hover { background: #123957; box-shadow: none; transform: none; }
-.btn-link-auth { color: var(--blue); text-decoration: none; font-weight: 600; }
-.btn-link-auth:hover { color: var(--navy); }
-.login-erro-cordeiro { background: #fff3f3; border-color: #f2cccc; color: #a83232; border-radius: 4px; }
+.login-btn-submit-cordeiro:hover { background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45); transform: translateY(-1px); }
+.btn-link-auth { color: rgba(255, 255, 255, 0.72); text-decoration: underline; font-weight: 400; }
+.btn-link-auth:hover { color: #38bdf8; }
+.login-erro-cordeiro { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.35); color: #fca5a5; border-radius: 8px; }
 
 /* Header e navegação */
 .portal-header {
