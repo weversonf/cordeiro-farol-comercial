@@ -1473,20 +1473,16 @@ body {
 .app-card {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 16px;
   box-shadow: 0 2px 5px rgba(14,41,66,.035);
   padding: 25px;
   min-height: 350px;
   overflow: visible;
 }
-.app-card::before { top: 0; bottom: 0; left: 0; right: auto; width: 4px; height: auto; }
-.app-card.card-mapa::before { background: #2588bb; }
-.app-card.card-nps::before { background: #d39727; }
-.app-card.card-funil::before { background: #25805d; }
-.app-card.card-relatorios::before { background: #735eb0; }
+.app-card::before { display: none; }
 .app-card:hover { transform: none; border-color: #b8c6d2; box-shadow: 0 8px 22px rgba(14,41,66,.09); }
 .app-card-top { margin-bottom: 22px; }
-.app-icon-box { width: 44px; height: 44px; border-radius: 5px; font-size: 22px; }
+.app-icon-box { width: 46px; height: 46px; border-radius: 50%; font-size: 22px; }
 .card-mapa .app-icon-box { background: #e8f4f9; color: #1c719f; border-color: #c1e1ee; }
 .card-nps .app-icon-box { background: #fff5df; color: #af7610; border-color: #f1ddac; }
 .card-funil .app-icon-box { background: #eaf6ef; color: #187551; border-color: #c8e6d4; }
