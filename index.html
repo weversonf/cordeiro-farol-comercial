@@ -113,6 +113,11 @@
             <span>Gestão de Perfis & Acessos</span>
             <span class="badge-admin">Admin</span>
           </button>
+          <button type="button" id="tabRelatoriosBtn" class="nav-tab-btn" style="display: none;">
+            <i class="ph ph-chart-bar"></i>
+            <span>Relatórios</span>
+            <span class="badge-private">Pessoal</span>
+          </button>
         </nav>
       </div>
 
@@ -240,6 +245,36 @@
             </a>
           </div>
 
+          <!-- Card 4: Relatórios avulsos (exclusivo do Administrador Master) -->
+          <div id="cardRelatorios" class="app-card card-relatorios" style="display: none;">
+            <div>
+              <div class="app-card-top">
+                <div class="app-icon-box">
+                  <i class="ph ph-chart-bar"></i>
+                </div>
+                <span class="badge-status-app exclusivo">
+                  <i class="ph ph-lock-key"></i> Exclusivo
+                </span>
+              </div>
+
+              <div class="app-card-body">
+                <h3>Relatórios</h3>
+                <div class="app-subtitle">Análises avulsas</div>
+                <p>Um espaço reservado para consultas pontuais, análises executivas e novos relatórios que não pertencem aos painéis principais.</p>
+                <ul class="app-features-list">
+                  <li><i class="ph ph-check"></i> Acesso pessoal e centralizado</li>
+                  <li><i class="ph ph-check"></i> Relatórios novos sem alterar os painéis</li>
+                  <li><i class="ph ph-check"></i> Organização por assunto e período</li>
+                </ul>
+              </div>
+            </div>
+
+            <button type="button" id="btnOpenRelatorios" class="btn-launch-app btn-primary-launch">
+              <span>Abrir Relatórios</span>
+              <i class="ph ph-arrow-right"></i>
+            </button>
+          </div>
+
         </div>
       </section>
 
@@ -287,6 +322,43 @@
               <!-- Injetado via JS -->
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           VISÃO 3: RELATÓRIOS AVULSOS (EXCLUSIVO WEVERSON)
+           ================================================================== -->
+      <section id="viewRelatorios" class="tab-view">
+        <div class="section-header reports-header">
+          <div>
+            <span class="section-eyebrow"><i class="ph ph-lock-key"></i> Espaço pessoal</span>
+            <h1 class="section-title">Relatórios avulsos</h1>
+            <p class="section-desc">Central para análises executivas e consultas que não fazem parte dos painéis operacionais.</p>
+          </div>
+          <div class="reports-header-icon" aria-hidden="true"><i class="ph ph-chart-bar"></i></div>
+        </div>
+
+        <div class="reports-intro-card">
+          <div>
+            <span class="reports-intro-label">Sua biblioteca de análises</span>
+            <h2>Relatórios sob demanda, no mesmo lugar.</h2>
+            <p>Quando um novo relatório estiver pronto, ele aparecerá aqui como um acesso independente — sem misturar com Mapa, NPS ou Funil.</p>
+          </div>
+          <div class="reports-intro-mark"><i class="ph ph-files"></i></div>
+        </div>
+
+        <div class="reports-toolbar">
+          <div>
+            <span class="reports-count">0 relatórios publicados</span>
+            <p>Os primeiros relatórios avulsos poderão ser adicionados nesta área.</p>
+          </div>
+          <span class="reports-private-tag"><i class="ph ph-lock"></i> Acesso exclusivo</span>
+        </div>
+
+        <div class="reports-empty-state">
+          <div class="reports-empty-icon"><i class="ph ph-chart-line-up"></i></div>
+          <h2>Seu espaço está pronto</h2>
+          <p>Ainda não há relatórios avulsos publicados. Quando você criar o primeiro, ele ficará disponível aqui.</p>
         </div>
       </section>
 

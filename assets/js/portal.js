@@ -34,7 +34,7 @@ function validarDominioCorporativo(email) {
   return DOMINIOS_AUTORIZADOS.includes(parts[1]);
 }
 
-// URLs dos 3 sistemas em produção
+// URLs dos sistemas em produção
 const URLS_SISTEMAS = {
   mapa: 'https://cordeiro-mapa-ocupacao.vercel.app',
   nps: 'https://cordeiro-nps.vercel.app',
@@ -208,12 +208,18 @@ function showAppScreen() {
 
   // Apenas Weverson Feitosa tem acesso à aba de Gestão de Perfis & Acessos
   const tabGestaoBtn = document.getElementById('tabGestaoBtn');
+  const tabRelatoriosBtn = document.getElementById('tabRelatoriosBtn');
+  const cardRelatorios = document.getElementById('cardRelatorios');
   const isMasterAdmin = currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL;
 
   if (isMasterAdmin) {
     tabGestaoBtn.style.display = 'flex';
+    tabRelatoriosBtn.style.display = 'flex';
+    cardRelatorios.style.display = 'flex';
   } else {
     tabGestaoBtn.style.display = 'none';
+    tabRelatoriosBtn.style.display = 'none';
+    cardRelatorios.style.display = 'none';
     switchTab('launcher');
   }
 
@@ -244,6 +250,16 @@ function setupEventListeners() {
   document.getElementById('tabGestaoBtn').addEventListener('click', () => {
     if (currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
       switchTab('gestao');
+    }
+  });
+  document.getElementById('tabRelatoriosBtn').addEventListener('click', () => {
+    if (currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
+      switchTab('relatorios');
+    }
+  });
+  document.getElementById('btnOpenRelatorios').addEventListener('click', () => {
+    if (currentUser && currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
+      switchTab('relatorios');
     }
   });
 
@@ -396,6 +412,9 @@ function switchTab(tab) {
     document.getElementById('tabGestaoBtn').classList.add('active');
     document.getElementById('viewGestao').classList.add('active');
     renderTabelaUsuarios();
+  } else if (tab === 'relatorios' && currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
+    document.getElementById('tabRelatoriosBtn').classList.add('active');
+    document.getElementById('viewRelatorios').classList.add('active');
   }
 }
 
