@@ -1469,7 +1469,7 @@ body {
   text-transform: uppercase;
   margin-bottom: 8px;
 }
-.launcher-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.launcher-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .app-card {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -1589,6 +1589,10 @@ body {
   .header-left { gap: 18px; }
   .header-brand-title { display: none; }
   .user-info-text { display: none; }
+}
+
+@media (max-width: 1180px) {
+  .launcher-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {
