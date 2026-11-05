@@ -333,32 +333,68 @@
           <div>
             <span class="section-eyebrow"><i class="ph ph-lock-key"></i> Espaço pessoal</span>
             <h1 class="section-title">Relatórios avulsos</h1>
-            <p class="section-desc">Central para análises executivas e consultas que não fazem parte dos painéis operacionais.</p>
+            <p class="section-desc">Análises atualizadas do Protheus e Bitrix, reunidas em uma única visão de consulta.</p>
           </div>
-          <div class="reports-header-icon" aria-hidden="true"><i class="ph ph-chart-bar"></i></div>
+          <div class="reports-actions">
+            <select id="relatoriosAno" class="reports-year-select" aria-label="Ano dos relatórios"></select>
+            <button type="button" id="btnAtualizarRelatorios" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+          </div>
         </div>
 
-        <div class="reports-intro-card">
-          <div>
-            <span class="reports-intro-label">Sua biblioteca de análises</span>
-            <h2>Relatórios sob demanda, no mesmo lugar.</h2>
-            <p>Quando um novo relatório estiver pronto, ele aparecerá aqui como um acesso independente — sem misturar com Mapa, NPS ou Funil.</p>
-          </div>
-          <div class="reports-intro-mark"><i class="ph ph-files"></i></div>
+        <div id="relatoriosLoading" class="reports-loading-state">
+          <i class="ph ph-spinner-gap animate-spin"></i>
+          <span>Consultando dados corporativos...</span>
         </div>
 
-        <div class="reports-toolbar">
-          <div>
-            <span class="reports-count">0 relatórios publicados</span>
-            <p>Os primeiros relatórios avulsos poderão ser adicionados nesta área.</p>
-          </div>
-          <span class="reports-private-tag"><i class="ph ph-lock"></i> Acesso exclusivo</span>
-        </div>
+        <div id="relatoriosErro" class="reports-error-state" style="display: none;"></div>
 
-        <div class="reports-empty-state">
-          <div class="reports-empty-icon"><i class="ph ph-chart-line-up"></i></div>
-          <h2>Seu espaço está pronto</h2>
-          <p>Ainda não há relatórios avulsos publicados. Quando você criar o primeiro, ele ficará disponível aqui.</p>
+        <div id="relatoriosConteudo" style="display: none;">
+          <div class="reports-source-bar">
+            <span><i class="ph ph-database"></i> Protheus · faturamento fiscal</span>
+            <span><i class="ph ph-chart-line-up"></i> Bitrix · pipeline comercial</span>
+            <span id="relatoriosAtualizadoEm" class="reports-updated-at"></span>
+          </div>
+
+          <div class="report-kpi-grid">
+            <article class="report-kpi-card"><span>Faturamento comercial</span><strong id="kpiFaturamentoLiquido">—</strong><small>Protheus · líquido de expurgos</small></article>
+            <article class="report-kpi-card"><span>Faturamento bruto</span><strong id="kpiFaturamentoBruto">—</strong><small>Notas fiscais emitidas</small></article>
+            <article class="report-kpi-card"><span>Pipeline em aberto</span><strong id="kpiPipeline">—</strong><small id="kpiPipelineDetalhe">Bitrix</small></article>
+            <article class="report-kpi-card"><span>Expurgos comerciais</span><strong id="kpiExpurgos">—</strong><small>CM Máquinas e rateios ADM</small></article>
+          </div>
+
+          <div class="reports-dashboard-grid">
+            <article class="report-panel report-panel-wide">
+              <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Faturamento mensal</h2></div><span class="report-panel-note">Comercial líquido</span></div>
+              <div id="graficoFaturamentoMensal" class="monthly-chart" aria-label="Gráfico de faturamento mensal"></div>
+            </article>
+
+            <article class="report-panel">
+              <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Por unidade</h2></div></div>
+              <div id="listaUnidades" class="report-ranking"></div>
+            </article>
+
+            <article class="report-panel">
+              <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Por contrato</h2></div></div>
+              <div id="listaContratos" class="report-ranking"></div>
+            </article>
+
+            <article class="report-panel">
+              <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Produtos e equipamentos</h2></div><span class="report-panel-note" title="Faturamento por descrição fiscal do produto">Fiscal</span></div>
+              <div id="listaEquipamentos" class="report-ranking"></div>
+            </article>
+
+            <article class="report-panel">
+              <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Faturamento por consultor</h2></div></div>
+              <div id="listaConsultores" class="report-ranking"></div>
+            </article>
+
+            <article class="report-panel">
+              <div class="report-panel-head"><div><span class="report-panel-eyebrow">Bitrix</span><h2>Pipeline por consultor</h2></div></div>
+              <div id="listaPipeline" class="report-ranking"></div>
+            </article>
+          </div>
+
+          <p class="reports-disclaimer"><i class="ph ph-info"></i> Faturamento exibido com os expurgos comerciais homologados. Produtos e equipamentos representam a descrição fiscal faturada; o vínculo individual por placa será refinado em uma próxima etapa.</p>
         </div>
       </section>
 

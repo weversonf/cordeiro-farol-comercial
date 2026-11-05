@@ -18,6 +18,7 @@ O termo **Farol** sintetiza a visão rápida e executiva da saúde comercial e o
 1. **Mapa de Ocupação:** `https://cordeiro-mapa-ocupacao.vercel.app`
 2. **Pesquisa NPS:** `https://cordeiro-nps.vercel.app`
 3. **Funil de Vendas:** `https://cordeiro-funil-vendas.vercel.app`
+4. **Relatórios:** visão exclusiva do Administrador Master com dados do Protheus e Bitrix.
 
 ---
 
@@ -30,6 +31,15 @@ O termo **Farol** sintetiza a visão rápida e executiva da saúde comercial e o
   - Matriz de permissão independente para cada um dos 3 sistemas.
   - Bloqueio imediato em todas as plataformas com 1 clique (desligamento ágil e seguro).
   - Tela de login padrão corporativa com campo de senha de largura total e recuperação de senha.
+- **Relatórios conectados:** faturamento por unidade, contrato, produto/equipamento e consultor (Protheus), além de pipeline por consultor (Bitrix).
+
+## Desenvolvimento local
+
+1. Copie `.env.example` para `.env.local` e informe as credenciais de leitura do PostgreSQL corporativo.
+2. Execute `npm install` e depois `npm run dev`.
+3. Acesse `http://127.0.0.1:4173`.
+
+> As credenciais ficam somente em `.env.local`, arquivo ignorado pelo Git. Em produção, cadastre as mesmas variáveis no projeto da Vercel.
 
 ---
 

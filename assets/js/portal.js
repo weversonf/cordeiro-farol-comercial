@@ -64,6 +64,7 @@ let usersList = [];
 let editingUserId = null;
 let editingUserEmail = null;
 let usuarioParaExcluir = null;
+let relatoriosCarregados = false;
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', async () => {
@@ -262,6 +263,7 @@ function setupEventListeners() {
       switchTab('relatorios');
     }
   });
+  configurarControlesRelatorios();
 
   // Esqueci senha
   document.getElementById('btnAbrirEsqueci').addEventListener('click', () => abrirModal('modalEsqueci'));
@@ -415,6 +417,129 @@ function switchTab(tab) {
   } else if (tab === 'relatorios' && currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
     document.getElementById('tabRelatoriosBtn').classList.add('active');
     document.getElementById('viewRelatorios').classList.add('active');
+    carregarRelatorios();
+  }
+}
+
+function configurarControlesRelatorios() {
+  const selectAno = document.getElementById('relatoriosAno');
+  const anoAtual = new Date().getFullYear();
+  for (let ano = anoAtual; ano >= 2023; ano -= 1) {
+    const option = document.createElement('option');
+    option.value = String(ano);
+    option.textContent = String(ano);
+    selectAno.appendChild(option);
+  }
+
+  document.getElementById('btnAtualizarRelatorios').addEventListener('click', () => carregarRelatorios(true));
+  selectAno.addEventListener('change', () => carregarRelatorios(true));
+}
+
+function formatarMoeda(valor) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: 1
+  }).format(Number(valor || 0));
+}
+
+function formatarMoedaCompleta(valor) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency', currency: 'BRL', maximumFractionDigits: 0
+  }).format(Number(valor || 0));
+}
+
+function escaparHtml(valor) {
+  return String(valor ?? '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
+  }[char]));
+}
+
+function renderizarRanking(id, itens, titulo, descricao = null) {
+  const container = document.getElementById(id);
+  const maiorValor = Math.max(...itens.map(item => Number(item.valor || 0)), 1);
+
+  if (!itens.length) {
+    container.innerHTML = '<p class="report-empty-list">Sem dados para o período.</p>';
+    return;
+  }
+
+  container.innerHTML = itens.map((item, indice) => {
+    const percentual = Math.max(3, (Number(item.valor || 0) / maiorValor) * 100);
+    const rotulo = item[titulo] || 'Não identificado';
+    const complemento = descricao ? descricao(item) : '';
+    return `
+      <div class="report-ranking-row">
+        <span class="report-ranking-position">${String(indice + 1).padStart(2, '0')}</span>
+        <div class="report-ranking-main">
+          <div class="report-ranking-label" title="${escaparHtml(rotulo)}">${escaparHtml(rotulo)}</div>
+          ${complemento ? `<div class="report-ranking-detail">${escaparHtml(complemento)}</div>` : ''}
+          <div class="report-ranking-track"><span style="width:${percentual}%"></span></div>
+        </div>
+        <strong>${formatarMoeda(item.valor)}</strong>
+      </div>`;
+  }).join('');
+}
+
+function renderizarGraficoMensal(itens) {
+  const container = document.getElementById('graficoFaturamentoMensal');
+  const maiorValor = Math.max(...itens.map(item => Number(item.valor || 0)), 1);
+  const nomesMes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+  container.innerHTML = itens.map(item => {
+    const mes = Number(String(item.mes).slice(-2));
+    const altura = Math.max(5, (Number(item.valor || 0) / maiorValor) * 100);
+    return `<div class="monthly-chart-item" title="${nomesMes[mes - 1]}: ${formatarMoedaCompleta(item.valor)}">
+      <span class="monthly-chart-value">${formatarMoeda(item.valor)}</span>
+      <div class="monthly-chart-bar"><span style="height:${altura}%"></span></div>
+      <small>${nomesMes[mes - 1]}</small>
+    </div>`;
+  }).join('');
+}
+
+async function carregarRelatorios(forcar = false) {
+  if (!currentUser || currentUser.email.toLowerCase() !== ADMIN_MASTER_EMAIL || (relatoriosCarregados && !forcar)) return;
+
+  const carregando = document.getElementById('relatoriosLoading');
+  const conteudo = document.getElementById('relatoriosConteudo');
+  const erro = document.getElementById('relatoriosErro');
+  const botao = document.getElementById('btnAtualizarRelatorios');
+  const ano = document.getElementById('relatoriosAno').value;
+
+  carregando.style.display = 'flex';
+  conteudo.style.display = 'none';
+  erro.style.display = 'none';
+  botao.disabled = true;
+
+  try {
+    const resposta = await fetch(`/api/relatorios?year=${encodeURIComponent(ano)}`, { cache: 'no-store' });
+    const dados = await resposta.json();
+    if (!resposta.ok || !dados.ok) throw new Error(dados.error || 'Falha ao consultar os dados.');
+
+    document.getElementById('kpiFaturamentoLiquido').textContent = formatarMoeda(dados.resumo.liquido);
+    document.getElementById('kpiFaturamentoBruto').textContent = formatarMoeda(dados.resumo.bruto);
+    document.getElementById('kpiPipeline').textContent = formatarMoeda(dados.resumo.pipeline);
+    document.getElementById('kpiPipelineDetalhe').textContent = `${dados.resumo.negociosPipeline} negócios em aberto no Bitrix`;
+    document.getElementById('kpiExpurgos').textContent = formatarMoeda(dados.resumo.expurgos);
+
+    const protheusAtualizado = dados.atualizacao?.protheus
+      ? new Date(dados.atualizacao.protheus).toLocaleDateString('pt-BR')
+      : 'sem data';
+    document.getElementById('relatoriosAtualizadoEm').textContent = `Protheus atualizado até ${protheusAtualizado}`;
+
+    renderizarGraficoMensal(dados.mensal);
+    renderizarRanking('listaUnidades', dados.unidades, 'unidade');
+    renderizarRanking('listaContratos', dados.contratos, 'contrato', item => item.cliente);
+    renderizarRanking('listaEquipamentos', dados.equipamentos, 'equipamento');
+    renderizarRanking('listaConsultores', dados.consultores, 'consultor');
+    renderizarRanking('listaPipeline', dados.pipeline, 'consultor', item => `${item.negocios} negócios em aberto`);
+
+    relatoriosCarregados = true;
+    conteudo.style.display = 'block';
+  } catch (ex) {
+    erro.innerHTML = `<i class="ph ph-warning-circle"></i><span>${escaparHtml(ex.message || 'Não foi possível atualizar os relatórios.')}</span>`;
+    erro.style.display = 'flex';
+  } finally {
+    carregando.style.display = 'none';
+    botao.disabled = false;
   }
 }
 
