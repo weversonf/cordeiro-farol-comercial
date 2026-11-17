@@ -2,8 +2,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mufykevpimzgudsgzfpb.s
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_KNpBaTlv2ZjAIhrJA3Ykbw_K-Lv-kNx';
 
 const ALLOWED_MASTER_EMAILS = new Set([
-  'weverson.feitosa@cordeiroguindastes.com.br',
-  'weverson.feitosa@cordeiroguindastes.com'
+  'weverson.feitosa@cordeiroguindastes.com.br'
 ]);
 
 export async function requireAdminMaster(req, res) {

@@ -20,8 +20,7 @@ const STORAGE_KEY_USERS = 'cordeiro_farol_users_v1';
 // E-mail do Administrador Master Exclusivo do Farol Geral
 const ADMIN_MASTER_EMAIL = 'weverson.feitosa@cordeiroguindastes.com.br';
 const ADMIN_MASTER_EMAILS = new Set([
-  'weverson.feitosa@cordeiroguindastes.com.br',
-  'weverson.feitosa@cordeiroguindastes.com'
+  'weverson.feitosa@cordeiroguindastes.com.br'
 ]);
 
 function isAdminMaster(email) {
