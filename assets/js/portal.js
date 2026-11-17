@@ -839,21 +839,21 @@ function renderizarContratos() {
 
     return `
       <tr>
-        <td>${cardCell}</td>
-        <td>
+        <td class="contract-cell-card" data-label="Card">${cardCell}</td>
+        <td class="contract-cell-main" data-label="Cliente / Negócio">
           <div class="contract-client">${escaparHtml(item.cliente)}</div>
           <div class="contract-title" title="${escaparHtml(item.titulo)}">${escaparHtml(item.titulo)}</div>
         </td>
-        <td><span class="contract-unit-tag">${escaparHtml(item.unidade)}</span></td>
-        <td>${escaparHtml(item.consultor)}</td>
-        <td>
+        <td data-label="Unidade"><span class="contract-unit-tag">${escaparHtml(item.unidade)}</span></td>
+        <td data-label="Executivo">${escaparHtml(item.consultor)}</td>
+        <td data-label="Etapa &amp; Tipo">
           <span class="contract-stage-pill ${etapaClass}">${escaparHtml(item.etapa)}</span>
           <div class="contract-type-sub">${escaparHtml(item.tipoContrato)}</div>
         </td>
-        <td><div class="contract-equip" title="${escaparHtml(eqTexto)}">${escaparHtml(eqTexto)}</div></td>
-        <td class="contract-dates">${escaparHtml(vigenciaTexto)}</td>
-        <td>${badgeFaltamContrato(item)}</td>
-        <td style="text-align: right;" class="contract-value">${formatarMoedaCompleta(item.valor)}</td>
+        <td data-label="Equipamentos"><div class="contract-equip" title="${escaparHtml(eqTexto)}">${escaparHtml(eqTexto)}</div></td>
+        <td data-label="Vigência" class="contract-dates">${escaparHtml(vigenciaTexto)}</td>
+        <td class="contract-cell-badge" data-label="Prazo">${badgeFaltamContrato(item)}</td>
+        <td data-label="Valor" style="text-align: right;" class="contract-value">${formatarMoedaCompleta(item.valor)}</td>
       </tr>
     `;
   }).join('');
@@ -1067,7 +1067,7 @@ function renderTabelaUsuarios(termoBusca = '') {
       : `<span class="status-pill inativo"><i class="ph ph-circle-fill" style="font-size:8px;"></i> Inativo</span>`;
 
     tr.innerHTML = `
-      <td>
+      <td class="iam-cell-user" data-label="Colaborador">
         <div class="colaborador-cell">
           <div class="colaborador-avatar">
             <i class="ph ph-user" style="font-size:18px; color:var(--accent-gold);"></i>
@@ -1078,13 +1078,13 @@ function renderTabelaUsuarios(termoBusca = '') {
           </div>
         </div>
       </td>
-      <td>${u.cargo}</td>
-      <td>${statusPill}</td>
-      <td>${permMapa}</td>
-      <td>${permNps}</td>
-      <td>${permFunil}</td>
-      <td>${permRelatorios}</td>
-      <td>
+      <td data-label="Cargo / Área">${u.cargo}</td>
+      <td data-label="Status">${statusPill}</td>
+      <td data-label="Mapa Ocupação">${permMapa}</td>
+      <td data-label="Pesquisa NPS">${permNps}</td>
+      <td data-label="Funil Vendas">${permFunil}</td>
+      <td data-label="Relatórios">${permRelatorios}</td>
+      <td class="iam-cell-actions" data-label="Ações">
         <div class="actions-cell">
           <!-- 1. Editar Permissões -->
           <button class="btn-table-action" title="Editar Permissões" onclick="abrirEdicaoUsuario('${u.id}')">
