@@ -1,34 +1,13 @@
-import pg from 'pg';
-
-const { Pool } = pg;
-let pool;
-
-function getPool() {
-  if (!pool) {
-    pool = new Pool({
-      host: process.env.PGHOST || process.env.DB_HOST,
-      port: Number(process.env.PGPORT || process.env.DB_PORT || 6543),
-      database: process.env.PGDATABASE || process.env.DB_NAME || 'postgres',
-      user: process.env.PGUSER || process.env.DB_USER,
-      password: process.env.PGPASSWORD || process.env.DB_PASS,
-      ssl: { rejectUnauthorized: false },
-      max: 4,
-      connectionTimeoutMillis: 10000
-    });
-  }
-  return pool;
-}
-
-function number(value) {
-  return Number(value || 0);
-}
+import { getPool, toNumber as number } from './_db.js';
+import { requireAdminMaster } from './_auth.js';
 
 export default async function handler(req, res) {
-  res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
-
   if (req.method !== 'GET') {
     return res.status(405).json({ ok: false, error: 'Método não permitido.' });
   }
+
+  const user = await requireAdminMaster(req, res);
+  if (!user) return;
 
   const requestedYear = Number(req.query?.year);
   const currentYear = new Date().getFullYear();

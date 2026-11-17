@@ -19,6 +19,14 @@ const STORAGE_KEY_USERS = 'cordeiro_farol_users_v1';
 
 // E-mail do Administrador Master Exclusivo do Farol Geral
 const ADMIN_MASTER_EMAIL = 'weverson.feitosa@cordeiroguindastes.com.br';
+const ADMIN_MASTER_EMAILS = new Set([
+  'weverson.feitosa@cordeiroguindastes.com.br',
+  'weverson.feitosa@cordeiroguindastes.com'
+]);
+
+function isAdminMaster(email) {
+  return ADMIN_MASTER_EMAILS.has(String(email || '').trim().toLowerCase());
+}
 
 // Domínios válidos corporativos
 const DOMINIOS_AUTORIZADOS = [
@@ -41,7 +49,7 @@ const URLS_SISTEMAS = {
   funil: 'https://cordeiro-funil-vendas.vercel.app'
 };
 
-// Base inicial padrão de contingência (fallback local caso banco offline)
+// Base inicial padrão de contingência (sem senha exposta no código cliente)
 const USUARIOS_PADRAO = [
   {
     id: 'u-1',
@@ -49,7 +57,6 @@ const USUARIOS_PADRAO = [
     email: 'weverson.feitosa@cordeiroguindastes.com.br',
     cargo: 'Administrador Master',
     status: 'ativo',
-    senha: 'Cordeiro@2026',
     permissoes: {
       mapa: { liberado: true, perfil: 'Admin' },
       nps: { liberado: true, perfil: 'Admin' },
@@ -65,6 +72,10 @@ let editingUserId = null;
 let editingUserEmail = null;
 let usuarioParaExcluir = null;
 let relatoriosCarregados = false;
+let relatorioAtivo = 'catalogo';
+let contratosCarregados = false;
+let contratosPayload = null;
+let contratosFiltroPrazo = 'todos';
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', async () => {
@@ -211,7 +222,7 @@ function showAppScreen() {
   const tabGestaoBtn = document.getElementById('tabGestaoBtn');
   const tabRelatoriosBtn = document.getElementById('tabRelatoriosBtn');
   const cardRelatorios = document.getElementById('cardRelatorios');
-  const isMasterAdmin = currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL;
+  const isMasterAdmin = isAdminMaster(currentUser.email);
 
   if (isMasterAdmin) {
     tabGestaoBtn.style.display = 'flex';
@@ -249,17 +260,17 @@ function setupEventListeners() {
   // Abas
   document.getElementById('tabLauncherBtn').addEventListener('click', () => switchTab('launcher'));
   document.getElementById('tabGestaoBtn').addEventListener('click', () => {
-    if (currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
+    if (isAdminMaster(currentUser?.email)) {
       switchTab('gestao');
     }
   });
   document.getElementById('tabRelatoriosBtn').addEventListener('click', () => {
-    if (currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
+    if (isAdminMaster(currentUser?.email)) {
       switchTab('relatorios');
     }
   });
   document.getElementById('btnOpenRelatorios').addEventListener('click', () => {
-    if (currentUser && currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
+    if (isAdminMaster(currentUser?.email)) {
       switchTab('relatorios');
     }
   });
@@ -367,11 +378,24 @@ async function handleLogin(e) {
     return;
   }
 
-  // Validação de senha
-  const isMaster = email === ADMIN_MASTER_EMAIL.toLowerCase();
-  const senhaCadastrada = user.senha || 'Cordeiro@2026';
+  // Validação de senha + sessão Supabase Auth
+  const isMaster = isAdminMaster(email);
+  const senhaCadastrada = user.senha || '';
+  let authSessaoValida = false;
 
-  if (senha !== senhaCadastrada && !(isMaster && (senha === 'Cordeiro@2026' || senha === senhaCadastrada))) {
+  if (sbClient && sbClient.auth) {
+    try {
+      const { data: authData, error: authErr } = await sbClient.auth.signInWithPassword({ email, password: senha });
+      if (!authErr && authData?.session?.access_token) {
+        authSessaoValida = true;
+      }
+    } catch (authEx) {
+      console.warn('Aviso ao autenticar no Supabase Auth:', authEx);
+    }
+  }
+
+  const senhaTabelaValida = Boolean(senhaCadastrada) && senha === senhaCadastrada;
+  if (!senhaTabelaValida && !authSessaoValida) {
     erroBox.textContent = 'Senha incorreta. Verifique os dados digitados ou utilize "Esqueci minha senha".';
     erroBox.style.display = 'flex';
     return;
@@ -394,9 +418,16 @@ async function handleLogin(e) {
   showToast(`Autenticado com sucesso. Bem-vindo, ${user.nome}!`, 'success');
 }
 
-function handleLogout() {
+async function handleLogout() {
   localStorage.removeItem(STORAGE_KEY_AUTH);
   currentUser = null;
+  relatoriosCarregados = false;
+  contratosCarregados = false;
+  contratosPayload = null;
+  relatorioAtivo = 'catalogo';
+  if (sbClient && sbClient.auth) {
+    try { await sbClient.auth.signOut(); } catch (_) {}
+  }
   document.getElementById('loginEmail').value = '';
   document.getElementById('loginSenha').value = '';
   showLoginScreen();
@@ -410,14 +441,46 @@ function switchTab(tab) {
   if (tab === 'launcher') {
     document.getElementById('tabLauncherBtn').classList.add('active');
     document.getElementById('viewLauncher').classList.add('active');
-  } else if (tab === 'gestao' && currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
+  } else if (tab === 'gestao' && isAdminMaster(currentUser?.email)) {
     document.getElementById('tabGestaoBtn').classList.add('active');
     document.getElementById('viewGestao').classList.add('active');
     renderTabelaUsuarios();
-  } else if (tab === 'relatorios' && currentUser.email.toLowerCase() === ADMIN_MASTER_EMAIL) {
+  } else if (tab === 'relatorios' && isAdminMaster(currentUser?.email)) {
     document.getElementById('tabRelatoriosBtn').classList.add('active');
     document.getElementById('viewRelatorios').classList.add('active');
+    abrirRelatorio(relatorioAtivo);
+  }
+}
+
+function abrirRelatorio(tipo = 'catalogo') {
+  relatorioAtivo = tipo;
+  const catalogo = document.getElementById('relatoriosCatalogo');
+  const visaoGeral = document.getElementById('relatorioVisaoGeral');
+  const contratos = document.getElementById('relatorioContratos');
+  const btnVoltar = document.getElementById('btnVoltarCatalogoRelatorios');
+  const acoesVisaoGeral = document.getElementById('acoesVisaoGeral');
+  const acoesContratos = document.getElementById('acoesContratos');
+  const titulo = document.getElementById('relatoriosTitulo');
+  const desc = document.getElementById('relatoriosDesc');
+
+  catalogo.style.display = tipo === 'catalogo' ? 'block' : 'none';
+  visaoGeral.style.display = tipo === 'visao-geral' ? 'block' : 'none';
+  contratos.style.display = tipo === 'contratos' ? 'block' : 'none';
+  btnVoltar.style.display = tipo === 'catalogo' ? 'none' : 'inline-flex';
+  acoesVisaoGeral.style.display = tipo === 'visao-geral' ? 'flex' : 'none';
+  acoesContratos.style.display = tipo === 'contratos' ? 'flex' : 'none';
+
+  if (tipo === 'visao-geral') {
+    titulo.textContent = 'Faturamento & Pipeline Comercial';
+    desc.textContent = 'Análises atualizadas do Protheus e Bitrix, reunidas em uma única visão de consulta.';
     carregarRelatorios();
+  } else if (tipo === 'contratos') {
+    titulo.textContent = 'Gestão de Contratos Ativos (180 dias)';
+    desc.textContent = 'Carteira ativa e em assinatura puxada do Bitrix em tempo real, com semáforo de vencimento e renovação.';
+    carregarContratos();
+  } else {
+    titulo.textContent = 'Central de Relatórios';
+    desc.textContent = 'Escolha um painel corporativo conectado em tempo real ao Bitrix e ao Protheus.';
   }
 }
 
@@ -433,6 +496,58 @@ function configurarControlesRelatorios() {
 
   document.getElementById('btnAtualizarRelatorios').addEventListener('click', () => carregarRelatorios(true));
   selectAno.addEventListener('change', () => carregarRelatorios(true));
+
+  document.getElementById('btnVoltarCatalogoRelatorios').addEventListener('click', () => abrirRelatorio('catalogo'));
+
+  document.querySelectorAll('[data-report-trigger]').forEach(btn => {
+    btn.addEventListener('click', event => {
+      event.stopPropagation();
+      abrirRelatorio(btn.dataset.reportTrigger);
+    });
+  });
+
+  document.querySelectorAll('.report-option-card[data-report]').forEach(card => {
+    card.addEventListener('click', () => abrirRelatorio(card.dataset.report));
+  });
+
+  document.getElementById('btnAtualizarContratos').addEventListener('click', () => carregarContratos(true));
+  document.getElementById('btnExportarContratosCsv').addEventListener('click', exportarContratosCsv);
+
+  document.querySelectorAll('#contratosSemaforoBar .semaphore-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('#contratosSemaforoBar .semaphore-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      contratosFiltroPrazo = pill.dataset.prazo || 'todos';
+      renderizarContratos();
+    });
+  });
+
+  [
+    'filtroContratoBusca',
+    'filtroContratoUnidade',
+    'filtroContratoConsultor',
+    'filtroContratoEtapa',
+    'filtroContratoTipo',
+    'filtroOcultarSpot'
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    const evt = el.tagName === 'INPUT' && el.type === 'text' ? 'input' : 'change';
+    el.addEventListener(evt, renderizarContratos);
+  });
+
+  document.getElementById('btnLimparFiltrosContratos').addEventListener('click', () => {
+    document.getElementById('filtroContratoBusca').value = '';
+    document.getElementById('filtroContratoUnidade').value = '';
+    document.getElementById('filtroContratoConsultor').value = '';
+    document.getElementById('filtroContratoEtapa').value = '';
+    document.getElementById('filtroContratoTipo').value = '';
+    document.getElementById('filtroOcultarSpot').checked = false;
+    contratosFiltroPrazo = 'todos';
+    document.querySelectorAll('#contratosSemaforoBar .semaphore-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.prazo === 'todos');
+    });
+    renderizarContratos();
+  });
 }
 
 function formatarMoeda(valor) {
@@ -495,8 +610,30 @@ function renderizarGraficoMensal(itens) {
   }).join('');
 }
 
+async function fetchRelatorioAutenticado(url) {
+  let token = '';
+  if (sbClient && sbClient.auth) {
+    const { data } = await sbClient.auth.getSession();
+    token = data?.session?.access_token || '';
+  }
+
+  if (!token) {
+    throw new Error('Sessão não autenticada no servidor. Clique em "Sair" e entre novamente (ou use "Esqueci minha senha" para sincronizar sua conta).');
+  }
+
+  const resposta = await fetch(url, {
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const dados = await resposta.json();
+  if (!resposta.ok || !dados.ok) {
+    throw new Error(dados.error || 'Falha ao consultar os dados.');
+  }
+  return dados;
+}
+
 async function carregarRelatorios(forcar = false) {
-  if (!currentUser || currentUser.email.toLowerCase() !== ADMIN_MASTER_EMAIL || (relatoriosCarregados && !forcar)) return;
+  if (!isAdminMaster(currentUser?.email) || (relatoriosCarregados && !forcar)) return;
 
   const carregando = document.getElementById('relatoriosLoading');
   const conteudo = document.getElementById('relatoriosConteudo');
@@ -510,9 +647,7 @@ async function carregarRelatorios(forcar = false) {
   botao.disabled = true;
 
   try {
-    const resposta = await fetch(`/api/relatorios?year=${encodeURIComponent(ano)}`, { cache: 'no-store' });
-    const dados = await resposta.json();
-    if (!resposta.ok || !dados.ok) throw new Error(dados.error || 'Falha ao consultar os dados.');
+    const dados = await fetchRelatorioAutenticado(`/api/relatorios?year=${encodeURIComponent(ano)}`);
 
     document.getElementById('kpiFaturamentoLiquido').textContent = formatarMoeda(dados.resumo.liquido);
     document.getElementById('kpiFaturamentoBruto').textContent = formatarMoeda(dados.resumo.bruto);
@@ -541,6 +676,252 @@ async function carregarRelatorios(forcar = false) {
     carregando.style.display = 'none';
     botao.disabled = false;
   }
+}
+
+function formatarDataBr(isoDate) {
+  if (!isoDate) return '—';
+  const [ano, mes, dia] = String(isoDate).slice(0, 10).split('-');
+  if (!ano || !mes || !dia) return '—';
+  return `${dia}/${mes}/${ano}`;
+}
+
+function preencherSelectFiltro(selectId, opcoes, rotuloPadrao) {
+  const select = document.getElementById(selectId);
+  const valorAtual = select.value;
+  select.innerHTML = `<option value="">${escaparHtml(rotuloPadrao)}</option>` +
+    opcoes.map(op => `<option value="${escaparHtml(op)}">${escaparHtml(op)}</option>`).join('');
+  if (opcoes.includes(valorAtual)) select.value = valorAtual;
+}
+
+function obterContratosFiltrados(ignorarPrazo = false) {
+  const lista = contratosPayload?.contratos || [];
+  const busca = document.getElementById('filtroContratoBusca').value.trim().toLowerCase();
+  const unidade = document.getElementById('filtroContratoUnidade').value;
+  const consultor = document.getElementById('filtroContratoConsultor').value;
+  const etapa = document.getElementById('filtroContratoEtapa').value;
+  const tipo = document.getElementById('filtroContratoTipo').value;
+  const ocultarSpot = document.getElementById('filtroOcultarSpot').checked;
+
+  return lista.filter(item => {
+    if (ocultarSpot && item.tipoContrato === 'Contrato Spot') return false;
+    if (unidade) {
+      const unidadesItem = String(item.unidade || '').split(',').map(u => u.trim());
+      if (!unidadesItem.includes(unidade)) return false;
+    }
+    if (consultor && item.consultor !== consultor) return false;
+    if (etapa && item.etapa !== etapa) return false;
+    if (tipo && item.tipoContrato !== tipo) return false;
+
+    if (busca) {
+      const texto = `${item.id} ${item.cliente} ${item.titulo} ${item.equipamentos} ${item.consultor} ${item.unidade}`.toLowerCase();
+      if (!texto.includes(busca)) return false;
+    }
+
+    if (!ignorarPrazo && contratosFiltroPrazo !== 'todos') {
+      if (contratosFiltroPrazo === '180d') {
+        return ['critico_30', 'alerta_90', 'atencao_180'].includes(item.statusPrazo);
+      }
+      return item.statusPrazo === contratosFiltroPrazo;
+    }
+    return true;
+  });
+}
+
+function badgeFaltamContrato(item) {
+  const d = item.faltamDias;
+  if (item.statusPrazo === 'sem_data' || d === null) {
+    return '<span class="contract-badge badge-semdata">Sem data fim</span>';
+  }
+  if (item.statusPrazo === 'vencido') {
+    return `<span class="contract-badge badge-vencido">Vencido há ${Math.abs(d)}d</span>`;
+  }
+  if (item.statusPrazo === 'critico_30') {
+    return `<span class="contract-badge badge-critico">${d === 0 ? 'Vence hoje' : `Faltam ${d}d`}</span>`;
+  }
+  if (item.statusPrazo === 'alerta_90') {
+    return `<span class="contract-badge badge-alerta">Faltam ${d}d</span>`;
+  }
+  if (item.statusPrazo === 'atencao_180') {
+    return `<span class="contract-badge badge-atencao">Faltam ${d}d</span>`;
+  }
+  return `<span class="contract-badge badge-vigente">Faltam ${d}d</span>`;
+}
+
+function renderizarContratos() {
+  if (!contratosPayload) return;
+
+  const baseSemPrazo = obterContratosFiltrados(true);
+  const filtrados = obterContratosFiltrados(false);
+
+  const contadores = {
+    todos: baseSemPrazo.length,
+    em180: 0,
+    critico_30: 0,
+    alerta_90: 0,
+    atencao_180: 0,
+    vigente: 0,
+    vencido: 0,
+    sem_data: 0
+  };
+
+  for (const item of baseSemPrazo) {
+    contadores[item.statusPrazo] = (contadores[item.statusPrazo] || 0) + 1;
+    if (['critico_30', 'alerta_90', 'atencao_180'].includes(item.statusPrazo)) contadores.em180 += 1;
+  }
+
+  document.getElementById('pillCountTodos').textContent = contadores.todos;
+  document.getElementById('pillCount180').textContent = contadores.em180;
+  document.getElementById('pillCountCritico').textContent = contadores.critico_30;
+  document.getElementById('pillCountAlerta').textContent = contadores.alerta_90;
+  document.getElementById('pillCountAtencao').textContent = contadores.atencao_180;
+  document.getElementById('pillCountVigente').textContent = contadores.vigente;
+  document.getElementById('pillCountVencido').textContent = contadores.vencido;
+  document.getElementById('pillCountSemData').textContent = contadores.sem_data;
+
+  const valorFiltro = filtrados.reduce((acc, item) => acc + Number(item.valor || 0), 0);
+  const em180Filtrados = filtrados.filter(i => ['critico_30', 'alerta_90', 'atencao_180'].includes(i.statusPrazo));
+  const valor180 = em180Filtrados.reduce((acc, item) => acc + Number(item.valor || 0), 0);
+  const criticoCount = filtrados.filter(i => i.statusPrazo === 'critico_30').length;
+  const alertaCount = filtrados.filter(i => i.statusPrazo === 'alerta_90').length;
+  const atencaoCount = filtrados.filter(i => i.statusPrazo === 'atencao_180').length;
+  const assinaturaCount = filtrados.filter(i => i.assinaturaPendente).length;
+  const semDataCount = filtrados.filter(i => i.statusPrazo === 'sem_data').length;
+  const vencidoCount = filtrados.filter(i => i.statusPrazo === 'vencido').length;
+
+  document.getElementById('kpiContratosTotal').textContent = String(filtrados.length);
+  document.getElementById('kpiContratosValorTotal').textContent = `Valor total: ${formatarMoeda(valorFiltro)}`;
+  document.getElementById('kpiContratos180').textContent = String(em180Filtrados.length);
+  document.getElementById('kpiContratosValor180').textContent = `Exposição: ${formatarMoeda(valor180)}`;
+  document.getElementById('kpiContratosCritico').textContent = String(criticoCount);
+  document.getElementById('kpiContratosAlertaDetalhe').textContent = `Alerta 31–90d: ${alertaCount} · Atenção 91–180d: ${atencaoCount}`;
+  document.getElementById('kpiContratosAssinatura').textContent = String(assinaturaCount);
+  document.getElementById('kpiContratosSemData').textContent = String(semDataCount);
+  document.getElementById('kpiContratosVencidosDetalhe').textContent = `Vencidos (sem baixa/aditivo): ${vencidoCount}`;
+
+  document.getElementById('contratosResumoTabela').textContent =
+    `Exibindo ${filtrados.length} de ${contratosPayload.contratos.length} negócios no Bitrix`;
+
+  const tbody = document.getElementById('tbodyContratos');
+  if (!filtrados.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="contracts-empty-row">Nenhum contrato encontrado com os filtros aplicados.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtrados.map(item => {
+    const cardCell = item.bitrixUrl
+      ? `<a href="${escaparHtml(item.bitrixUrl)}" target="_blank" rel="noopener" class="contract-card-link">#${escaparHtml(item.id)} <i class="ph ph-arrow-square-out"></i></a>`
+      : `<span class="contract-card-id">#${escaparHtml(item.id)}</span>`;
+
+    const eqTexto = item.equipamentos || 'Não especificado no card';
+    const etapaClass = item.assinaturaPendente ? 'stage-pending' : 'stage-active';
+    const vigenciaTexto = `${formatarDataBr(item.dataInicio)} → ${formatarDataBr(item.dataFim)}`;
+
+    return `
+      <tr>
+        <td>${cardCell}</td>
+        <td>
+          <div class="contract-client">${escaparHtml(item.cliente)}</div>
+          <div class="contract-title" title="${escaparHtml(item.titulo)}">${escaparHtml(item.titulo)}</div>
+        </td>
+        <td><span class="contract-unit-tag">${escaparHtml(item.unidade)}</span></td>
+        <td>${escaparHtml(item.consultor)}</td>
+        <td>
+          <span class="contract-stage-pill ${etapaClass}">${escaparHtml(item.etapa)}</span>
+          <div class="contract-type-sub">${escaparHtml(item.tipoContrato)}</div>
+        </td>
+        <td><div class="contract-equip" title="${escaparHtml(eqTexto)}">${escaparHtml(eqTexto)}</div></td>
+        <td class="contract-dates">${escaparHtml(vigenciaTexto)}</td>
+        <td>${badgeFaltamContrato(item)}</td>
+        <td style="text-align: right;" class="contract-value">${formatarMoedaCompleta(item.valor)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function carregarContratos(forcar = false) {
+  if (!isAdminMaster(currentUser?.email) || (contratosCarregados && !forcar)) return;
+
+  const carregando = document.getElementById('contratosLoading');
+  const conteudo = document.getElementById('contratosConteudo');
+  const erro = document.getElementById('contratosErro');
+  const botao = document.getElementById('btnAtualizarContratos');
+
+  carregando.style.display = 'flex';
+  conteudo.style.display = 'none';
+  erro.style.display = 'none';
+  botao.disabled = true;
+
+  try {
+    const dados = await fetchRelatorioAutenticado('/api/contratos');
+
+    contratosPayload = dados;
+    contratosCarregados = true;
+
+    const bitrixAtualizado = dados.atualizacao?.bitrix
+      ? new Date(dados.atualizacao.bitrix).toLocaleString('pt-BR')
+      : 'sem data';
+    document.getElementById('contratosAtualizadoEm').textContent = `Bitrix atualizado em ${bitrixAtualizado}`;
+
+    preencherSelectFiltro('filtroContratoUnidade', dados.filtros?.unidades || [], 'Todas as unidades');
+    preencherSelectFiltro('filtroContratoConsultor', dados.filtros?.consultores || [], 'Todos os executivos');
+    preencherSelectFiltro('filtroContratoEtapa', dados.filtros?.etapas || [], 'Todas as etapas');
+    preencherSelectFiltro('filtroContratoTipo', dados.filtros?.tipos || [], 'Todos os tipos');
+
+    renderizarContratos();
+    conteudo.style.display = 'block';
+  } catch (ex) {
+    erro.innerHTML = `<i class="ph ph-warning-circle"></i><span>${escaparHtml(ex.message || 'Não foi possível carregar os contratos do Bitrix.')}</span>`;
+    erro.style.display = 'flex';
+  } finally {
+    carregando.style.display = 'none';
+    botao.disabled = false;
+  }
+}
+
+function exportarContratosCsv() {
+  if (!contratosPayload) {
+    showToast('Carregue os contratos antes de exportar.', 'warning');
+    return;
+  }
+  const filtrados = obterContratosFiltrados(false);
+  if (!filtrados.length) {
+    showToast('Nenhum contrato visível no filtro para exportar.', 'warning');
+    return;
+  }
+
+  const cabecalho = [
+    'Card Bitrix', 'Cliente', 'Negocio', 'Unidade', 'Executivo',
+    'Etapa', 'Tipo Contrato', 'Equipamentos', 'Inicio', 'Fim',
+    'Faltam (dias)', 'Status Prazo', 'Valor'
+  ];
+
+  const escaparCsv = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const linhas = filtrados.map(item => [
+    item.id,
+    item.cliente,
+    item.titulo,
+    item.unidade,
+    item.consultor,
+    item.etapa,
+    item.tipoContrato,
+    item.equipamentos,
+    formatarDataBr(item.dataInicio),
+    formatarDataBr(item.dataFim),
+    item.faltamDias === null ? '' : item.faltamDias,
+    item.statusPrazo,
+    Number(item.valor || 0).toFixed(2).replace('.', ',')
+  ].map(escaparCsv).join(';'));
+
+  const csv = '\uFEFF' + [cabecalho.map(escaparCsv).join(';'), ...linhas].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `Contratos_Ativos_Bitrix_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 function renderLauncher() {

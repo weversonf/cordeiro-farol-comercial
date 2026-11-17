@@ -49,7 +49,6 @@
             required 
             placeholder="seu.email@cordeiroguindastes.com.br"
             autocomplete="username"
-            value="weverson.feitosa@cordeiroguindastes.com.br"
           >
         </div>
 
@@ -63,7 +62,6 @@
               required 
               placeholder="••••••••"
               autocomplete="current-password"
-              value="Cordeiro@2026"
             >
             <button type="button" id="btnToggleEye" class="btn-toggle-eye" title="Mostrar/Ocultar Senha">
               <i class="ph ph-eye"></i>
@@ -326,75 +324,267 @@
       </section>
 
       <!-- ==================================================================
-           VISÃO 3: RELATÓRIOS AVULSOS (EXCLUSIVO WEVERSON)
+           VISÃO 3: CENTRAL DE RELATÓRIOS (EXCLUSIVO WEVERSON)
            ================================================================== -->
       <section id="viewRelatorios" class="tab-view">
         <div class="section-header reports-header">
           <div>
             <span class="section-eyebrow"><i class="ph ph-lock-key"></i> Espaço pessoal</span>
-            <h1 class="section-title">Relatórios avulsos</h1>
-            <p class="section-desc">Análises atualizadas do Protheus e Bitrix, reunidas em uma única visão de consulta.</p>
+            <h1 id="relatoriosTitulo" class="section-title">Central de Relatórios</h1>
+            <p id="relatoriosDesc" class="section-desc">Escolha um painel corporativo conectado em tempo real ao Bitrix e ao Protheus.</p>
           </div>
           <div class="reports-actions">
-            <select id="relatoriosAno" class="reports-year-select" aria-label="Ano dos relatórios"></select>
-            <button type="button" id="btnAtualizarRelatorios" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+            <button type="button" id="btnVoltarCatalogoRelatorios" class="btn-secondary-reports" style="display: none;">
+              <i class="ph ph-arrow-left"></i> Todos os relatórios
+            </button>
+
+            <div id="acoesVisaoGeral" class="reports-actions" style="display: none;">
+              <select id="relatoriosAno" class="reports-year-select" aria-label="Ano dos relatórios"></select>
+              <button type="button" id="btnAtualizarRelatorios" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+            </div>
+
+            <div id="acoesContratos" class="reports-actions" style="display: none;">
+              <button type="button" id="btnExportarContratosCsv" class="btn-secondary-reports"><i class="ph ph-download-simple"></i> Exportar CSV</button>
+              <button type="button" id="btnAtualizarContratos" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+            </div>
           </div>
         </div>
 
-        <div id="relatoriosLoading" class="reports-loading-state">
-          <i class="ph ph-spinner-gap animate-spin"></i>
-          <span>Consultando dados corporativos...</span>
+        <!-- Catálogo / Gama de Relatórios -->
+        <div id="relatoriosCatalogo">
+          <div class="reports-toolbar">
+            <div>
+              <div class="reports-count">2 painéis conectados ao vivo</div>
+              <p>Selecione o relatório que deseja consultar. Novos módulos serão adicionados diretamente nesta central.</p>
+            </div>
+            <span class="reports-private-tag"><i class="ph ph-shield-check"></i> Acesso Master</span>
+          </div>
+
+          <div class="reports-catalog-grid">
+            <article class="report-option-card" data-report="visao-geral">
+              <div class="report-option-top">
+                <div class="report-option-icon icon-visao"><i class="ph ph-chart-line-up"></i></div>
+                <span class="report-source-pill">Protheus + Bitrix</span>
+              </div>
+              <h3>Faturamento &amp; Pipeline Comercial</h3>
+              <p>Faturamento líquido e bruto, expurgos comerciais, evolução mensal, rankings por unidade, contrato, produto e pipeline por consultor.</p>
+              <ul class="report-option-meta">
+                <li><i class="ph ph-check"></i> Filtro anual e rankings Top 10</li>
+                <li><i class="ph ph-check"></i> Reconciliação de expurgos homologados</li>
+              </ul>
+              <button type="button" class="btn-open-report" data-report-trigger="visao-geral">
+                <span>Abrir Faturamento &amp; Pipeline</span>
+                <i class="ph ph-arrow-right"></i>
+              </button>
+            </article>
+
+            <article class="report-option-card is-featured" data-report="contratos">
+              <div class="report-option-top">
+                <div class="report-option-icon icon-contratos"><i class="ph ph-files"></i></div>
+                <span class="report-source-pill is-live">Bitrix · Tempo real</span>
+              </div>
+              <h3>Gestão de Contratos Ativos (180 dias)</h3>
+              <p>Carteira ativa e em assinatura puxada do Bitrix em tempo real, com semáforo de vencimento em 30, 90 e 180 dias, equipamentos e exportação.</p>
+              <ul class="report-option-meta">
+                <li><i class="ph ph-check"></i> Semáforo de renovação (Crítico, Alerta, 180d)</li>
+                <li><i class="ph ph-check"></i> Filtros por unidade, executivo, etapa e tipo</li>
+              </ul>
+              <button type="button" class="btn-open-report is-primary" data-report-trigger="contratos">
+                <span>Abrir Gestão de Contratos</span>
+                <i class="ph ph-arrow-right"></i>
+              </button>
+            </article>
+
+            <article class="report-option-card is-planned" aria-label="Próximos relatórios em expansão">
+              <div class="report-option-top">
+                <div class="report-option-icon icon-planned"><i class="ph ph-stack-plus"></i></div>
+                <span class="report-source-pill is-muted">Em expansão</span>
+              </div>
+              <h3>Novos Relatórios</h3>
+              <p>Espaço reservado para os próximos módulos analíticos da diretoria: Cobertura de Carteira, Análise Win/Loss e SLA Comercial.</p>
+              <ul class="report-option-meta">
+                <li><i class="ph ph-clock"></i> Estrutura pronta para plugar novas APIs</li>
+                <li><i class="ph ph-clock"></i> Mesma governança do DW Supabase</li>
+              </ul>
+              <span class="report-planned-badge">Disponível para novos módulos</span>
+            </article>
+          </div>
         </div>
 
-        <div id="relatoriosErro" class="reports-error-state" style="display: none;"></div>
-
-        <div id="relatoriosConteudo" style="display: none;">
-          <div class="reports-source-bar">
-            <span><i class="ph ph-database"></i> Protheus · faturamento fiscal</span>
-            <span><i class="ph ph-chart-line-up"></i> Bitrix · pipeline comercial</span>
-            <span id="relatoriosAtualizadoEm" class="reports-updated-at"></span>
+        <!-- Relatório 1: Visão Geral (Protheus + Bitrix) -->
+        <div id="relatorioVisaoGeral" style="display: none;">
+          <div id="relatoriosLoading" class="reports-loading-state">
+            <i class="ph ph-spinner-gap animate-spin"></i>
+            <span>Consultando dados corporativos...</span>
           </div>
 
-          <div class="report-kpi-grid">
-            <article class="report-kpi-card"><span>Faturamento comercial</span><strong id="kpiFaturamentoLiquido">—</strong><small>Protheus · líquido de expurgos</small></article>
-            <article class="report-kpi-card"><span>Faturamento bruto</span><strong id="kpiFaturamentoBruto">—</strong><small>Notas fiscais emitidas</small></article>
-            <article class="report-kpi-card"><span>Pipeline em aberto</span><strong id="kpiPipeline">—</strong><small id="kpiPipelineDetalhe">Bitrix</small></article>
-            <article class="report-kpi-card"><span>Expurgos comerciais</span><strong id="kpiExpurgos">—</strong><small>CM Máquinas e rateios ADM</small></article>
+          <div id="relatoriosErro" class="reports-error-state" style="display: none;"></div>
+
+          <div id="relatoriosConteudo" style="display: none;">
+            <div class="reports-source-bar">
+              <span><i class="ph ph-database"></i> Protheus · faturamento fiscal</span>
+              <span><i class="ph ph-chart-line-up"></i> Bitrix · pipeline comercial</span>
+              <span id="relatoriosAtualizadoEm" class="reports-updated-at"></span>
+            </div>
+
+            <div class="report-kpi-grid">
+              <article class="report-kpi-card"><span>Faturamento comercial</span><strong id="kpiFaturamentoLiquido">—</strong><small>Protheus · líquido de expurgos</small></article>
+              <article class="report-kpi-card"><span>Faturamento bruto</span><strong id="kpiFaturamentoBruto">—</strong><small>Notas fiscais emitidas</small></article>
+              <article class="report-kpi-card"><span>Pipeline em aberto</span><strong id="kpiPipeline">—</strong><small id="kpiPipelineDetalhe">Bitrix</small></article>
+              <article class="report-kpi-card"><span>Expurgos comerciais</span><strong id="kpiExpurgos">—</strong><small>CM Máquinas e rateios ADM</small></article>
+            </div>
+
+            <div class="reports-dashboard-grid">
+              <article class="report-panel report-panel-wide">
+                <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Faturamento mensal</h2></div><span class="report-panel-note">Comercial líquido</span></div>
+                <div id="graficoFaturamentoMensal" class="monthly-chart" aria-label="Gráfico de faturamento mensal"></div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Por unidade</h2></div></div>
+                <div id="listaUnidades" class="report-ranking"></div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Por contrato</h2></div></div>
+                <div id="listaContratos" class="report-ranking"></div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Produtos e equipamentos</h2></div><span class="report-panel-note" title="Faturamento por descrição fiscal do produto">Fiscal</span></div>
+                <div id="listaEquipamentos" class="report-ranking"></div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Faturamento por consultor</h2></div></div>
+                <div id="listaConsultores" class="report-ranking"></div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-head"><div><span class="report-panel-eyebrow">Bitrix</span><h2>Pipeline por consultor</h2></div></div>
+                <div id="listaPipeline" class="report-ranking"></div>
+              </article>
+            </div>
+
+            <p class="reports-disclaimer"><i class="ph ph-info"></i> Faturamento exibido com os expurgos comerciais homologados. Produtos e equipamentos representam a descrição fiscal faturada; o vínculo individual por placa será refinado em uma próxima etapa.</p>
+          </div>
+        </div>
+
+        <!-- Relatório 2: Gestão de Contratos Ativos (Bitrix em tempo real) -->
+        <div id="relatorioContratos" style="display: none;">
+          <div id="contratosLoading" class="reports-loading-state">
+            <i class="ph ph-spinner-gap animate-spin"></i>
+            <span>Consultando contratos ativos no Bitrix...</span>
           </div>
 
-          <div class="reports-dashboard-grid">
-            <article class="report-panel report-panel-wide">
-              <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Faturamento mensal</h2></div><span class="report-panel-note">Comercial líquido</span></div>
-              <div id="graficoFaturamentoMensal" class="monthly-chart" aria-label="Gráfico de faturamento mensal"></div>
-            </article>
+          <div id="contratosErro" class="reports-error-state" style="display: none;"></div>
 
-            <article class="report-panel">
-              <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Por unidade</h2></div></div>
-              <div id="listaUnidades" class="report-ranking"></div>
-            </article>
+          <div id="contratosConteudo" style="display: none;">
+            <div class="reports-source-bar">
+              <span><i class="ph ph-plugs-connected"></i> Bitrix24 · Negócios ativos (Análise Jurídica, Elaboração, Assinatura, Ganho e Em Atendimento)</span>
+              <span id="contratosAtualizadoEm" class="reports-updated-at"></span>
+            </div>
 
-            <article class="report-panel">
-              <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Por contrato</h2></div></div>
-              <div id="listaContratos" class="report-ranking"></div>
-            </article>
+            <div class="contracts-kpi-grid">
+              <article class="report-kpi-card kpi-total">
+                <span>Contratos no filtro</span>
+                <strong id="kpiContratosTotal">—</strong>
+                <small id="kpiContratosValorTotal">—</small>
+              </article>
+              <article class="report-kpi-card kpi-180">
+                <span>Renovam em até 180 dias</span>
+                <strong id="kpiContratos180">—</strong>
+                <small id="kpiContratosValor180">—</small>
+              </article>
+              <article class="report-kpi-card kpi-critico">
+                <span>Crítico (0 a 30 dias)</span>
+                <strong id="kpiContratosCritico">—</strong>
+                <small id="kpiContratosAlertaDetalhe">Alerta 31–90d / Atenção 91–180d</small>
+              </article>
+              <article class="report-kpi-card kpi-assinatura">
+                <span>Em jurídico / assinatura</span>
+                <strong id="kpiContratosAssinatura">—</strong>
+                <small>Aguardando formalização ou assinatura</small>
+              </article>
+              <article class="report-kpi-card kpi-semdata">
+                <span>Sem data fim no Bitrix</span>
+                <strong id="kpiContratosSemData">—</strong>
+                <small id="kpiContratosVencidosDetalhe">—</small>
+              </article>
+            </div>
 
-            <article class="report-panel">
-              <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Produtos e equipamentos</h2></div><span class="report-panel-note" title="Faturamento por descrição fiscal do produto">Fiscal</span></div>
-              <div id="listaEquipamentos" class="report-ranking"></div>
-            </article>
+            <!-- Semáforo de Renovação -->
+            <div class="contracts-semaphore-bar" id="contratosSemaforoBar" role="tablist" aria-label="Filtro por faixa de vencimento">
+              <button type="button" class="semaphore-pill active" data-prazo="todos">Todos <span id="pillCountTodos">0</span></button>
+              <button type="button" class="semaphore-pill pill-180" data-prazo="180d">A vencer ≤ 180d <span id="pillCount180">0</span></button>
+              <button type="button" class="semaphore-pill pill-critico" data-prazo="critico_30">Crítico (0–30d) <span id="pillCountCritico">0</span></button>
+              <button type="button" class="semaphore-pill pill-alerta" data-prazo="alerta_90">Alerta (31–90d) <span id="pillCountAlerta">0</span></button>
+              <button type="button" class="semaphore-pill pill-atencao" data-prazo="atencao_180">Atenção (91–180d) <span id="pillCountAtencao">0</span></button>
+              <button type="button" class="semaphore-pill pill-vigente" data-prazo="vigente">Vigentes (&gt; 180d) <span id="pillCountVigente">0</span></button>
+              <button type="button" class="semaphore-pill pill-vencido" data-prazo="vencido">Vencidos (&lt; 0d) <span id="pillCountVencido">0</span></button>
+              <button type="button" class="semaphore-pill pill-semdata" data-prazo="sem_data">Sem data fim <span id="pillCountSemData">0</span></button>
+            </div>
 
-            <article class="report-panel">
-              <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Faturamento por consultor</h2></div></div>
-              <div id="listaConsultores" class="report-ranking"></div>
-            </article>
+            <!-- Barra de Filtros -->
+            <div class="contracts-filters-bar">
+              <div class="contracts-search-box">
+                <i class="ph ph-magnifying-glass"></i>
+                <input type="text" id="filtroContratoBusca" placeholder="Buscar por cliente, título, equipamento ou nº card...">
+              </div>
 
-            <article class="report-panel">
-              <div class="report-panel-head"><div><span class="report-panel-eyebrow">Bitrix</span><h2>Pipeline por consultor</h2></div></div>
-              <div id="listaPipeline" class="report-ranking"></div>
-            </article>
+              <select id="filtroContratoUnidade" class="contracts-filter-select" aria-label="Filtrar por unidade">
+                <option value="">Todas as unidades</option>
+              </select>
+
+              <select id="filtroContratoConsultor" class="contracts-filter-select" aria-label="Filtrar por consultor">
+                <option value="">Todos os executivos</option>
+              </select>
+
+              <select id="filtroContratoEtapa" class="contracts-filter-select" aria-label="Filtrar por etapa">
+                <option value="">Todas as etapas</option>
+              </select>
+
+              <select id="filtroContratoTipo" class="contracts-filter-select" aria-label="Filtrar por tipo de contrato">
+                <option value="">Todos os tipos</option>
+              </select>
+
+              <label class="contracts-toggle-spot" title="Oculta serviços pontuais marcados como Contrato Spot para focar em contratos recorrentes">
+                <input type="checkbox" id="filtroOcultarSpot">
+                <span>Ocultar Spot</span>
+              </label>
+
+              <button type="button" id="btnLimparFiltrosContratos" class="btn-clear-filters">Limpar</button>
+            </div>
+
+            <!-- Tabela Operacional -->
+            <div class="contracts-table-card">
+              <div class="contracts-table-meta">
+                <span id="contratosResumoTabela">Exibindo 0 registros</span>
+                <span class="contracts-table-hint">Ordenado por urgência de renovação (0–180 dias primeiro)</span>
+              </div>
+
+              <div class="contracts-table-scroll">
+                <table class="contracts-table">
+                  <thead>
+                    <tr>
+                      <th>Card</th>
+                      <th>Cliente / Negócio</th>
+                      <th>Unidade</th>
+                      <th>Executivo</th>
+                      <th>Etapa &amp; Tipo</th>
+                      <th>Equipamentos</th>
+                      <th>Vigência</th>
+                      <th>Faltam</th>
+                      <th style="text-align: right;">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbodyContratos"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <p class="reports-disclaimer"><i class="ph ph-info"></i> Painel alimentado ao vivo pelo Bitrix24 no DW (<code>stage_bitrix.b_crm_deal</code>). Datas e prazos usam os campos de previsão já replicados no DW (<code>UF_CRM_1704904017946</code>/<code>1704904033370</code> e <code>UF_CRM_1713470874</code>/<code>1713470907</code>); campos contratuais dedicados (nº contrato, aditivos, reajuste e assinatura formal) passarão a preencher automaticamente assim que forem incluídos na replicação do Bitrix.</p>
           </div>
-
-          <p class="reports-disclaimer"><i class="ph ph-info"></i> Faturamento exibido com os expurgos comerciais homologados. Produtos e equipamentos representam a descrição fiscal faturada; o vínculo individual por placa será refinado em uma próxima etapa.</p>
         </div>
       </section>
 

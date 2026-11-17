@@ -2,7 +2,8 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import handler from './api/relatorios.js';
+import relatoriosHandler from './api/relatorios.js';
+import contratosHandler from './api/contratos.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.join(root, '.env.local');
@@ -24,15 +25,19 @@ const contentTypes = {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
-  if (url.pathname === '/api/relatorios') {
-    const reqLike = { method: req.method, query: Object.fromEntries(url.searchParams) };
+  const apiRoutes = {
+    '/api/relatorios': relatoriosHandler,
+    '/api/contratos': contratosHandler
+  };
+  if (apiRoutes[url.pathname]) {
+    const reqLike = { method: req.method, headers: req.headers, query: Object.fromEntries(url.searchParams) };
     const resLike = {
       code: 200, headers: {},
       setHeader(key, value) { this.headers[key] = value; },
       status(code) { this.code = code; return this; },
       json(body) { res.writeHead(this.code, { 'Content-Type': 'application/json; charset=utf-8', ...this.headers }); res.end(JSON.stringify(body)); }
     };
-    return handler(reqLike, resLike);
+    return apiRoutes[url.pathname](reqLike, resLike);
   }
 
   const target = path.normalize(path.join(root, url.pathname === '/' ? 'index.html' : url.pathname));
