@@ -1923,6 +1923,8 @@ body {
 .contract-badge.badge-vigente { background: #e8f6ef; color: #1c6e4d; }
 .contract-badge.badge-vencido { background: #f3e8ec; color: #8c2544; }
 .contract-badge.badge-semdata { background: #eef2f5; color: #617385; }
+.perm-card-icon.icon-relatorios { background: #f0edfb; color: #604d9a; border: 1px solid #d8d0f2; }
+.badge-role-app.ativo-relatorios { background: #f0edfb; color: #604d9a; border: 1px solid #d8d0f2; }
 .contracts-empty-row { text-align: center; padding: 36px 16px !important; color: #748497 !important; }
 
 /* Modais e feedback */

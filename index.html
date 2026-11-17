@@ -313,6 +313,7 @@
                 <th>Mapa Ocupação</th>
                 <th>Pesquisa NPS</th>
                 <th>Funil Vendas</th>
+                <th>Relatórios</th>
                 <th style="text-align: right;">Ações</th>
               </tr>
             </thead>
@@ -779,6 +780,31 @@
               </select>
             </div>
           </div>
+
+          <!-- Relatórios -->
+          <div class="app-permission-card inativo" id="cardNovoRelatorios">
+            <div class="perm-card-top">
+              <div class="perm-card-brand">
+                <div class="perm-card-icon icon-relatorios"><i class="ph ph-chart-bar"></i></div>
+                <div>
+                  <div class="perm-card-title">Relatórios</div>
+                  <div class="perm-card-sub">Contratos, Faturamento &amp; BI</div>
+                </div>
+              </div>
+              <label class="switch-control" title="Liberar Acesso">
+                <input type="checkbox" id="novoPermRelatorios" onchange="document.getElementById('cardNovoRelatorios').className = this.checked ? 'app-permission-card ativo' : 'app-permission-card inativo'">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <div class="perm-card-bottom">
+              <label for="novoPerfilRelatorios">Nível de Permissão:</label>
+              <select id="novoPerfilRelatorios" class="select-role-custom" disabled>
+                <option value="Visualizador">Visualizador</option>
+                <option value="Gestor">Gestor / Diretoria</option>
+                <option value="Admin">Administrador Master</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div class="modal-footer">
@@ -904,6 +930,31 @@
                 <option value="Comercial">Executivo Comercial</option>
                 <option value="Gestor">Gestor / Diretoria</option>
                 <option value="Admin">Administrador Geral</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Card Relatórios -->
+          <div class="app-permission-card" id="cardEditRelatorios">
+            <div class="perm-card-top">
+              <div class="perm-card-brand">
+                <div class="perm-card-icon icon-relatorios"><i class="ph ph-chart-bar"></i></div>
+                <div>
+                  <div class="perm-card-title">Relatórios</div>
+                  <div class="perm-card-sub">Contratos, Faturamento &amp; BI</div>
+                </div>
+              </div>
+              <label class="switch-control" title="Ativar ou desativar acesso">
+                <input type="checkbox" id="editPermRelatorios">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <div class="perm-card-bottom">
+              <label for="editPerfilRelatorios">Nível de Acesso:</label>
+              <select id="editPerfilRelatorios" class="select-role-custom">
+                <option value="Visualizador">Visualizador</option>
+                <option value="Gestor">Gestor / Diretoria</option>
+                <option value="Admin">Administrador Master</option>
               </select>
             </div>
           </div>

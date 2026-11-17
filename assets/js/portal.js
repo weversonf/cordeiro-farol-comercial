@@ -27,6 +27,11 @@ function isAdminMaster(email) {
   return ADMIN_MASTER_EMAILS.has(String(email || '').trim().toLowerCase());
 }
 
+function podeAcessarRelatorios(user) {
+  if (!user) return false;
+  return isAdminMaster(user.email) || Boolean(user.permissoes?.relatorios?.liberado);
+}
+
 // Domínios válidos corporativos
 const DOMINIOS_AUTORIZADOS = [
   'cordeiroguindastes.com.br',
@@ -59,7 +64,8 @@ const USUARIOS_PADRAO = [
     permissoes: {
       mapa: { liberado: true, perfil: 'Admin' },
       nps: { liberado: true, perfil: 'Admin' },
-      funil: { liberado: true, perfil: 'Admin' }
+      funil: { liberado: true, perfil: 'Admin' },
+      relatorios: { liberado: true, perfil: 'Admin' }
     }
   }
 ];
@@ -67,6 +73,7 @@ const USUARIOS_PADRAO = [
 // Estado
 let currentUser = null;
 let usersList = [];
+let hasRelatoriosDbColumns = false;
 let editingUserId = null;
 let editingUserEmail = null;
 let usuarioParaExcluir = null;
@@ -97,6 +104,7 @@ async function initStorage() {
 
       if (!error && Array.isArray(data) && data.length > 0) {
         window._supabaseDataCloud = data;
+        hasRelatoriosDbColumns = Object.prototype.hasOwnProperty.call(data[0], 'permissao_relatorios');
         usersList = data
           .filter(row => {
             const e = String(row.email || '').toLowerCase();
@@ -113,6 +121,12 @@ async function initStorage() {
             if (emailLow === ADMIN_MASTER_EMAIL) defaultCargo = 'Administrador Master';
             else if (emailLow.includes('marcio')) defaultCargo = 'Head Comercial';
             else if (emailLow.includes('erika')) defaultCargo = 'Gestão NPS & Qualidade';
+
+            const isMasterRow = isAdminMaster(emailLow);
+            const relatoriosLiberado = isMasterRow || row.permissao_relatorios === true;
+            const relatoriosPerfil = isMasterRow
+              ? 'Admin'
+              : (relatoriosLiberado ? (row.perfil_relatorios || 'Visualizador') : 'Sem Acesso');
 
             return {
               id: String(row.id),
@@ -133,6 +147,10 @@ async function initStorage() {
                 funil: {
                   liberado: row.permissao_funil !== false,
                   perfil: row.perfil_funil || 'Comercial'
+                },
+                relatorios: {
+                  liberado: relatoriosLiberado,
+                  perfil: relatoriosPerfil
                 }
               }
             };
@@ -222,15 +240,13 @@ function showAppScreen() {
   const tabRelatoriosBtn = document.getElementById('tabRelatoriosBtn');
   const cardRelatorios = document.getElementById('cardRelatorios');
   const isMasterAdmin = isAdminMaster(currentUser.email);
+  const podeRelatorios = podeAcessarRelatorios(currentUser);
 
-  if (isMasterAdmin) {
-    tabGestaoBtn.style.display = 'flex';
-    tabRelatoriosBtn.style.display = 'flex';
-    cardRelatorios.style.display = 'flex';
-  } else {
-    tabGestaoBtn.style.display = 'none';
-    tabRelatoriosBtn.style.display = 'none';
-    cardRelatorios.style.display = 'none';
+  tabGestaoBtn.style.display = isMasterAdmin ? 'flex' : 'none';
+  tabRelatoriosBtn.style.display = podeRelatorios ? 'flex' : 'none';
+  cardRelatorios.style.display = podeRelatorios ? 'flex' : 'none';
+
+  if (!isMasterAdmin && !podeRelatorios) {
     switchTab('launcher');
   }
 
@@ -264,12 +280,12 @@ function setupEventListeners() {
     }
   });
   document.getElementById('tabRelatoriosBtn').addEventListener('click', () => {
-    if (isAdminMaster(currentUser?.email)) {
+    if (podeAcessarRelatorios(currentUser)) {
       switchTab('relatorios');
     }
   });
   document.getElementById('btnOpenRelatorios').addEventListener('click', () => {
-    if (isAdminMaster(currentUser?.email)) {
+    if (podeAcessarRelatorios(currentUser)) {
       switchTab('relatorios');
     }
   });
@@ -298,6 +314,10 @@ function setupEventListeners() {
   // Novo usuário
   document.getElementById('btnNovoColaborador').addEventListener('click', () => {
     document.getElementById('formNovoUsuario').reset();
+    const cardNovoRel = document.getElementById('cardNovoRelatorios');
+    if (cardNovoRel) cardNovoRel.className = 'app-permission-card inativo';
+    const selNovoRel = document.getElementById('novoPerfilRelatorios');
+    if (selNovoRel) selNovoRel.disabled = true;
     abrirModal('modalNovoUsuario');
   });
   document.getElementById('btnFecharNovo').addEventListener('click', () => fecharModal('modalNovoUsuario'));
@@ -338,6 +358,8 @@ function setupModalSwitches() {
   setupSwitch('editPermMapa', 'cardEditMapa', 'editPerfilMapa');
   setupSwitch('editPermNps', 'cardEditNps', 'editPerfilNps');
   setupSwitch('editPermFunil', 'cardEditFunil', 'editPerfilFunil');
+  setupSwitch('editPermRelatorios', 'cardEditRelatorios', 'editPerfilRelatorios');
+  setupSwitch('novoPermRelatorios', 'cardNovoRelatorios', 'novoPerfilRelatorios');
 }
 
 async function handleLogin(e) {
@@ -444,7 +466,7 @@ function switchTab(tab) {
     document.getElementById('tabGestaoBtn').classList.add('active');
     document.getElementById('viewGestao').classList.add('active');
     renderTabelaUsuarios();
-  } else if (tab === 'relatorios' && isAdminMaster(currentUser?.email)) {
+  } else if (tab === 'relatorios' && podeAcessarRelatorios(currentUser)) {
     document.getElementById('tabRelatoriosBtn').classList.add('active');
     document.getElementById('viewRelatorios').classList.add('active');
     abrirRelatorio(relatorioAtivo);
@@ -632,7 +654,7 @@ async function fetchRelatorioAutenticado(url) {
 }
 
 async function carregarRelatorios(forcar = false) {
-  if (!isAdminMaster(currentUser?.email) || (relatoriosCarregados && !forcar)) return;
+  if (!podeAcessarRelatorios(currentUser) || (relatoriosCarregados && !forcar)) return;
 
   const carregando = document.getElementById('relatoriosLoading');
   const conteudo = document.getElementById('relatoriosConteudo');
@@ -838,7 +860,7 @@ function renderizarContratos() {
 }
 
 async function carregarContratos(forcar = false) {
-  if (!isAdminMaster(currentUser?.email) || (contratosCarregados && !forcar)) return;
+  if (!podeAcessarRelatorios(currentUser) || (contratosCarregados && !forcar)) return;
 
   const carregando = document.getElementById('contratosLoading');
   const conteudo = document.getElementById('contratosConteudo');
@@ -1014,13 +1036,13 @@ function renderTabelaUsuarios(termoBusca = '') {
   });
 
   if (filtrados.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--text-dimmed);">Nenhum colaborador encontrado para "${termoBusca}".</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-dimmed);">Nenhum colaborador encontrado para "${termoBusca}".</td></tr>`;
     return;
   }
 
   filtrados.forEach(u => {
     const tr = document.createElement('tr');
-    const isMaster = u.email.toLowerCase() === ADMIN_MASTER_EMAIL;
+    const isMaster = isAdminMaster(u.email);
 
     const permMapa = u.permissoes.mapa && u.permissoes.mapa.liberado 
       ? `<span class="badge-role-app ativo-mapa"><i class="ph ph-check-circle"></i> ${u.permissoes.mapa.perfil}</span>`
@@ -1032,6 +1054,12 @@ function renderTabelaUsuarios(termoBusca = '') {
 
     const permFunil = u.permissoes.funil && u.permissoes.funil.liberado 
       ? `<span class="badge-role-app ativo-funil"><i class="ph ph-check-circle"></i> ${u.permissoes.funil.perfil}</span>`
+      : `<span class="badge-role-app bloqueado"><i class="ph ph-x"></i> Bloqueado</span>`;
+
+    const relLiberado = isMaster || Boolean(u.permissoes.relatorios && u.permissoes.relatorios.liberado);
+    const relPerfil = isMaster ? 'Admin' : (u.permissoes.relatorios?.perfil || 'Visualizador');
+    const permRelatorios = relLiberado
+      ? `<span class="badge-role-app ativo-relatorios"><i class="ph ph-check-circle"></i> ${relPerfil}</span>`
       : `<span class="badge-role-app bloqueado"><i class="ph ph-x"></i> Bloqueado</span>`;
 
     const statusPill = u.status === 'ativo' 
@@ -1055,6 +1083,7 @@ function renderTabelaUsuarios(termoBusca = '') {
       <td>${permMapa}</td>
       <td>${permNps}</td>
       <td>${permFunil}</td>
+      <td>${permRelatorios}</td>
       <td>
         <div class="actions-cell">
           <!-- 1. Editar Permissões -->
@@ -1115,6 +1144,9 @@ async function handleSalvarNovoUsuario(e) {
   const funilLiberado = document.getElementById('novoPermFunil').checked;
   const funilPerfil = document.getElementById('novoPerfilFunil').value;
 
+  const relatoriosLiberado = document.getElementById('novoPermRelatorios').checked;
+  const relatoriosPerfil = document.getElementById('novoPerfilRelatorios').value;
+
   const novoUsuario = {
     id: 'usr_' + Date.now(),
     nome,
@@ -1124,7 +1156,8 @@ async function handleSalvarNovoUsuario(e) {
     permissoes: {
       mapa: { liberado: mapaLiberado, perfil: mapaLiberado ? mapaPerfil : 'Sem Acesso' },
       nps: { liberado: npsLiberado, perfil: npsLiberado ? npsPerfil : 'Sem Acesso' },
-      funil: { liberado: funilLiberado, perfil: funilLiberado ? funilPerfil : 'Sem Acesso' }
+      funil: { liberado: funilLiberado, perfil: funilLiberado ? funilPerfil : 'Sem Acesso' },
+      relatorios: { liberado: relatoriosLiberado, perfil: relatoriosLiberado ? relatoriosPerfil : 'Sem Acesso' }
     }
   };
 
@@ -1165,20 +1198,25 @@ async function handleSalvarNovoUsuario(e) {
         novoUsuario.id = String(nextNumericId);
 
         const perfilNpsDb = !npsLiberado ? 'bloqueado' : (npsPerfil === 'Admin' ? 'admin' : (npsPerfil === 'Comercial' ? 'comercial' : 'visualizador'));
+        const payloadNovoUsuario = {
+          id: nextNumericId,
+          nome,
+          email,
+          senha: 'Cordeiro@2026',
+          ativo: true,
+          perfil: perfilNpsDb,
+          permissao_mapa: mapaLiberado,
+          perfil_mapa: mapaPerfil,
+          permissao_funil: funilLiberado,
+          perfil_funil: funilPerfil
+        };
+        if (hasRelatoriosDbColumns) {
+          payloadNovoUsuario.permissao_relatorios = relatoriosLiberado;
+          payloadNovoUsuario.perfil_relatorios = relatoriosLiberado ? relatoriosPerfil : 'Sem Acesso';
+        }
         const { data: insertedData, error: dbErr } = await sbClient
           .from('usuarios_nps')
-          .insert([{
-            id: nextNumericId,
-            nome,
-            email,
-            senha: 'Cordeiro@2026',
-            ativo: true,
-            perfil: perfilNpsDb,
-            permissao_mapa: mapaLiberado,
-            perfil_mapa: mapaPerfil,
-            permissao_funil: funilLiberado,
-            perfil_funil: funilPerfil
-          }])
+          .insert([payloadNovoUsuario])
           .select();
 
         if (dbErr) {
@@ -1259,6 +1297,21 @@ window.abrirEdicaoUsuario = function(id) {
     selFunil.disabled = !funilEl.checked;
   }
 
+  // Relatórios
+  const relEl = document.getElementById('editPermRelatorios');
+  if (relEl) {
+    const isMasterRow = isAdminMaster(u.email);
+    relEl.checked = isMasterRow || Boolean(u.permissoes.relatorios && u.permissoes.relatorios.liberado);
+    relEl.disabled = isMasterRow;
+    const cardRel = document.getElementById('cardEditRelatorios');
+    if (cardRel) cardRel.className = relEl.checked ? 'app-permission-card ativo' : 'app-permission-card inativo';
+    const selRel = document.getElementById('editPerfilRelatorios');
+    if (selRel) {
+      selRel.value = isMasterRow ? 'Admin' : (relEl.checked ? (u.permissoes.relatorios?.perfil || 'Visualizador') : 'Visualizador');
+      selRel.disabled = !relEl.checked || isMasterRow;
+    }
+  }
+
   abrirModal('modalEditarUsuario');
 };
 
@@ -1290,25 +1343,35 @@ async function handleSalvarEdicaoUsuario(e) {
     const funilLiberado = document.getElementById('editPermFunil').checked;
     const funilPerfil = document.getElementById('editPerfilFunil').value;
 
+    const isMasterTarget = isAdminMaster(u.email);
+    const relatoriosLiberado = isMasterTarget ? true : Boolean(document.getElementById('editPermRelatorios')?.checked);
+    const relatoriosPerfil = isMasterTarget ? 'Admin' : (document.getElementById('editPerfilRelatorios')?.value || 'Visualizador');
+
     u.permissoes = {
       mapa: { liberado: mapaLiberado, perfil: mapaLiberado ? mapaPerfil : 'Sem Acesso' },
       nps: { liberado: npsLiberado, perfil: npsLiberado ? npsPerfil : 'Sem Acesso' },
-      funil: { liberado: funilLiberado, perfil: funilLiberado ? funilPerfil : 'Sem Acesso' }
+      funil: { liberado: funilLiberado, perfil: funilLiberado ? funilPerfil : 'Sem Acesso' },
+      relatorios: { liberado: relatoriosLiberado, perfil: relatoriosLiberado ? relatoriosPerfil : 'Sem Acesso' }
     };
 
     // Salva no Supabase se conectado (usando colunas válidas)
     if (sbClient) {
       try {
         const perfilNpsDb = !npsLiberado ? 'bloqueado' : (npsPerfil === 'Admin' ? 'admin' : (npsPerfil === 'Comercial' ? 'comercial' : 'visualizador'));
+        const updatePayload = {
+          perfil: perfilNpsDb,
+          permissao_mapa: mapaLiberado,
+          perfil_mapa: mapaPerfil,
+          permissao_funil: funilLiberado,
+          perfil_funil: funilPerfil
+        };
+        if (hasRelatoriosDbColumns) {
+          updatePayload.permissao_relatorios = relatoriosLiberado;
+          updatePayload.perfil_relatorios = relatoriosLiberado ? relatoriosPerfil : 'Sem Acesso';
+        }
         const { error: dbError } = await sbClient
           .from('usuarios_nps')
-          .update({
-            perfil: perfilNpsDb,
-            permissao_mapa: mapaLiberado,
-            perfil_mapa: mapaPerfil,
-            permissao_funil: funilLiberado,
-            perfil_funil: funilPerfil
-          })
+          .update(updatePayload)
           .ilike('email', u.email);
 
         if (dbError) {
@@ -1329,7 +1392,11 @@ async function handleSalvarEdicaoUsuario(e) {
       renderLauncher();
     }
 
-    showToast(`Permissões de ${u.nome} sincronizadas com sucesso!`, 'success');
+    if (!hasRelatoriosDbColumns && relatoriosLiberado && !isMasterTarget) {
+      showToast('Mapa/NPS/Funil salvos. Para liberar Relatórios no banco para terceiros, crie as colunas permissao_relatorios e perfil_relatorios em usuarios_nps.', 'warning');
+    } else {
+      showToast(`Permissões de ${u.nome} sincronizadas com sucesso!`, 'success');
+    }
   } catch (errGeral) {
     console.error('Erro ao salvar permissões:', errGeral);
     showToast('Falha ao salvar: ' + errGeral.message, 'error');

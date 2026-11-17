@@ -5,6 +5,26 @@ const ALLOWED_MASTER_EMAILS = new Set([
   'weverson.feitosa@cordeiroguindastes.com.br'
 ]);
 
+async function hasDelegatedReportsPermission(email, bearerToken) {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/usuarios_nps?email=ilike.${encodeURIComponent(email)}&select=ativo,permissao_relatorios&limit=1`,
+      {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${bearerToken}`
+        }
+      }
+    );
+    if (!res.ok) return false;
+    const rows = await res.json();
+    const row = Array.isArray(rows) ? rows[0] : null;
+    return Boolean(row && row.ativo !== false && row.permissao_relatorios === true);
+  } catch {
+    return false;
+  }
+}
+
 export async function requireAdminMaster(req, res) {
   res.setHeader('Cache-Control', 'no-store');
 
@@ -39,10 +59,15 @@ export async function requireAdminMaster(req, res) {
     const user = await response.json();
     const email = String(user?.email || '').trim().toLowerCase();
 
-    if (!ALLOWED_MASTER_EMAILS.has(email)) {
+    if (ALLOWED_MASTER_EMAILS.has(email)) {
+      return user;
+    }
+
+    const delegated = await hasDelegatedReportsPermission(email, token);
+    if (!delegated) {
       res.status(403).json({
         ok: false,
-        error: 'Acesso restrito ao Administrador Master.'
+        error: 'Acesso restrito aos usuários autorizados em Relatórios.'
       });
       return null;
     }
