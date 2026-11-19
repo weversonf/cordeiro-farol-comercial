@@ -82,6 +82,10 @@ function buildResumoPorExecutivo(titulos) {
     });
 }
 
+function getHojeSaoPauloIso() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ ok: false, error: 'Método não permitido.' });
@@ -93,7 +97,7 @@ export default async function handler(req, res) {
   const escopo = String(req.query?.escopo || 'pbix').toLowerCase() === 'all' ? 'all' : 'pbix';
   const dataCorte = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query?.data_corte || ''))
     ? String(req.query.data_corte)
-    : new Date().toISOString().slice(0, 10);
+    : getHojeSaoPauloIso();
   const executivoFiltro = String(req.query?.executivo || '').trim();
   const margemFiltro = String(req.query?.margem || '').trim().toUpperCase();
 
@@ -120,7 +124,44 @@ export default async function handler(req, res) {
 
     const filiaisParam = escopo === 'pbix' ? PBIX_FILIAIS : null;
     const result = await pool.query(`
-      WITH fiv_nf AS (
+      WITH se1_base AS MATERIALIZED (
+        SELECT
+          TRIM(COALESCE(se1.e1_cliente, '')) AS cod_cliente,
+          TRIM(COALESCE(se1.e1_loja, '')) AS loja,
+          NULLIF(TRIM(COALESCE(se1.e1_nomcli, '')), '') AS nomcli,
+          TRIM(COALESCE(se1.e1_filial, '')) AS cod_filial,
+          TRIM(COALESCE(se1.e1_prefixo, '')) AS serie,
+          TRIM(COALESCE(se1.e1_num, '')) AS titulo,
+          TRIM(COALESCE(se1.e1_tipo, '')) AS tipo,
+          NULLIF(TRIM(COALESCE(se1.e1_vend1, '')), '') AS vend1,
+          COALESCE(se1.e1_valor, 0)::numeric AS valor_original,
+          COALESCE(se1.e1_saldo, 0)::numeric AS saldo_inadimplente,
+          CASE
+            WHEN TRIM(COALESCE(se1.e1_emissao::text, '')) ~ '^\\d{8}$' THEN TO_DATE(TRIM(se1.e1_emissao::text), 'YYYYMMDD')
+            WHEN TRIM(COALESCE(se1.e1_emissao::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN SUBSTRING(TRIM(se1.e1_emissao::text), 1, 10)::date
+            ELSE NULL
+          END AS emissao,
+          CASE
+            WHEN TRIM(COALESCE(se1.e1_vencrea::text, '')) ~ '^\\d{8}$' THEN TO_DATE(TRIM(se1.e1_vencrea::text), 'YYYYMMDD')
+            WHEN TRIM(COALESCE(se1.e1_vencrea::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN SUBSTRING(TRIM(se1.e1_vencrea::text), 1, 10)::date
+            WHEN TRIM(COALESCE(se1.e1_vencto::text, '')) ~ '^\\d{8}$' THEN TO_DATE(TRIM(se1.e1_vencto::text), 'YYYYMMDD')
+            WHEN TRIM(COALESCE(se1.e1_vencto::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN SUBSTRING(TRIM(se1.e1_vencto::text), 1, 10)::date
+            ELSE NULL
+          END AS vencimento_real
+        FROM stage_protheus.se1010 se1
+        WHERE COALESCE(TRIM(se1.d_e_l_e_t_), '') <> '*'
+          AND COALESCE(se1.e1_saldo, 0) > 0
+          AND TRIM(COALESCE(se1.e1_tipo, '')) NOT IN ('RA', 'NCC')
+          AND TRIM(COALESCE(se1.e1_tipo, '')) NOT LIKE '%-'
+          AND ($1::text[] IS NULL OR TRIM(COALESCE(se1.e1_filial, '')) = ANY($1::text[]))
+      ),
+      se1_inad AS MATERIALIZED (
+        SELECT *
+        FROM se1_base
+        WHERE vencimento_real IS NOT NULL
+          AND vencimento_real < $2::date
+      ),
+      fiv_nf AS (
         SELECT DISTINCT ON (
           TRIM(COALESCE(f.cod_cliente, '')),
           TRIM(COALESCE(f.loja, '')),
@@ -136,6 +177,7 @@ export default async function handler(req, res) {
           NULLIF(TRIM(COALESCE(f.cod_vendedor, '')), '') AS cod_vendedor
         FROM comercial.fato_itens_vendas f
         WHERE NULLIF(TRIM(COALESCE(f.numero_documento, '')), '') IS NOT NULL
+          AND TRIM(COALESCE(f.numero_documento, '')) IN (SELECT DISTINCT titulo FROM se1_inad WHERE titulo <> '')
         ORDER BY
           TRIM(COALESCE(f.cod_cliente, '')),
           TRIM(COALESCE(f.loja, '')),
@@ -143,69 +185,59 @@ export default async function handler(req, res) {
           TRIM(COALESCE(f.serie, '')),
           f.emissao DESC NULLS LAST
       ),
-      cli_nome AS (
+      dim_cli_loja AS (
         SELECT DISTINCT ON (TRIM(COALESCE(c.cod_cliente, '')), TRIM(COALESCE(c.loja, '')))
           TRIM(COALESCE(c.cod_cliente, '')) AS cod_cliente,
           TRIM(COALESCE(c.loja, '')) AS loja,
-          COALESCE(NULLIF(TRIM(c.nome_cliente), ''), 'Cliente ' || TRIM(COALESCE(c.cod_cliente, ''))) AS nome_cliente
+          NULLIF(TRIM(c.nome_cliente), '') AS nome_cliente
         FROM comercial.dim_clientes c
-        ORDER BY TRIM(COALESCE(c.cod_cliente, '')), TRIM(COALESCE(c.loja, ''))
+        WHERE TRIM(COALESCE(c.cod_cliente, '')) IN (SELECT DISTINCT cod_cliente FROM se1_inad WHERE cod_cliente <> '')
+        ORDER BY TRIM(COALESCE(c.cod_cliente, '')), TRIM(COALESCE(c.loja, '')), c.data_modificacao DESC NULLS LAST, c.id DESC
+      ),
+      dim_cli_cod AS (
+        SELECT DISTINCT ON (TRIM(COALESCE(c.cod_cliente, '')))
+          TRIM(COALESCE(c.cod_cliente, '')) AS cod_cliente,
+          NULLIF(TRIM(c.nome_cliente), '') AS nome_cliente
+        FROM comercial.dim_clientes c
+        WHERE TRIM(COALESCE(c.cod_cliente, '')) IN (SELECT DISTINCT cod_cliente FROM se1_inad WHERE cod_cliente <> '')
+        ORDER BY TRIM(COALESCE(c.cod_cliente, '')), c.data_modificacao DESC NULLS LAST, c.id DESC
       ),
       vend_nome AS (
         SELECT DISTINCT ON (TRIM(COALESCE(v.cod_vendedor, '')))
           TRIM(COALESCE(v.cod_vendedor, '')) AS cod_vendedor,
           UPPER(COALESCE(NULLIF(TRIM(v.nome_vendedor), ''), 'Vendedor ' || TRIM(COALESCE(v.cod_vendedor, '')))) AS nome_vendedor
         FROM comercial.dim_vendedor v
-        ORDER BY TRIM(COALESCE(v.cod_vendedor, ''))
+        ORDER BY TRIM(COALESCE(v.cod_vendedor, '')), v.id DESC
       )
       SELECT
         'PROTHEUS (SE1010)' AS origem,
         COALESCE(v.nome_vendedor, 'SEM EXECUTIVO') AS executivo,
-        TRIM(COALESCE(se1.e1_cliente, '')) AS cod_cliente,
-        COALESCE(cn.nome_cliente, NULLIF(TRIM(se1.e1_nomcli), ''), 'Cliente ' || TRIM(COALESCE(se1.e1_cliente, ''))) AS cliente,
+        s.cod_cliente,
+        COALESCE(cl.nome_cliente, cc.nome_cliente, s.nomcli, 'Cliente ' || s.cod_cliente) AS cliente,
         COALESCE(fn.margem, 'Sem Margem') AS margem,
         COALESCE(fn.numero_contrato, '') AS contrato,
-        TRIM(COALESCE(se1.e1_filial, '')) AS cod_filial,
-        TRIM(COALESCE(se1.e1_prefixo, '')) AS serie,
-        TRIM(COALESCE(se1.e1_num, '')) AS titulo,
-        COALESCE(se1.e1_valor, 0)::numeric * CASE WHEN TRIM(COALESCE(se1.e1_tipo, '')) IN ('AB-', 'NCC', 'RA') THEN -1 ELSE 1 END AS valor_original,
-        COALESCE(se1.e1_saldo, 0)::numeric * CASE WHEN TRIM(COALESCE(se1.e1_tipo, '')) IN ('AB-', 'NCC', 'RA') THEN -1 ELSE 1 END AS saldo_inadimplente,
-        CASE
-          WHEN TRIM(COALESCE(se1.e1_emissao::text, '')) ~ '^\\d{8}$' THEN TO_DATE(TRIM(se1.e1_emissao::text), 'YYYYMMDD')
-          WHEN TRIM(COALESCE(se1.e1_emissao::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN SUBSTRING(TRIM(se1.e1_emissao::text), 1, 10)::date
-          ELSE NULL
-        END AS emissao,
-        CASE
-          WHEN TRIM(COALESCE(se1.e1_vencrea::text, '')) ~ '^\\d{8}$' THEN TO_DATE(TRIM(se1.e1_vencrea::text), 'YYYYMMDD')
-          WHEN TRIM(COALESCE(se1.e1_vencrea::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN SUBSTRING(TRIM(se1.e1_vencrea::text), 1, 10)::date
-          WHEN TRIM(COALESCE(se1.e1_vencto::text, '')) ~ '^\\d{8}$' THEN TO_DATE(TRIM(se1.e1_vencto::text), 'YYYYMMDD')
-          WHEN TRIM(COALESCE(se1.e1_vencto::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN SUBSTRING(TRIM(se1.e1_vencto::text), 1, 10)::date
-          ELSE NULL
-        END AS vencimento_real
-      FROM stage_protheus.se1010 se1
+        s.cod_filial,
+        s.serie,
+        s.titulo,
+        s.tipo,
+        s.valor_original,
+        s.saldo_inadimplente,
+        TO_CHAR(s.emissao, 'YYYY-MM-DD') AS emissao,
+        TO_CHAR(s.vencimento_real, 'YYYY-MM-DD') AS vencimento_real
+      FROM se1_inad s
       LEFT JOIN fiv_nf fn
-        ON fn.cod_cliente = TRIM(COALESCE(se1.e1_cliente, ''))
-       AND fn.loja = TRIM(COALESCE(se1.e1_loja, ''))
-       AND fn.numero_documento = TRIM(COALESCE(se1.e1_num, ''))
-       AND fn.serie = TRIM(COALESCE(se1.e1_prefixo, ''))
-      LEFT JOIN cli_nome cn
-        ON cn.cod_cliente = TRIM(COALESCE(se1.e1_cliente, ''))
-       AND cn.loja = TRIM(COALESCE(se1.e1_loja, ''))
+        ON fn.cod_cliente = s.cod_cliente
+       AND fn.loja = s.loja
+       AND fn.numero_documento = s.titulo
+       AND fn.serie = s.serie
+      LEFT JOIN dim_cli_loja cl
+        ON cl.cod_cliente = s.cod_cliente
+       AND cl.loja = s.loja
+      LEFT JOIN dim_cli_cod cc
+        ON cc.cod_cliente = s.cod_cliente
       LEFT JOIN vend_nome v
-        ON v.cod_vendedor = COALESCE(NULLIF(TRIM(COALESCE(se1.e1_vend1, '')), ''), fn.cod_vendedor)
-      WHERE COALESCE(TRIM(se1.d_e_l_e_t_), '') <> '*'
-        AND COALESCE(se1.e1_saldo, 0) <> 0
-        AND ($1::text[] IS NULL OR TRIM(COALESCE(se1.e1_filial, '')) = ANY($1::text[]))
-        AND (
-          CASE
-            WHEN TRIM(COALESCE(se1.e1_vencrea::text, '')) ~ '^\\d{8}$' THEN TO_DATE(TRIM(se1.e1_vencrea::text), 'YYYYMMDD')
-            WHEN TRIM(COALESCE(se1.e1_vencrea::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN SUBSTRING(TRIM(se1.e1_vencrea::text), 1, 10)::date
-            WHEN TRIM(COALESCE(se1.e1_vencto::text, '')) ~ '^\\d{8}$' THEN TO_DATE(TRIM(se1.e1_vencto::text), 'YYYYMMDD')
-            WHEN TRIM(COALESCE(se1.e1_vencto::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN SUBSTRING(TRIM(se1.e1_vencto::text), 1, 10)::date
-            ELSE NULL
-          END
-        ) < $2::date
-      ORDER BY saldo_inadimplente DESC
+        ON v.cod_vendedor = COALESCE(s.vend1, fn.cod_vendedor)
+      ORDER BY s.saldo_inadimplente DESC
     `, [filiaisParam, dataCorte]);
 
     let titulos = result.rows.map(r => ({
@@ -219,10 +251,11 @@ export default async function handler(req, res) {
       codFilial: r.cod_filial,
       serie: r.serie,
       titulo: r.titulo,
+      tipo: r.tipo,
       valorOriginal: toNumber(r.valor_original),
       saldoInadimplente: toNumber(r.saldo_inadimplente),
-      emissao: r.emissao ? new Date(r.emissao).toISOString().slice(0, 10) : null,
-      vencimentoReal: r.vencimento_real ? new Date(r.vencimento_real).toISOString().slice(0, 10) : null
+      emissao: r.emissao || null,
+      vencimentoReal: r.vencimento_real || null
     }));
 
     if (executivoFiltro) {

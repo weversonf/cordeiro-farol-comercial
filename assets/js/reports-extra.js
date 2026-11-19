@@ -920,17 +920,31 @@
   // ============================================================================
   // INADIMPLENCIA (EXECUTIVO, MARGEM E CLIENTE + EXPORTACAO XLSX 2 ABAS)
   // ============================================================================
+  function hojeLocalIso() {
+    const dt = new Date();
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const d = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
   function bindInadimplenciaControles() {
     if (inadBinded) return;
     inadBinded = true;
 
     const corteEl = document.getElementById('inadDataCorte');
     if (corteEl && !corteEl.value) {
-      corteEl.value = new Date().toISOString().slice(0, 10);
+      corteEl.value = hojeLocalIso();
     }
 
     document.getElementById('btnAtualizarInadimplencia')?.addEventListener('click', () => carregarInadimplencia(true));
-    document.getElementById('inadDataCorte')?.addEventListener('change', () => carregarInadimplencia(true));
+    document.getElementById('inadDataCorte')?.addEventListener('change', () => {
+      if (inadPayload?.importadoDe) {
+        renderizarInadimplencia();
+      } else {
+        carregarInadimplencia(true);
+      }
+    });
 
     ['inadFiltroExecutivo', 'inadFiltroMargem'].forEach(id => {
       document.getElementById(id)?.addEventListener('change', renderizarInadimplencia);
@@ -1024,10 +1038,10 @@
       const idxFilial = findCol([/filial/]);
       const idxSerie = findCol([/s[eé]rie|pref/]);
       const idxTitulo = findCol([/t[ií]tulo|nf/]);
-      const idxValorOrig = findCol([/valor original/]);
-      const idxSaldo = findCol([/saldo inadimplente/, /^saldo/]);
+      const idxValorOrig = findCol([/valor original/, /vr\.?\s*t[ií]tulo/, /vlr\.?\s*t[ií]tulo/, /valor t[ií]tulo/]);
+      const idxSaldo = findCol([/saldo inadimplente/, /^saldo/, /sld.*aberto/]);
       const idxEmissao = findCol([/emiss[aã]o/]);
-      const idxVenc = findCol([/vencimento/]);
+      const idxVenc = findCol([/venc.*real/, /vencto.*real/, /vencimento/]);
 
       const titulos = [];
       for (let i = headerIdx + 1; i < rows.length; i += 1) {
@@ -1037,6 +1051,7 @@
         const saldo = idxSaldo >= 0 ? Number(r[idxSaldo] || 0) : 0;
         if (!cli && !exec && !saldo) continue;
         if (/^total/i.test(cli) || /^total/i.test(exec)) continue;
+        if (!(saldo > 0)) continue;
         titulos.push({
           origem: idxOrigem >= 0 ? String(r[idxOrigem] || 'PLANILHA').trim() : 'PLANILHA',
           executivo: normalizarExecutivoInad(exec),
@@ -1055,7 +1070,7 @@
       }
 
       if (!titulos.length) {
-        core().showToast('Nenhum título encontrado na planilha importada.', 'warning');
+        core().showToast('Nenhum título com saldo devedor > 0 encontrado na planilha importada.', 'warning');
         return;
       }
 
@@ -1064,7 +1079,7 @@
         disponivel: true,
         importadoDe: file.name,
         fonte: `Planilha (${file.name})`,
-        dataCorte: document.getElementById('inadDataCorte')?.value || new Date().toISOString().slice(0, 10),
+        dataCorte: document.getElementById('inadDataCorte')?.value || hojeLocalIso(),
         titulos
       };
       inadCarregado = true;
@@ -1113,7 +1128,7 @@
     if (btn) btn.disabled = true;
 
     try {
-      const dataCorte = document.getElementById('inadDataCorte')?.value || new Date().toISOString().slice(0, 10);
+      const dataCorte = document.getElementById('inadDataCorte')?.value || hojeLocalIso();
       const qs = new URLSearchParams({ data_corte: dataCorte, escopo: 'pbix' });
       const dados = await core().fetchRelatorioAutenticado(`/api/inadimplencia?${qs.toString()}`);
       if (Array.isArray(dados?.titulos)) {
@@ -1152,11 +1167,14 @@
 
   function obterTitulosInadFiltrados() {
     const todos = inadPayload?.titulos || [];
+    const dataCorte = document.getElementById('inadDataCorte')?.value || hojeLocalIso();
     const exec = document.getElementById('inadFiltroExecutivo')?.value || '';
     const margem = document.getElementById('inadFiltroMargem')?.value || 'TODAS';
     const busca = String(document.getElementById('inadFiltroBusca')?.value || '').trim().toLowerCase();
 
     return todos.filter(t => {
+      if (!(Number(t.saldoInadimplente || 0) > 0)) return false;
+      if (dataCorte && t.vencimentoReal && t.vencimentoReal >= dataCorte) return false;
       const execNorm = normalizarExecutivoInad(t.executivo);
       if (exec && execNorm !== exec) return false;
       if (margem && margem !== 'TODAS' && t.margem !== margem) return false;
@@ -1432,7 +1450,7 @@
       [`RESUMO CONSOLIDADO POR EXECUTIVO E MARGEM — INADIMPLÊNCIA (R$ ${totalSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`],
       [],
       ['CONSOLIDADO POR EXECUTIVO E MARGEM DO CONTRATO (D2_YMARGCT — CALCULADO POR FÓRMULAS DA ABA 1)'],
-      ['Executivo (Atribuído pela NF)', 'Margem A (R$)', 'Margem B (R$)', 'Margem C (R$)', 'Saldo Total Líquido (R$)', '% do Total', 'Qtd Títulos'],
+      ['Executivo (Atribuído pela NF)', 'Margem A (R$)', 'Margem B (R$)', 'Margem C (R$)', 'Outras / Sem Margem (R$)', 'Saldo Total (R$)', '% do Total', 'Qtd Títulos'],
       ...resumoExec.map((r, idx) => {
         const rowNum = 5 + idx;
         return [
@@ -1440,8 +1458,9 @@
           { t: 'n', f: `SUMIFS('1. INADIMPLENCIA'!$K$4:$K$${lastRow},'1. INADIMPLENCIA'!$B$4:$B$${lastRow},$A${rowNum},'1. INADIMPLENCIA'!$E$4:$E$${lastRow},"A")`, v: r.margemA },
           { t: 'n', f: `SUMIFS('1. INADIMPLENCIA'!$K$4:$K$${lastRow},'1. INADIMPLENCIA'!$B$4:$B$${lastRow},$A${rowNum},'1. INADIMPLENCIA'!$E$4:$E$${lastRow},"B")`, v: r.margemB },
           { t: 'n', f: `SUMIFS('1. INADIMPLENCIA'!$K$4:$K$${lastRow},'1. INADIMPLENCIA'!$B$4:$B$${lastRow},$A${rowNum},'1. INADIMPLENCIA'!$E$4:$E$${lastRow},"C")`, v: r.margemC },
-          { t: 'n', f: `SUM(B${rowNum}:D${rowNum})`, v: r.margemA + r.margemB + r.margemC },
-          { t: 'n', f: `E${rowNum}/$E$${totalRowIdx}`, v: totalSaldo ? (r.saldoTotal / totalSaldo) : 0 },
+          { t: 'n', f: `SUMIFS('1. INADIMPLENCIA'!$K$4:$K$${lastRow},'1. INADIMPLENCIA'!$B$4:$B$${lastRow},$A${rowNum})-SUM(B${rowNum}:D${rowNum})`, v: r.outrasMargens },
+          { t: 'n', f: `SUM(B${rowNum}:E${rowNum})`, v: r.saldoTotal },
+          { t: 'n', f: `F${rowNum}/$F$${totalRowIdx}`, v: totalSaldo ? (r.saldoTotal / totalSaldo) : 0 },
           { t: 'n', f: `COUNTIF('1. INADIMPLENCIA'!$B$4:$B$${lastRow},$A${rowNum})`, v: r.qtdTitulos }
         ];
       }),
@@ -1450,20 +1469,21 @@
         { t: 'n', f: `SUM(B5:B${resumoLastRow})`, v: resumoExec.reduce((a, r) => a + r.margemA, 0) },
         { t: 'n', f: `SUM(C5:C${resumoLastRow})`, v: resumoExec.reduce((a, r) => a + r.margemB, 0) },
         { t: 'n', f: `SUM(D5:D${resumoLastRow})`, v: resumoExec.reduce((a, r) => a + r.margemC, 0) },
-        { t: 'n', f: `SUM(E5:E${resumoLastRow})`, v: resumoExec.reduce((a, r) => a + r.margemA + r.margemB + r.margemC, 0) },
+        { t: 'n', f: `SUM(E5:E${resumoLastRow})`, v: resumoExec.reduce((a, r) => a + r.outrasMargens, 0) },
+        { t: 'n', f: `SUM(F5:F${resumoLastRow})`, v: totalSaldo },
         { t: 'n', v: 1 },
-        { t: 'n', f: `SUM(G5:G${resumoLastRow})`, v: filtrados.length }
+        { t: 'n', f: `SUM(H5:H${resumoLastRow})`, v: filtrados.length }
       ]
     ];
     const ws2 = XLSX.utils.aoa_to_sheet(aoa2);
     ws2['!cols'] = [
-      { wch: 32 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 22 }, { wch: 14 }, { wch: 14 }
+      { wch: 32 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 22 }, { wch: 22 }, { wch: 14 }, { wch: 14 }
     ];
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws1, '1. INADIMPLENCIA');
     XLSX.utils.book_append_sheet(wb, ws2, '2. RESUMO EXECUTIVO E MARGEM');
-    const dataTag = document.getElementById('inadDataCorte')?.value || new Date().toISOString().slice(0, 10);
+    const dataTag = document.getElementById('inadDataCorte')?.value || hojeLocalIso();
     XLSX.writeFile(wb, `Inadimplencia_Executivo_Cliente_Margem_${dataTag}.xlsx`);
   }
 
