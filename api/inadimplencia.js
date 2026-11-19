@@ -3,14 +3,33 @@ import { requireAdminMaster } from './_auth.js';
 import { PBIX_FILIAIS, checkTableReadable } from './_dw.js';
 
 const FILIAL_NOMES = {
-  '010101': 'Matriz Fortaleza (010101)',
-  '010102': 'Filial 010102',
-  '030301': 'Transportes Matriz (030301)',
-  '030303': 'Transportes Pecém (030303)',
-  '040401': 'JVC Locações (040401)',
-  '060601': 'Cordeiro Locações (060601)',
-  '111101': 'ALSM Locações (111101)'
+  '010101': '010101 - Matriz Fortaleza',
+  '010102': '010102 - Filial 010102',
+  '010103': '010103 - Filial 010103',
+  '010104': '010104 - Filial 010104',
+  '020201': '020201 - Cordeiro Guindastes',
+  '030301': '030301 - Transportes Matriz',
+  '030302': '030302 - Transportes Filial 02',
+  '030303': '030303 - Transportes Pecém',
+  '040401': '040401 - JVC Locações',
+  '060601': '060601 - Cordeiro Locações',
+  '060602': '060602 - Cordeiro Locações (Wind)',
+  '070701': '070701 - Filial 070701',
+  '101001': '101001 - Central Administrativa',
+  '111101': '111101 - ALSM Locações',
+  '121201': '121201 - CM Máquinas (Matriz)',
+  '121202': '121202 - CM Máquinas (Mossoró)',
+  '121203': '121203 - CM Máquinas (Recife)',
+  '141401': '141401 - Cordeiro Engenharia',
+  '161601': '161601 - Holding / Central ADM',
+  '171701': '171701 - Cordeiro Metalmecânica'
 };
+
+function formatarNomeFilial(codFilial) {
+  const cod = String(codFilial || '').trim();
+  if (!cod) return 'Sem Filial';
+  return FILIAL_NOMES[cod] || `${cod} - Filial ${cod}`;
+}
 
 function normalizeMargin(raw) {
   const txt = String(raw || '').trim().toUpperCase();
@@ -94,12 +113,16 @@ export default async function handler(req, res) {
   const user = await requireAdminMaster(req, res);
   if (!user) return;
 
-  const escopo = String(req.query?.escopo || 'pbix').toLowerCase() === 'all' ? 'all' : 'pbix';
+  const escopo = String(req.query?.escopo || 'all').toLowerCase() === 'pbix' ? 'pbix' : 'all';
   const dataCorte = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query?.data_corte || ''))
     ? String(req.query.data_corte)
     : getHojeSaoPauloIso();
   const executivoFiltro = String(req.query?.executivo || '').trim();
   const margemFiltro = String(req.query?.margem || '').trim().toUpperCase();
+  const filiaisFiltro = String(req.query?.filiais || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
 
   try {
     const pool = getPool();
@@ -247,7 +270,7 @@ export default async function handler(req, res) {
       cliente: r.cliente,
       margem: normalizeMargin(r.margem),
       contrato: r.contrato,
-      filial: FILIAL_NOMES[r.cod_filial] || r.cod_filial,
+      filial: formatarNomeFilial(r.cod_filial),
       codFilial: r.cod_filial,
       serie: r.serie,
       titulo: r.titulo,
@@ -258,6 +281,23 @@ export default async function handler(req, res) {
       vencimentoReal: r.vencimento_real || null
     }));
 
+    const filialMap = new Map();
+    for (const t of titulos) {
+      const cod = t.codFilial || t.filial || '';
+      if (!cod) continue;
+      if (!filialMap.has(cod)) {
+        filialMap.set(cod, { codFilial: cod, label: t.filial, qtdTitulos: 0, saldoTotal: 0 });
+      }
+      const f = filialMap.get(cod);
+      f.qtdTitulos += 1;
+      f.saldoTotal += t.saldoInadimplente;
+    }
+    const filiaisDisponiveis = Array.from(filialMap.values()).sort((a, b) => a.codFilial.localeCompare(b.codFilial));
+
+    if (filiaisFiltro.length) {
+      const setFil = new Set(filiaisFiltro);
+      titulos = titulos.filter(t => setFil.has(t.codFilial) || setFil.has(t.filial));
+    }
     if (executivoFiltro) {
       titulos = titulos.filter(t => t.executivo.toLowerCase() === executivoFiltro.toLowerCase());
     }
@@ -285,6 +325,7 @@ export default async function handler(req, res) {
       fonte: 'stage_protheus.se1010 + comercial.fato_itens_vendas',
       dataCorte,
       escopo,
+      filiaisDisponiveis,
       resumoExecutivo,
       topClientes,
       titulos

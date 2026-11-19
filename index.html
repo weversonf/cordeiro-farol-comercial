@@ -1209,10 +1209,28 @@
 
         <!-- Painel 5: Inadimplência por Executivo, Margem e Cliente -->
         <div id="relatorioInadimplencia" style="display: none;">
-          <div class="contracts-filters-bar faturamento-filters-grid">
+          <div class="contracts-filters-bar faturamento-filters-grid inad-filters-grid">
             <div class="filter-field">
               <label for="inadDataCorte">Venc. Real anterior a</label>
               <input type="date" id="inadDataCorte" />
+            </div>
+            <div class="filter-field inad-filial-field" id="inadFiltroFilialWrap">
+              <label for="inadFiltroFilialBtn">Filiais</label>
+              <div class="multi-select-dropdown" id="inadFiltroFilialDropdown">
+                <button type="button" id="inadFiltroFilialBtn" class="multi-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span id="inadFiltroFilialLabel">Todas as filiais</span>
+                  <i class="ph ph-caret-down"></i>
+                </button>
+                <div id="inadFiltroFilialMenu" class="multi-select-menu" style="display: none;">
+                  <div class="multi-select-toolbar">
+                    <input type="search" id="inadFiltroFilialBusca" placeholder="Buscar código ou filial..." />
+                    <div class="multi-select-actions">
+                      <button type="button" id="btnInadFilialLimpar">Todas (Limpar)</button>
+                    </div>
+                  </div>
+                  <div id="inadFiltroFilialLista" class="multi-select-list" role="listbox" aria-multiselectable="true"></div>
+                </div>
+              </div>
             </div>
             <div class="filter-field">
               <label for="inadFiltroExecutivo">Executivo</label>

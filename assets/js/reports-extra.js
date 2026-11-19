@@ -18,6 +18,8 @@
   let inadPayload = null;
   let inadCarregado = false;
   let inadBinded = false;
+  let inadFiliaisSelecionadas = new Set();
+  let inadFiliaisCatalogo = [];
   const inadCharts = {};
 
   function renderInadChart(canvasId, config) {
@@ -928,6 +930,127 @@
     return `${y}-${m}-${d}`;
   }
 
+  const FILIAL_NOMES_INAD = {
+    '010101': '010101 - Matriz Fortaleza',
+    '010102': '010102 - Filial 010102',
+    '010103': '010103 - Filial 010103',
+    '010104': '010104 - Filial 010104',
+    '020201': '020201 - Cordeiro Guindastes',
+    '030301': '030301 - Transportes Matriz',
+    '030302': '030302 - Transportes Filial 02',
+    '030303': '030303 - Transportes Pecém',
+    '040401': '040401 - JVC Locações',
+    '060601': '060601 - Cordeiro Locações',
+    '060602': '060602 - Cordeiro Locações (Wind)',
+    '070701': '070701 - Filial 070701',
+    '101001': '101001 - Central Administrativa',
+    '111101': '111101 - ALSM Locações',
+    '121201': '121201 - CM Máquinas (Matriz)',
+    '121202': '121202 - CM Máquinas (Mossoró)',
+    '121203': '121203 - CM Máquinas (Recife)',
+    '141401': '141401 - Cordeiro Engenharia',
+    '161601': '161601 - Holding / Central ADM',
+    '171701': '171701 - Cordeiro Metalmecânica'
+  };
+
+  function extrairCodFilialInad(codFilial, rawFilial) {
+    const cod = String(codFilial || '').trim();
+    if (/^\d{6}$/.test(cod)) return cod;
+    const raw = String(rawFilial || '').trim();
+    const m = raw.match(/\b(\d{6})\b/);
+    return m ? m[1] : '';
+  }
+
+  function formatarFilialInad(codFilial, rawFilial) {
+    const cod = extrairCodFilialInad(codFilial, rawFilial);
+    if (cod && FILIAL_NOMES_INAD[cod]) return FILIAL_NOMES_INAD[cod];
+    const raw = String(rawFilial || '').trim();
+    if (cod && raw) {
+      if (raw.startsWith(`${cod} -`)) return raw;
+      const nomeLimpo = raw.replace(new RegExp(`\\s*\\(${cod}\\)\\s*`, 'g'), '').trim();
+      return nomeLimpo && nomeLimpo !== cod ? `${cod} - ${nomeLimpo}` : `${cod} - Filial ${cod}`;
+    }
+    if (cod) return `${cod} - Filial ${cod}`;
+    return raw || 'Sem Filial';
+  }
+
+  function atualizarLabelFiliaisInad() {
+    const labelEl = document.getElementById('inadFiltroFilialLabel');
+    const btnEl = document.getElementById('inadFiltroFilialBtn');
+    if (!labelEl) return;
+    const total = inadFiliaisCatalogo.length;
+    const qtd = inadFiliaisSelecionadas.size;
+    if (qtd === 0 || (total > 0 && qtd >= total)) {
+      labelEl.textContent = 'Todas as filiais';
+      btnEl?.classList.remove('has-selection');
+    } else if (qtd === 1) {
+      const onlyKey = Array.from(inadFiliaisSelecionadas)[0];
+      const item = inadFiliaisCatalogo.find(f => f.key === onlyKey);
+      labelEl.textContent = item ? item.label : onlyKey;
+      btnEl?.classList.add('has-selection');
+    } else {
+      labelEl.textContent = `${qtd} filiais selecionadas`;
+      btnEl?.classList.add('has-selection');
+    }
+  }
+
+  function renderizarListaFiliaisInad() {
+    const listaEl = document.getElementById('inadFiltroFilialLista');
+    if (!listaEl) return;
+    const termo = String(document.getElementById('inadFiltroFilialBusca')?.value || '').trim().toLowerCase();
+    const filtradas = termo
+      ? inadFiliaisCatalogo.filter(f => f.label.toLowerCase().includes(termo) || f.key.toLowerCase().includes(termo))
+      : inadFiliaisCatalogo;
+
+    if (!filtradas.length) {
+      listaEl.innerHTML = '<div class="multi-select-empty">Nenhuma filial encontrada.</div>';
+      return;
+    }
+
+    listaEl.innerHTML = filtradas.map(f => {
+      const checked = inadFiliaisSelecionadas.has(f.key) ? 'checked' : '';
+      return `
+        <label class="multi-select-option">
+          <input type="checkbox" value="${esc(f.key)}" ${checked} />
+          <span class="multi-select-text" title="${esc(f.label)}">${esc(f.label)}</span>
+          <small class="multi-select-count">${fmtInt(f.count)}</small>
+        </label>`;
+    }).join('');
+
+    listaEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) {
+          inadFiliaisSelecionadas.add(cb.value);
+        } else {
+          inadFiliaisSelecionadas.delete(cb.value);
+        }
+        atualizarLabelFiliaisInad();
+        renderizarInadimplencia();
+      });
+    });
+  }
+
+  function preencherFiltroFiliaisInad(titulos) {
+    const map = new Map();
+    for (const t of (titulos || [])) {
+      const label = formatarFilialInad(t.codFilial, t.filial);
+      const key = extrairCodFilialInad(t.codFilial, t.filial) || label;
+      t.codFilial = key;
+      t.filial = label;
+      if (!map.has(key)) {
+        map.set(key, { key, label, count: 0 });
+      }
+      map.get(key).count += 1;
+    }
+    inadFiliaisCatalogo = Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+
+    const validKeys = new Set(inadFiliaisCatalogo.map(f => f.key));
+    inadFiliaisSelecionadas = new Set(Array.from(inadFiliaisSelecionadas).filter(k => validKeys.has(k)));
+
+    atualizarLabelFiliaisInad();
+    renderizarListaFiliaisInad();
+  }
+
   function bindInadimplenciaControles() {
     if (inadBinded) return;
     inadBinded = true;
@@ -944,6 +1067,41 @@
       } else {
         carregarInadimplencia(true);
       }
+    });
+
+    const btnFilial = document.getElementById('inadFiltroFilialBtn');
+    const menuFilial = document.getElementById('inadFiltroFilialMenu');
+    const wrapFilial = document.getElementById('inadFiltroFilialDropdown');
+    if (btnFilial && menuFilial) {
+      const toggleMenu = (abrir) => {
+        const isOpen = abrir !== undefined ? abrir : menuFilial.style.display === 'none';
+        menuFilial.style.display = isOpen ? 'block' : 'none';
+        btnFilial.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        if (isOpen) {
+          document.getElementById('inadFiltroFilialBusca')?.focus();
+        }
+      };
+      btnFilial.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleMenu();
+      });
+      document.addEventListener('click', (e) => {
+        if (wrapFilial && !wrapFilial.contains(e.target)) {
+          toggleMenu(false);
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') toggleMenu(false);
+      });
+    }
+    document.getElementById('inadFiltroFilialBusca')?.addEventListener('input', renderizarListaFiliaisInad);
+    document.getElementById('btnInadFilialLimpar')?.addEventListener('click', () => {
+      inadFiliaisSelecionadas.clear();
+      const buscaFil = document.getElementById('inadFiltroFilialBusca');
+      if (buscaFil) buscaFil.value = '';
+      atualizarLabelFiliaisInad();
+      renderizarListaFiliaisInad();
+      renderizarInadimplencia();
     });
 
     ['inadFiltroExecutivo', 'inadFiltroMargem'].forEach(id => {
@@ -1052,6 +1210,8 @@
         if (!cli && !exec && !saldo) continue;
         if (/^total/i.test(cli) || /^total/i.test(exec)) continue;
         if (!(saldo > 0)) continue;
+        const rawFil = idxFilial >= 0 ? String(r[idxFilial] || '').trim() : '';
+        const codFil = extrairCodFilialInad('', rawFil);
         titulos.push({
           origem: idxOrigem >= 0 ? String(r[idxOrigem] || 'PLANILHA').trim() : 'PLANILHA',
           executivo: normalizarExecutivoInad(exec),
@@ -1059,7 +1219,8 @@
           cliente: cli || 'Não informado',
           margem: normalizarMargemInad(idxMargem >= 0 ? r[idxMargem] : ''),
           contrato: idxContrato >= 0 ? String(r[idxContrato] || '').trim() : '',
-          filial: idxFilial >= 0 ? String(r[idxFilial] || '').trim() : '',
+          codFilial: codFil,
+          filial: formatarFilialInad(codFil, rawFil),
           serie: idxSerie >= 0 ? String(r[idxSerie] || '').trim() : '',
           titulo: idxTitulo >= 0 ? String(r[idxTitulo] || '').trim() : '',
           valorOriginal: idxValorOrig >= 0 ? Number(r[idxValorOrig] || 0) : saldo,
@@ -1083,13 +1244,14 @@
         titulos
       };
       inadCarregado = true;
+      preencherFiltroFiliaisInad(titulos);
       preencherSelectExecutivoInad(titulos);
       renderizarInadimplencia();
       document.getElementById('inadConteudo').style.display = 'block';
       document.getElementById('inadStatusBanner').innerHTML = `
         <div class="report-status-banner is-info">
           <i class="ph ph-file-xls"></i>
-          <div><strong>Planilha carregada:</strong> ${esc(file.name)} (${fmtInt(titulos.length)} títulos). Você pode filtrar por Executivo, Margem e Cliente e exportar o consolidado em Excel.</div>
+          <div><strong>Planilha carregada:</strong> ${esc(file.name)} (${fmtInt(titulos.length)} títulos). Você pode filtrar por Filial, Executivo, Margem e Cliente e exportar o consolidado em Excel.</div>
         </div>`;
       core().showToast(`Planilha "${file.name}" carregada com ${titulos.length} títulos!`, 'success');
     } catch (ex) {
@@ -1129,11 +1291,13 @@
 
     try {
       const dataCorte = document.getElementById('inadDataCorte')?.value || hojeLocalIso();
-      const qs = new URLSearchParams({ data_corte: dataCorte, escopo: 'pbix' });
+      const qs = new URLSearchParams({ data_corte: dataCorte, escopo: 'all' });
       const dados = await core().fetchRelatorioAutenticado(`/api/inadimplencia?${qs.toString()}`);
       if (Array.isArray(dados?.titulos)) {
         dados.titulos.forEach(t => {
           t.executivo = normalizarExecutivoInad(t.executivo);
+          t.filial = formatarFilialInad(t.codFilial, t.filial);
+          t.codFilial = extrairCodFilialInad(t.codFilial, t.filial) || t.filial;
         });
       }
       inadPayload = dados;
@@ -1147,12 +1311,13 @@
               <strong>Protheus SE1010 pendente de permissão para leitura automática:</strong>
               <p>${esc(dados.motivo || 'Tabela stage_protheus.se1010 sem SELECT para leitura_bi.')}</p>
               <p><strong>Ação DBA/TI:</strong> <code>${esc(dados.sqlLiberacao || 'GRANT SELECT ON stage_protheus.se1010 TO leitura_bi;')}</code></p>
-              <p>Enquanto a TI libera a tabela no DW, você já pode clicar em <strong>Importar Planilha (.xlsx)</strong> no topo para visualizar os gráficos, filtrar por Executivo/Margem e exportar o Excel.</p>
+              <p>Enquanto a TI libera a tabela no DW, você já pode clicar em <strong>Importar Planilha (.xlsx)</strong> no topo para visualizar os gráficos, filtrar por Filial/Executivo/Margem e exportar o Excel.</p>
             </div>
           </div>`;
         return;
       }
 
+      preencherFiltroFiliaisInad(dados.titulos || []);
       preencherSelectExecutivoInad(dados.titulos || []);
       renderizarInadimplencia();
       conteudo.style.display = 'block';
@@ -1171,10 +1336,15 @@
     const exec = document.getElementById('inadFiltroExecutivo')?.value || '';
     const margem = document.getElementById('inadFiltroMargem')?.value || 'TODAS';
     const busca = String(document.getElementById('inadFiltroBusca')?.value || '').trim().toLowerCase();
+    const temFiltroFilial = inadFiliaisSelecionadas.size > 0 && inadFiliaisSelecionadas.size < inadFiliaisCatalogo.length;
 
     return todos.filter(t => {
       if (!(Number(t.saldoInadimplente || 0) > 0)) return false;
       if (dataCorte && t.vencimentoReal && t.vencimentoReal >= dataCorte) return false;
+      if (temFiltroFilial) {
+        const keyFil = extrairCodFilialInad(t.codFilial, t.filial) || formatarFilialInad(t.codFilial, t.filial);
+        if (!inadFiliaisSelecionadas.has(keyFil)) return false;
+      }
       const execNorm = normalizarExecutivoInad(t.executivo);
       if (exec && execNorm !== exec) return false;
       if (margem && margem !== 'TODAS' && t.margem !== margem) return false;
@@ -1498,6 +1668,8 @@
       fatCarregado = false;
       inadPayload = null;
       inadCarregado = false;
+      inadFiliaisSelecionadas = new Set();
+      inadFiliaisCatalogo = [];
     }
   };
 })();
