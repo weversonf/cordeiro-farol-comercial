@@ -13,7 +13,7 @@ export function getPool() {
       password: process.env.PGPASSWORD || process.env.DB_PASS,
       ssl: { rejectUnauthorized: false },
       max: 4,
-      connectionTimeoutMillis: 10000
+      connectionTimeoutMillis: 25000
     });
   }
   return pool;

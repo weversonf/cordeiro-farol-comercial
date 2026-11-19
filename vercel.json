@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/relatorios", "destination": "/index.html" },
+    { "source": "/relatorios/:path*", "destination": "/index.html" },
+    { "source": "/gestao", "destination": "/index.html" }
+  ]
+}

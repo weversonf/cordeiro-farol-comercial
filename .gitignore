@@ -7,3 +7,7 @@ dist/
 Thumbs.db
 ~$*
 *.tmp
+.vercel
+
+.vercel
+.env*

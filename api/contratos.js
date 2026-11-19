@@ -47,10 +47,28 @@ export default async function handler(req, res) {
   const user = await requireAdminMaster(req, res);
   if (!user) return;
 
-  const bitrixPortal = String(process.env.BITRIX_PORTAL_URL || '').trim().replace(/\/+$/, '');
+  const bitrixPortal = String(process.env.BITRIX_PORTAL_URL || 'https://grupocordeiro.bitrix24.com.br').trim().replace(/\/+$/, '');
 
   try {
     const client = getPool();
+
+    const ufColsResult = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'stage_bitrix'
+        AND table_name = 'b_crm_deal_uf'
+    `);
+    const ufCols = new Set(ufColsResult.rows.map(r => r.column_name));
+    const ufColOrNull = (name) => (ufCols.has(name) ? `uf."${name}"` : 'NULL::text');
+    const ufDateExpr = (name) =>
+      ufCols.has(name)
+        ? `CASE WHEN TRIM(COALESCE(uf."${name}"::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN uf."${name}"::date END`
+        : 'NULL::date';
+
+    const hasTipoContratoNovo = ufCols.has('UF_CRM_1794938969189');
+    const hasAssinadoNovo = ufCols.has('UF_CRM_1795008280665');
+    const hasReajusteNovo = ufCols.has('UF_CRM_1795008431097');
+    const hasAditivoNovo = ufCols.has('UF_CRM_1795008010146');
 
     const [dealsResult, syncResult] = await Promise.all([
       client.query(`
@@ -99,7 +117,10 @@ export default async function handler(req, res) {
                 ELSE 'Não informado'
               END
             ) AS unidade,
-            COALESCE(et."VALOR", 'Não informado') AS tipo_contrato,
+            COALESCE(NULLIF(TRIM(et_novo."VALOR"), ''), NULLIF(TRIM(et."VALOR"), ''), 'Não informado') AS tipo_contrato,
+            NULLIF(TRIM(ea."VALOR"), '') AS contrato_assinado,
+            NULLIF(TRIM(${ufColOrNull('UF_CRM_1795008431097')}::text), '') AS indice_reajuste,
+            NULLIF(TRIM(${ufColOrNull('UF_CRM_1795008010146')}::text), '') AS aditivo_pdf,
             COALESCE(eq.equipamentos, '') AS equipamentos,
             CASE
               WHEN TRIM(COALESCE(d."OPPORTUNITY"::text, '')) ~ '^-?[0-9]+(\\.[0-9]+)?$'
@@ -107,13 +128,15 @@ export default async function handler(req, res) {
               ELSE 0
             END AS valor,
             COALESCE(
-              CASE WHEN TRIM(COALESCE(uf."UF_CRM_1704904017946"::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN uf."UF_CRM_1704904017946"::date END,
-              CASE WHEN TRIM(COALESCE(uf."UF_CRM_1713470874"::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN uf."UF_CRM_1713470874"::date END,
+              ${ufDateExpr('UF_CRM_1795008029033')},
+              ${ufDateExpr('UF_CRM_1704904017946')},
+              ${ufDateExpr('UF_CRM_1713470874')},
               CASE WHEN TRIM(COALESCE(d."BEGINDATE"::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN d."BEGINDATE"::date END
             ) AS dt_inicio,
             COALESCE(
-              CASE WHEN TRIM(COALESCE(uf."UF_CRM_1704904033370"::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN uf."UF_CRM_1704904033370"::date END,
-              CASE WHEN TRIM(COALESCE(uf."UF_CRM_1713470907"::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN uf."UF_CRM_1713470907"::date END
+              ${ufDateExpr('UF_CRM_1795008143114')},
+              ${ufDateExpr('UF_CRM_1704904033370')},
+              ${ufDateExpr('UF_CRM_1713470907')}
             ) AS dt_fim,
             d."DATE_MODIFY" AS date_modify
           FROM stage_bitrix.b_crm_deal d
@@ -123,9 +146,13 @@ export default async function handler(req, res) {
           LEFT JOIN stage_bitrix.b_crm_status s ON s."STATUS_ID" = d."STAGE_ID" AND s."ENTITY_ID" LIKE 'DEAL_STAGE%'
           LEFT JOIN unidades_deal u_unid ON u_unid.deal_id = d."ID"::text
           LEFT JOIN equipamentos_deal eq ON eq.deal_id = d."ID"::text
+          LEFT JOIN stage_bitrix.b_uf_enum_values et_novo
+            ON ${hasTipoContratoNovo ? `et_novo."FIELD_NAME" = 'UF_CRM_1794938969189' AND et_novo."ITEM_ID"::text = NULLIF(regexp_replace(COALESCE(uf."UF_CRM_1794938969189"::text, ''), '[^0-9]', '', 'g'), '')` : 'FALSE'}
           LEFT JOIN stage_bitrix.b_uf_enum_values et
             ON et."FIELD_NAME" = 'UF_CRM_1757342596090'
            AND et."ITEM_ID"::text = NULLIF(regexp_replace(COALESCE(uf."UF_CRM_1757342596090"::text, ''), '[^0-9]', '', 'g'), '')
+          LEFT JOIN stage_bitrix.b_uf_enum_values ea
+            ON ${hasAssinadoNovo ? `ea."FIELD_NAME" = 'UF_CRM_1795008280665' AND ea."ITEM_ID"::text = NULLIF(regexp_replace(COALESCE(uf."UF_CRM_1795008280665"::text, ''), '[^0-9]', '', 'g'), '')` : 'FALSE'}
           WHERE d."STAGE_ID" = ANY($1::text[])
         )
         SELECT
@@ -137,6 +164,9 @@ export default async function handler(req, res) {
           consultor,
           unidade,
           tipo_contrato,
+          contrato_assinado,
+          indice_reajuste,
+          aditivo_pdf,
           equipamentos,
           valor,
           TO_CHAR(dt_inicio, 'YYYY-MM-DD') AS dt_inicio,
@@ -164,6 +194,13 @@ export default async function handler(req, res) {
       const faltamDias = row.faltam_dias === null ? null : Number(row.faltam_dias);
       const vigenciaDias = row.vigencia_dias === null ? null : Number(row.vigencia_dias);
       const statusPrazo = classifyStatusPrazo(faltamDias);
+      const contratoAssinado = row.contrato_assinado || null;
+      const assinaturaPendente =
+        contratoAssinado === 'Não'
+          ? true
+          : contratoAssinado === 'Sim' || contratoAssinado === 'Pedido de compra'
+            ? false
+            : SIGNATURE_PENDING_STAGES.has(row.stage_id);
       return {
         id: row.id,
         titulo: row.titulo,
@@ -171,6 +208,9 @@ export default async function handler(req, res) {
         consultor: row.consultor,
         unidade: row.unidade,
         tipoContrato: row.tipo_contrato,
+        contratoAssinado,
+        indiceReajuste: row.indice_reajuste || null,
+        aditivoPdf: row.aditivo_pdf || null,
         stageId: row.stage_id,
         etapa: STAGE_LABELS[row.stage_id] || row.stage_nome,
         equipamentos: row.equipamentos,
@@ -180,7 +220,7 @@ export default async function handler(req, res) {
         faltamDias,
         vigenciaDias,
         statusPrazo,
-        assinaturaPendente: SIGNATURE_PENDING_STAGES.has(row.stage_id),
+        assinaturaPendente,
         dataAtualizacao: row.date_modify,
         bitrixUrl: bitrixPortal ? `${bitrixPortal}/crm/deal/details/${encodeURIComponent(row.id)}/` : null
       };
@@ -233,6 +273,14 @@ export default async function handler(req, res) {
       ok: true,
       geradoEm: new Date().toISOString(),
       fonte: 'stage_bitrix.b_crm_deal',
+      camposNovosSincronizados: {
+        tipoContrato: hasTipoContratoNovo,
+        vigenciaInicial: ufCols.has('UF_CRM_1795008029033'),
+        vigenciaFinal: ufCols.has('UF_CRM_1795008143114'),
+        contratoAssinado: hasAssinadoNovo,
+        indiceReajuste: hasReajusteNovo,
+        aditivoPdf: hasAditivoNovo
+      },
       atualizacao: {
         bitrix: syncResult.rows[0]?.bitrix || null
       },

@@ -79,6 +79,8 @@ let editingUserEmail = null;
 let usuarioParaExcluir = null;
 let relatoriosCarregados = false;
 let relatorioAtivo = 'catalogo';
+let visaoGeralFiltros = { mes: '', unidade: '', contrato: '', equipamento: '', consultor: '' };
+let lastSupabaseAuthError = '';
 let contratosCarregados = false;
 let contratosPayload = null;
 let contratosFiltroPrazo = 'todos';
@@ -254,6 +256,8 @@ function showAppScreen() {
   if (isMasterAdmin) {
     renderTabelaUsuarios();
   }
+
+  aplicarRotaUrlAtual({ replace: true });
 }
 
 function setupEventListeners() {
@@ -290,6 +294,12 @@ function setupEventListeners() {
     }
   });
   configurarControlesRelatorios();
+
+  window.addEventListener('popstate', () => {
+    if (currentUser) {
+      aplicarRotaUrlAtual({ skipHistory: true });
+    }
+  });
 
   // Esqueci senha
   document.getElementById('btnAbrirEsqueci').addEventListener('click', () => abrirModal('modalEsqueci'));
@@ -409,8 +419,12 @@ async function handleLogin(e) {
       const { data: authData, error: authErr } = await sbClient.auth.signInWithPassword({ email, password: senha });
       if (!authErr && authData?.session?.access_token) {
         authSessaoValida = true;
+        lastSupabaseAuthError = '';
+      } else if (authErr) {
+        lastSupabaseAuthError = authErr.message || 'Falha no Supabase Auth';
       }
     } catch (authEx) {
+      lastSupabaseAuthError = authEx?.message || 'Erro de rede no Supabase Auth';
       console.warn('Aviso ao autenticar no Supabase Auth:', authEx);
     }
   }
@@ -436,16 +450,23 @@ async function handleLogin(e) {
     return;
   }
 
-  showToast(`Autenticado com sucesso. Bem-vindo, ${user.nome}!`, 'success');
+  if (!authSessaoValida && podeAcessarRelatorios(user)) {
+    showToast('Autenticação local concluída, porém a sessão Supabase Auth não foi validada. Se Relatórios pedir login, use "Esqueci minha senha" para sincronizar.', 'warning');
+  } else {
+    showToast(`Autenticado com sucesso. Bem-vindo, ${user.nome}!`, 'success');
+  }
 }
 
 async function handleLogout() {
   localStorage.removeItem(STORAGE_KEY_AUTH);
   currentUser = null;
   relatoriosCarregados = false;
+  visaoGeralFiltros = { mes: '', unidade: '', contrato: '', equipamento: '', consultor: '' };
+  lastSupabaseAuthError = '';
   contratosCarregados = false;
   contratosPayload = null;
   relatorioAtivo = 'catalogo';
+  window.FarolReportsExtra?.reset?.();
   if (sbClient && sbClient.auth) {
     try { await sbClient.auth.signOut(); } catch (_) {}
   }
@@ -455,54 +476,137 @@ async function handleLogout() {
   showToast('Sessão encerrada com sucesso.', 'success');
 }
 
-function switchTab(tab) {
+const RELATORIO_ROTAS = {
+  catalogo: '/relatorios',
+  contratos: '/relatorios/contratos',
+  rmr: '/relatorios/rmr-comercial',
+  inadimplencia: '/relatorios/inadimplencia'
+};
+
+const ROTA_PARA_RELATORIO = {
+  '/relatorios': 'catalogo',
+  '/relatorios/': 'catalogo',
+  '/relatorios/contratos': 'contratos',
+  '/relatorios/rmr-comercial': 'rmr',
+  '/relatorios/inadimplencia': 'inadimplencia'
+};
+
+function sincronizarUrlNavegador(caminho, { skipHistory = false, replace = false } = {}) {
+  if (skipHistory || !window.history || !caminho) return;
+  const atual = window.location.pathname.replace(/\/+$/, '') || '/';
+  const destino = caminho === '/' ? '/' : caminho.replace(/\/+$/, '');
+  if (atual === destino) return;
+  if (replace) {
+    window.history.replaceState({ path: destino }, '', destino);
+  } else {
+    window.history.pushState({ path: destino }, '', destino);
+  }
+}
+
+function aplicarRotaUrlAtual(options = {}) {
+  const path = (window.location.pathname || '/').replace(/\/+$/, '') || '/';
+  if (path === '/gestao' && isAdminMaster(currentUser?.email)) {
+    switchTab('gestao', options);
+    return;
+  }
+  const relatorioDaRota = ROTA_PARA_RELATORIO[path];
+  if (relatorioDaRota && podeAcessarRelatorios(currentUser)) {
+    relatorioAtivo = relatorioDaRota;
+    switchTab('relatorios', options);
+    return;
+  }
+  if (path.startsWith('/relatorios') && podeAcessarRelatorios(currentUser)) {
+    relatorioAtivo = 'catalogo';
+    switchTab('relatorios', { ...options, replace: true });
+  }
+}
+
+function switchTab(tab, options = {}) {
   document.querySelectorAll('.nav-tab-btn').forEach(btn => btn.classList.remove('active'));
   document.querySelectorAll('.tab-view').forEach(view => view.classList.remove('active'));
 
   if (tab === 'launcher') {
     document.getElementById('tabLauncherBtn').classList.add('active');
     document.getElementById('viewLauncher').classList.add('active');
+    sincronizarUrlNavegador('/', options);
   } else if (tab === 'gestao' && isAdminMaster(currentUser?.email)) {
     document.getElementById('tabGestaoBtn').classList.add('active');
     document.getElementById('viewGestao').classList.add('active');
     renderTabelaUsuarios();
+    sincronizarUrlNavegador('/gestao', options);
   } else if (tab === 'relatorios' && podeAcessarRelatorios(currentUser)) {
     document.getElementById('tabRelatoriosBtn').classList.add('active');
     document.getElementById('viewRelatorios').classList.add('active');
-    abrirRelatorio(relatorioAtivo);
+    abrirRelatorio(relatorioAtivo, options);
   }
 }
 
-function abrirRelatorio(tipo = 'catalogo') {
+function abrirRelatorio(tipo = 'catalogo', options = {}) {
+  if (!RELATORIO_ROTAS[tipo]) tipo = 'catalogo';
   relatorioAtivo = tipo;
   const catalogo = document.getElementById('relatoriosCatalogo');
   const visaoGeral = document.getElementById('relatorioVisaoGeral');
   const contratos = document.getElementById('relatorioContratos');
+  const rmr = document.getElementById('relatorioRmr');
+  const faturamento = document.getElementById('relatorioFaturamento');
+  const inadimplencia = document.getElementById('relatorioInadimplencia');
+  const topBar = document.getElementById('relatoriosTopBar');
+  const breadcrumbAtual = document.getElementById('relatoriosBreadcrumbAtual');
   const btnVoltar = document.getElementById('btnVoltarCatalogoRelatorios');
   const acoesVisaoGeral = document.getElementById('acoesVisaoGeral');
   const acoesContratos = document.getElementById('acoesContratos');
+  const acoesRmr = document.getElementById('acoesRmr');
+  const acoesFaturamento = document.getElementById('acoesFaturamento');
+  const acoesInadimplencia = document.getElementById('acoesInadimplencia');
   const titulo = document.getElementById('relatoriosTitulo');
   const desc = document.getElementById('relatoriosDesc');
 
   catalogo.style.display = tipo === 'catalogo' ? 'block' : 'none';
   visaoGeral.style.display = tipo === 'visao-geral' ? 'block' : 'none';
   contratos.style.display = tipo === 'contratos' ? 'block' : 'none';
+  if (rmr) rmr.style.display = tipo === 'rmr' ? 'block' : 'none';
+  if (faturamento) faturamento.style.display = tipo === 'faturamento' ? 'block' : 'none';
+  if (inadimplencia) inadimplencia.style.display = tipo === 'inadimplencia' ? 'block' : 'none';
+
+  if (topBar) topBar.style.display = tipo === 'catalogo' ? 'none' : 'flex';
   btnVoltar.style.display = tipo === 'catalogo' ? 'none' : 'inline-flex';
   acoesVisaoGeral.style.display = tipo === 'visao-geral' ? 'flex' : 'none';
   acoesContratos.style.display = tipo === 'contratos' ? 'flex' : 'none';
+  if (acoesRmr) acoesRmr.style.display = tipo === 'rmr' ? 'flex' : 'none';
+  if (acoesFaturamento) acoesFaturamento.style.display = tipo === 'faturamento' ? 'flex' : 'none';
+  if (acoesInadimplencia) acoesInadimplencia.style.display = tipo === 'inadimplencia' ? 'flex' : 'none';
 
   if (tipo === 'visao-geral') {
     titulo.textContent = 'Faturamento & Pipeline Comercial';
     desc.textContent = 'Análises atualizadas do Protheus e Bitrix, reunidas em uma única visão de consulta.';
+    if (breadcrumbAtual) breadcrumbAtual.textContent = 'Faturamento & Pipeline Comercial';
     carregarRelatorios();
   } else if (tipo === 'contratos') {
     titulo.textContent = 'Gestão de Contratos Ativos (180 dias)';
     desc.textContent = 'Carteira ativa e em assinatura puxada do Bitrix em tempo real, com semáforo de vencimento e renovação.';
+    if (breadcrumbAtual) breadcrumbAtual.textContent = 'Gestão de Contratos Ativos';
     carregarContratos();
+  } else if (tipo === 'rmr') {
+    titulo.textContent = 'RMR Comercial';
+    desc.textContent = 'Visão executiva, Metas vs Realizado, Backlog & Medições, Contratos & Clientes, Projeções e Funil/Perdas (Protheus + Bitrix24).';
+    if (breadcrumbAtual) breadcrumbAtual.textContent = 'RMR Comercial';
+    window.FarolReportsExtra?.openRmr?.();
+  } else if (tipo === 'faturamento') {
+    titulo.textContent = 'Faturamento & Recebimentos Efetivos';
+    desc.textContent = 'Competência fiscal Protheus (emissão NF-e), evolução mensal, analítico exportável e seção separada de liquidação financeira (baixa).';
+    if (breadcrumbAtual) breadcrumbAtual.textContent = 'Faturamento';
+    window.FarolReportsExtra?.openFaturamento?.();
+  } else if (tipo === 'inadimplencia') {
+    titulo.textContent = 'Inadimplência por Executivo, Margem & Cliente';
+    desc.textContent = 'Carteira inadimplente (Protheus SE1010 + Margem D2_YMARGCT) com visão consolidada por Executivo, Margem A/B/C e exportação Excel.';
+    if (breadcrumbAtual) breadcrumbAtual.textContent = 'Inadimplência';
+    window.FarolReportsExtra?.openInadimplencia?.();
   } else {
     titulo.textContent = 'Central de Relatórios';
     desc.textContent = 'Escolha um painel corporativo conectado em tempo real ao Bitrix e ao Protheus.';
   }
+
+  sincronizarUrlNavegador(RELATORIO_ROTAS[tipo], options);
 }
 
 function configurarControlesRelatorios() {
@@ -516,9 +620,14 @@ function configurarControlesRelatorios() {
   }
 
   document.getElementById('btnAtualizarRelatorios').addEventListener('click', () => carregarRelatorios(true));
-  selectAno.addEventListener('change', () => carregarRelatorios(true));
+  selectAno.addEventListener('change', () => {
+    visaoGeralFiltros = { mes: '', unidade: '', contrato: '', equipamento: '', consultor: '' };
+    carregarRelatorios(true);
+  });
 
   document.getElementById('btnVoltarCatalogoRelatorios').addEventListener('click', () => abrirRelatorio('catalogo'));
+  document.getElementById('btnTopoVoltarCatalogo')?.addEventListener('click', () => abrirRelatorio('catalogo'));
+  document.getElementById('btnBreadcrumbCatalogo')?.addEventListener('click', () => abrirRelatorio('catalogo'));
 
   document.querySelectorAll('[data-report-trigger]').forEach(btn => {
     btn.addEventListener('click', event => {
@@ -589,21 +698,94 @@ function escaparHtml(valor) {
   }[char]));
 }
 
-function renderizarRanking(id, itens, titulo, descricao = null) {
+function toggleFiltroVisaoGeral(campo, valor) {
+  if (!campo) return;
+  const atual = String(visaoGeralFiltros[campo] || '');
+  const proximo = String(valor || '');
+  visaoGeralFiltros[campo] = atual.toLowerCase() === proximo.toLowerCase() ? '' : proximo;
+  carregarRelatorios(true);
+}
+
+function limparFiltrosVisaoGeral() {
+  visaoGeralFiltros = { mes: '', unidade: '', contrato: '', equipamento: '', consultor: '' };
+  carregarRelatorios(true);
+}
+
+function renderizarBarraFiltrosVisaoGeral() {
+  const bar = document.getElementById('visaoGeralFiltrosBar');
+  if (!bar) return;
+
+  const nomesMes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  const labels = {
+    mes: 'Mês',
+    unidade: 'Unidade',
+    contrato: 'Contrato',
+    equipamento: 'Equipamento',
+    consultor: 'Consultor'
+  };
+
+  const ativos = Object.entries(visaoGeralFiltros).filter(([, val]) => Boolean(val));
+  if (!ativos.length) {
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    return;
+  }
+
+  const chips = ativos.map(([campo, val]) => {
+    let display = val;
+    if (campo === 'mes' && /^\d{4}-\d{2}$/.test(val)) {
+      const mIdx = Number(val.slice(-2)) - 1;
+      display = `${nomesMes[mIdx] || val}/${val.slice(2, 4)}`;
+    }
+    return `
+      <button type="button" class="crossfilter-chip" data-clear-filter="${escaparHtml(campo)}" title="Clique para remover filtro">
+        <span>${labels[campo]}:</span> <strong>${escaparHtml(display)}</strong> <i class="ph ph-x"></i>
+      </button>`;
+  }).join('');
+
+  bar.innerHTML = `
+    <span class="crossfilter-prefix"><i class="ph ph-funnel-simple"></i> Filtros ativos:</span>
+    ${chips}
+    <button type="button" class="crossfilter-clear-all" id="btnLimparFiltrosVisaoGeral">Limpar tudo</button>
+  `;
+  bar.style.display = 'flex';
+
+  bar.querySelectorAll('[data-clear-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      visaoGeralFiltros[btn.dataset.clearFilter] = '';
+      carregarRelatorios(true);
+    });
+  });
+  document.getElementById('btnLimparFiltrosVisaoGeral')?.addEventListener('click', limparFiltrosVisaoGeral);
+}
+
+function renderizarRanking(id, itens, titulo, descricao = null, filterKey = null) {
   const container = document.getElementById(id);
   const maiorValor = Math.max(...itens.map(item => Number(item.valor || 0)), 1);
 
   if (!itens.length) {
-    container.innerHTML = '<p class="report-empty-list">Sem dados para o período.</p>';
+    container.innerHTML = '<p class="report-empty-list">Sem dados para o filtro aplicado.</p>';
     return;
   }
+
+  const activeVal = filterKey ? String(visaoGeralFiltros[filterKey] || '').toLowerCase() : '';
 
   container.innerHTML = itens.map((item, indice) => {
     const percentual = Math.max(3, (Number(item.valor || 0) / maiorValor) * 100);
     const rotulo = item[titulo] || 'Não identificado';
+    const rawVal = String(item[titulo] || '');
     const complemento = descricao ? descricao(item) : '';
+    const isSelected = activeVal && rawVal.toLowerCase() === activeVal;
+    const isDimmed = activeVal && !isSelected;
+    const cls = [
+      'report-ranking-row',
+      filterKey ? 'is-interactive' : '',
+      isSelected ? 'is-selected' : '',
+      isDimmed ? 'is-dimmed' : ''
+    ].filter(Boolean).join(' ');
+
     return `
-      <div class="report-ranking-row">
+      <div class="${cls}" ${filterKey ? `role="button" tabindex="0" data-filter-val="${escaparHtml(rawVal)}" title="Clique para filtrar/alternar: ${escaparHtml(rotulo)}"` : ''}>
         <span class="report-ranking-position">${String(indice + 1).padStart(2, '0')}</span>
         <div class="report-ranking-main">
           <div class="report-ranking-label" title="${escaparHtml(rotulo)}">${escaparHtml(rotulo)}</div>
@@ -613,22 +795,61 @@ function renderizarRanking(id, itens, titulo, descricao = null) {
         <strong>${formatarMoeda(item.valor)}</strong>
       </div>`;
   }).join('');
+
+  if (filterKey) {
+    container.querySelectorAll('.report-ranking-row[data-filter-val]').forEach(row => {
+      const acionar = () => toggleFiltroVisaoGeral(filterKey, row.dataset.filterVal);
+      row.addEventListener('click', acionar);
+      row.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          acionar();
+        }
+      });
+    });
+  }
 }
 
 function renderizarGraficoMensal(itens) {
   const container = document.getElementById('graficoFaturamentoMensal');
   const maiorValor = Math.max(...itens.map(item => Number(item.valor || 0)), 1);
   const nomesMes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  const activeMes = visaoGeralFiltros.mes || '';
+
+  if (!itens.length) {
+    container.innerHTML = '<p class="report-empty-list">Sem faturamento mensal para o filtro selecionado.</p>';
+    return;
+  }
 
   container.innerHTML = itens.map(item => {
     const mes = Number(String(item.mes).slice(-2));
     const altura = Math.max(5, (Number(item.valor || 0) / maiorValor) * 100);
-    return `<div class="monthly-chart-item" title="${nomesMes[mes - 1]}: ${formatarMoedaCompleta(item.valor)}">
+    const isSelected = activeMes && item.mes === activeMes;
+    const isDimmed = activeMes && !isSelected;
+    const cls = [
+      'monthly-chart-item',
+      'is-interactive',
+      isSelected ? 'is-selected' : '',
+      isDimmed ? 'is-dimmed' : ''
+    ].filter(Boolean).join(' ');
+
+    return `<div class="${cls}" role="button" tabindex="0" data-filter-mes="${escaparHtml(item.mes)}" title="${nomesMes[mes - 1]}: ${formatarMoedaCompleta(item.valor)} (clique para filtrar)">
       <span class="monthly-chart-value">${formatarMoeda(item.valor)}</span>
       <div class="monthly-chart-bar"><span style="height:${altura}%"></span></div>
       <small>${nomesMes[mes - 1]}</small>
     </div>`;
   }).join('');
+
+  container.querySelectorAll('.monthly-chart-item[data-filter-mes]').forEach(bar => {
+    const acionar = () => toggleFiltroVisaoGeral('mes', bar.dataset.filterMes);
+    bar.addEventListener('click', acionar);
+    bar.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        acionar();
+      }
+    });
+  });
 }
 
 async function fetchRelatorioAutenticado(url) {
@@ -636,10 +857,17 @@ async function fetchRelatorioAutenticado(url) {
   if (sbClient && sbClient.auth) {
     const { data } = await sbClient.auth.getSession();
     token = data?.session?.access_token || '';
+    if (!token) {
+      try {
+        const refreshed = await sbClient.auth.refreshSession();
+        token = refreshed?.data?.session?.access_token || '';
+      } catch (_) {}
+    }
   }
 
   if (!token) {
-    throw new Error('Sessão não autenticada no servidor. Clique em "Sair" e entre novamente (ou use "Esqueci minha senha" para sincronizar sua conta).');
+    const detalhe = lastSupabaseAuthError ? ` (${lastSupabaseAuthError})` : '';
+    throw new Error(`Sessão não autenticada no servidor${detalhe}. Clique em "Sair" e entre novamente (ou use "Esqueci minha senha" para sincronizar sua conta).`);
   }
 
   const resposta = await fetch(url, {
@@ -661,40 +889,56 @@ async function carregarRelatorios(forcar = false) {
   const erro = document.getElementById('relatoriosErro');
   const botao = document.getElementById('btnAtualizarRelatorios');
   const ano = document.getElementById('relatoriosAno').value;
+  const jaVisivel = conteudo.style.display === 'block';
 
-  carregando.style.display = 'flex';
-  conteudo.style.display = 'none';
+  if (!jaVisivel) {
+    carregando.style.display = 'flex';
+    conteudo.style.display = 'none';
+  } else {
+    conteudo.classList.add('is-reloading');
+  }
   erro.style.display = 'none';
   botao.disabled = true;
 
   try {
-    const dados = await fetchRelatorioAutenticado(`/api/relatorios?year=${encodeURIComponent(ano)}`);
+    const params = new URLSearchParams({ year: ano });
+    Object.entries(visaoGeralFiltros).forEach(([k, v]) => {
+      if (v) params.set(k, v);
+    });
+
+    const dados = await fetchRelatorioAutenticado(`/api/relatorios?${params.toString()}`);
 
     document.getElementById('kpiFaturamentoLiquido').textContent = formatarMoeda(dados.resumo.liquido);
     document.getElementById('kpiFaturamentoBruto').textContent = formatarMoeda(dados.resumo.bruto);
     document.getElementById('kpiPipeline').textContent = formatarMoeda(dados.resumo.pipeline);
     document.getElementById('kpiPipelineDetalhe').textContent = `${dados.resumo.negociosPipeline} negócios em aberto no Bitrix`;
-    document.getElementById('kpiExpurgos').textContent = formatarMoeda(dados.resumo.expurgos);
+    const kpiExpurgos = document.getElementById('kpiExpurgos');
+    if (kpiExpurgos && dados.resumo.expurgos !== undefined) {
+      kpiExpurgos.textContent = formatarMoeda(dados.resumo.expurgos);
+    }
 
     const protheusAtualizado = dados.atualizacao?.protheus
       ? new Date(dados.atualizacao.protheus).toLocaleDateString('pt-BR')
       : 'sem data';
     document.getElementById('relatoriosAtualizadoEm').textContent = `Protheus atualizado até ${protheusAtualizado}`;
 
+    renderizarBarraFiltrosVisaoGeral();
     renderizarGraficoMensal(dados.mensal);
-    renderizarRanking('listaUnidades', dados.unidades, 'unidade');
-    renderizarRanking('listaContratos', dados.contratos, 'contrato', item => item.cliente);
-    renderizarRanking('listaEquipamentos', dados.equipamentos, 'equipamento');
-    renderizarRanking('listaConsultores', dados.consultores, 'consultor');
-    renderizarRanking('listaPipeline', dados.pipeline, 'consultor', item => `${item.negocios} negócios em aberto`);
+    renderizarRanking('listaUnidades', dados.unidades, 'unidade', null, 'unidade');
+    renderizarRanking('listaContratos', dados.contratos, 'contrato', item => item.cliente, 'contrato');
+    renderizarRanking('listaEquipamentos', dados.equipamentos, 'equipamento', null, 'equipamento');
+    renderizarRanking('listaConsultores', dados.consultores, 'consultor', null, 'consultor');
+    renderizarRanking('listaPipeline', dados.pipeline, 'consultor', item => `${item.negocios} negócios em aberto`, 'consultor');
 
     relatoriosCarregados = true;
     conteudo.style.display = 'block';
   } catch (ex) {
+    conteudo.style.display = 'none';
     erro.innerHTML = `<i class="ph ph-warning-circle"></i><span>${escaparHtml(ex.message || 'Não foi possível atualizar os relatórios.')}</span>`;
     erro.style.display = 'flex';
   } finally {
     carregando.style.display = 'none';
+    conteudo.classList.remove('is-reloading');
     botao.disabled = false;
   }
 }
@@ -836,6 +1080,11 @@ function renderizarContratos() {
     const eqTexto = item.equipamentos || 'Não especificado no card';
     const etapaClass = item.assinaturaPendente ? 'stage-pending' : 'stage-active';
     const vigenciaTexto = `${formatarDataBr(item.dataInicio)} → ${formatarDataBr(item.dataFim)}`;
+    const extrasContrato = [
+      item.contratoAssinado ? `Assinado: ${item.contratoAssinado}` : '',
+      item.indiceReajuste ? `Reajuste: ${item.indiceReajuste}` : '',
+      item.aditivoPdf ? 'Aditivo PDF' : ''
+    ].filter(Boolean);
 
     return `
       <tr>
@@ -849,6 +1098,7 @@ function renderizarContratos() {
         <td data-label="Etapa &amp; Tipo">
           <span class="contract-stage-pill ${etapaClass}">${escaparHtml(item.etapa)}</span>
           <div class="contract-type-sub">${escaparHtml(item.tipoContrato)}</div>
+          ${extrasContrato.length ? `<div class="contract-type-sub">${escaparHtml(extrasContrato.join(' · '))}</div>` : ''}
         </td>
         <td data-label="Equipamentos"><div class="contract-equip" title="${escaparHtml(eqTexto)}">${escaparHtml(eqTexto)}</div></td>
         <td data-label="Vigência" class="contract-dates">${escaparHtml(vigenciaTexto)}</td>
@@ -912,8 +1162,8 @@ function exportarContratosCsv() {
 
   const cabecalho = [
     'Card Bitrix', 'Cliente', 'Negocio', 'Unidade', 'Executivo',
-    'Etapa', 'Tipo Contrato', 'Equipamentos', 'Inicio', 'Fim',
-    'Faltam (dias)', 'Status Prazo', 'Valor'
+    'Etapa', 'Tipo Contrato', 'Contrato Assinado', 'Indice Reajuste', 'Aditivo PDF',
+    'Equipamentos', 'Inicio', 'Fim', 'Faltam (dias)', 'Status Prazo', 'Valor'
   ];
 
   const escaparCsv = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -925,6 +1175,9 @@ function exportarContratosCsv() {
     item.consultor,
     item.etapa,
     item.tipoContrato,
+    item.contratoAssinado || '',
+    item.indiceReajuste || '',
+    item.aditivoPdf ? 'Sim' : '',
     item.equipamentos,
     formatarDataBr(item.dataInicio),
     formatarDataBr(item.dataFim),
@@ -1704,3 +1957,14 @@ function showToast(mensagem, tipo = 'success') {
     setTimeout(() => toast.remove(), 250);
   }, 4000);
 }
+
+window.FarolReportsCore = {
+  podeAcessarRelatorios: () => podeAcessarRelatorios(currentUser),
+  fetchRelatorioAutenticado,
+  formatarMoeda,
+  formatarMoedaCompleta,
+  formatarDataBr,
+  escaparHtml,
+  preencherSelectFiltro,
+  showToast
+};
