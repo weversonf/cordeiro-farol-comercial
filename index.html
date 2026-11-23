@@ -6,16 +6,22 @@
   <title>Farol Cordeiro Comercial · Grupo Cordeiro</title>
   
   <!-- Favicon Cordeiro -->
-  <link rel="icon" type="image/png" href="assets/img/logo-cordeiro-icon.png">
+  <link rel="icon" type="image/png" href="/assets/img/logo-cordeiro-icon.png">
   
   <!-- Phosphor Icons CDN Oficial -->
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   
   <!-- Supabase JS Client Oficial -->
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+  <!-- SheetJS (Importacao e Exportacao XLSX modelo Inadimplencia) -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   
   <!-- Estilos Principais -->
-  <link rel="stylesheet" href="assets/css/portal.css">
+  <link rel="stylesheet" href="/assets/css/portal.css">
 </head>
 <body>
 
@@ -27,7 +33,7 @@
       
       <!-- Logotipo Cordeiro -->
       <div class="login-logo-box-cordeiro">
-        <img src="assets/img/logo-cordeiro-branca.png" alt="Grupo Cordeiro" onerror="this.src='assets/img/logo-cordeiro-full-branca.png'">
+        <img src="/assets/img/logo-cordeiro-branca.png" alt="Grupo Cordeiro" onerror="this.src='/assets/img/logo-cordeiro-full-branca.png'">
       </div>
 
       <div class="login-header-cordeiro">
@@ -97,7 +103,7 @@
     <header class="portal-header">
       <div class="header-left">
         <div class="header-logo-box">
-          <img src="assets/img/logo-cordeiro-branca.png" alt="Grupo Cordeiro">
+          <img src="/assets/img/logo-cordeiro-branca.png" alt="Grupo Cordeiro">
           <span class="header-brand-title">FAROL CORDEIRO COMERCIAL</span>
         </div>
 
@@ -328,6 +334,17 @@
            VISÃO 3: CENTRAL DE RELATÓRIOS (EXCLUSIVO WEVERSON)
            ================================================================== -->
       <section id="viewRelatorios" class="tab-view">
+        <div id="relatoriosTopBar" class="reports-topbar" style="display: none;">
+          <button type="button" id="btnTopoVoltarCatalogo" class="btn-reports-back-top">
+            <i class="ph ph-arrow-left"></i> Voltar para Central de Relatórios
+          </button>
+          <nav class="reports-breadcrumb" aria-label="Navegação de relatórios">
+            <button type="button" id="btnBreadcrumbCatalogo" class="reports-breadcrumb-link">Central de Relatórios</button>
+            <i class="ph ph-caret-right"></i>
+            <span id="relatoriosBreadcrumbAtual" class="reports-breadcrumb-current">Painel</span>
+          </nav>
+        </div>
+
         <div class="section-header reports-header">
           <div>
             <span class="section-eyebrow"><i class="ph ph-lock-key"></i> Espaço pessoal</span>
@@ -348,37 +365,49 @@
               <button type="button" id="btnExportarContratosCsv" class="btn-secondary-reports"><i class="ph ph-download-simple"></i> Exportar CSV</button>
               <button type="button" id="btnAtualizarContratos" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
             </div>
+
+            <div id="acoesRmr" class="reports-actions" style="display: none;">
+              <select id="rmrAnoSelect" class="reports-year-select" aria-label="Ano RMR"></select>
+              <select id="rmrMesSelect" class="reports-year-select" aria-label="Mês de referência RMR"></select>
+              <label class="report-inline-toggle">
+                <input type="checkbox" id="rmrIncluirExpurgos" />
+                <span>Incluir expurgos (Bruto)</span>
+              </label>
+              <button type="button" id="btnExportarRmrCsv" class="btn-secondary-reports"><i class="ph ph-download-simple"></i> Exportar CSV</button>
+              <button type="button" id="btnAtualizarRmr" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+            </div>
+
+            <div id="acoesFaturamento" class="reports-actions" style="display: none;">
+              <button type="button" id="btnExportarFaturamentoCsv" class="btn-secondary-reports"><i class="ph ph-download-simple"></i> Exportar Analítico CSV</button>
+              <button type="button" id="btnAtualizarFaturamento" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+            </div>
+
+            <div id="acoesFaturamentoSd2" class="reports-actions" style="display: none;">
+              <button type="button" id="btnExportarFaturamentoSd2Base" class="btn-secondary-reports"><i class="ph ph-microsoft-excel-logo"></i> Exportar detalhamento (.xlsx)</button>
+              <button type="button" id="btnAtualizarFaturamentoSd2" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+            </div>
+
+            <div id="acoesInadimplencia" class="reports-actions" style="display: none;">
+              <button type="button" id="btnFecharCompetencia" class="btn-secondary-reports"><i class="ph ph-lock-simple"></i> Fechar competência</button>
+              <button type="button" id="btnExportarInadimplenciaXlsx" class="btn-secondary-reports"><i class="ph ph-microsoft-excel-logo"></i> Exportar Excel (.xlsx)</button>
+              <button type="button" id="btnAtualizarInadimplencia" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+            </div>
           </div>
         </div>
 
-        <!-- Catálogo / Gama de Relatórios -->
+        <div id="relatoriosAuthBanner" class="report-status-banner is-warning" style="display: none; margin-bottom: 14px;"></div>
+
+        <!-- Catálogo / Gama de Relatórios -->
         <div id="relatoriosCatalogo">
           <div class="reports-toolbar">
             <div>
-              <div class="reports-count">2 painéis conectados ao vivo</div>
-              <p>Selecione o relatório que deseja consultar. Novos módulos serão adicionados diretamente nesta central.</p>
+              <div class="reports-count">4 painéis conectados ao vivo</div>
+              <p>Selecione o relatório que deseja consultar. Todos os indicadores usam consultas validadas diretamente no PostgreSQL corporativo.</p>
             </div>
             <span class="reports-private-tag"><i class="ph ph-shield-check"></i> Acesso Master</span>
           </div>
 
           <div class="reports-catalog-grid">
-            <article class="report-option-card" data-report="visao-geral">
-              <div class="report-option-top">
-                <div class="report-option-icon icon-visao"><i class="ph ph-chart-line-up"></i></div>
-                <span class="report-source-pill">Protheus + Bitrix</span>
-              </div>
-              <h3>Faturamento &amp; Pipeline Comercial</h3>
-              <p>Faturamento líquido e bruto, expurgos comerciais, evolução mensal, rankings por unidade, contrato, produto e pipeline por consultor.</p>
-              <ul class="report-option-meta">
-                <li><i class="ph ph-check"></i> Filtro anual e rankings Top 10</li>
-                <li><i class="ph ph-check"></i> Reconciliação de expurgos homologados</li>
-              </ul>
-              <button type="button" class="btn-open-report" data-report-trigger="visao-geral">
-                <span>Abrir Faturamento &amp; Pipeline</span>
-                <i class="ph ph-arrow-right"></i>
-              </button>
-            </article>
-
             <article class="report-option-card is-featured" data-report="contratos">
               <div class="report-option-top">
                 <div class="report-option-icon icon-contratos"><i class="ph ph-files"></i></div>
@@ -396,18 +425,55 @@
               </button>
             </article>
 
-            <article class="report-option-card is-planned" aria-label="Próximos relatórios em expansão">
+            <article class="report-option-card is-featured" data-report="rmr">
               <div class="report-option-top">
-                <div class="report-option-icon icon-planned"><i class="ph ph-stack-plus"></i></div>
-                <span class="report-source-pill is-muted">Em expansão</span>
+                <div class="report-option-icon icon-rmr"><i class="ph ph-presentation-chart"></i></div>
+                <span class="report-source-pill is-live">Protheus + Bitrix · RMR</span>
               </div>
-              <h3>Novos Relatórios</h3>
-              <p>Espaço reservado para os próximos módulos analíticos da diretoria: Cobertura de Carteira, Análise Win/Loss e SLA Comercial.</p>
+              <h3>RMR Comercial</h3>
+              <p>Visão executiva, Metas vs Realizado (Unidades e Executivos), Backlog e Medições Pendentes, Contratos por Cliente, Projeções e Funil/Perdas.</p>
               <ul class="report-option-meta">
-                <li><i class="ph ph-clock"></i> Estrutura pronta para plugar novas APIs</li>
-                <li><i class="ph ph-clock"></i> Mesma governança do DW Supabase</li>
+                <li><i class="ph ph-check"></i> Regras reconciliadas com RMR OUT26 &amp; INBOX PBIX</li>
+                <li><i class="ph ph-check"></i> Cenários de fechamento anual + Perdas reais vs Cliente</li>
               </ul>
-              <span class="report-planned-badge">Disponível para novos módulos</span>
+              <button type="button" class="btn-open-report is-primary" data-report-trigger="rmr">
+                <span>Abrir RMR Comercial</span>
+                <i class="ph ph-arrow-right"></i>
+              </button>
+            </article>
+
+            <article class="report-option-card is-featured" data-report="inadimplencia">
+              <div class="report-option-top">
+                <div class="report-option-icon icon-inadimplencia"><i class="ph ph-warning-octagon"></i></div>
+                <span class="report-source-pill is-live">Protheus SE1 + SD2</span>
+              </div>
+              <h3>Inadimplência (Executivo &amp; Margem)</h3>
+              <p>Carteira inadimplente por Executivo, Margem (A, B, C) e Cliente, com gráficos interativos e exportação Excel fiel ao modelo RMR.</p>
+              <ul class="report-option-meta">
+                <li><i class="ph ph-check"></i> Consolidado Executivo × Margem (A, B, C)</li>
+                <li><i class="ph ph-check"></i> Exportação Excel (.xlsx) em 2 abas</li>
+              </ul>
+              <button type="button" class="btn-open-report is-primary" data-report-trigger="inadimplencia">
+                <span>Abrir Inadimplência</span>
+                <i class="ph ph-arrow-right"></i>
+              </button>
+            </article>
+
+            <article class="report-option-card is-featured" data-report="faturamento">
+              <div class="report-option-top">
+                <div class="report-option-icon icon-faturamento"><i class="ph ph-receipt"></i></div>
+                <span class="report-source-pill is-live">Protheus SD2 · Prévia</span>
+              </div>
+              <h3>Prévia de Faturamento (SD2)</h3>
+              <p>Faturamento comercial lido direto da SD2, com os expurgos da premiação (CM Máquinas, Central ADM e locação T&amp;A) e o impacto de cada regra.</p>
+              <ul class="report-option-meta">
+                <li><i class="ph ph-check"></i> TES e CFOP de receita homologados</li>
+                <li><i class="ph ph-check"></i> Por unidade, executivo e cliente</li>
+              </ul>
+              <button type="button" class="btn-open-report is-primary" data-report-trigger="faturamento">
+                <span>Abrir Prévia de Faturamento</span>
+                <i class="ph ph-arrow-right"></i>
+              </button>
             </article>
           </div>
         </div>
@@ -425,19 +491,21 @@
             <div class="reports-source-bar">
               <span><i class="ph ph-database"></i> Protheus · faturamento fiscal</span>
               <span><i class="ph ph-chart-line-up"></i> Bitrix · pipeline comercial</span>
+              <span class="reports-hint-tag"><i class="ph ph-cursor-click"></i> Clique em qualquer mês ou item para filtrar o painel</span>
               <span id="relatoriosAtualizadoEm" class="reports-updated-at"></span>
             </div>
 
-            <div class="report-kpi-grid">
-              <article class="report-kpi-card"><span>Faturamento comercial</span><strong id="kpiFaturamentoLiquido">—</strong><small>Protheus · líquido de expurgos</small></article>
+            <div id="visaoGeralFiltrosBar" class="crossfilter-bar" style="display: none;"></div>
+
+            <div class="report-kpi-grid is-3cols">
+              <article class="report-kpi-card"><span>Faturamento comercial</span><strong id="kpiFaturamentoLiquido">—</strong><small id="kpiFaturamentoComercialSub">Protheus · operação comercial</small></article>
               <article class="report-kpi-card"><span>Faturamento bruto</span><strong id="kpiFaturamentoBruto">—</strong><small>Notas fiscais emitidas</small></article>
               <article class="report-kpi-card"><span>Pipeline em aberto</span><strong id="kpiPipeline">—</strong><small id="kpiPipelineDetalhe">Bitrix</small></article>
-              <article class="report-kpi-card"><span>Expurgos comerciais</span><strong id="kpiExpurgos">—</strong><small>CM Máquinas e rateios ADM</small></article>
             </div>
 
             <div class="reports-dashboard-grid">
               <article class="report-panel report-panel-wide">
-                <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Faturamento mensal</h2></div><span class="report-panel-note">Comercial líquido</span></div>
+                <div class="report-panel-head"><div><span class="report-panel-eyebrow">Protheus</span><h2>Faturamento mensal</h2></div><span class="report-panel-note">Clique no mês para filtrar</span></div>
                 <div id="graficoFaturamentoMensal" class="monthly-chart" aria-label="Gráfico de faturamento mensal"></div>
               </article>
 
@@ -467,7 +535,7 @@
               </article>
             </div>
 
-            <p class="reports-disclaimer"><i class="ph ph-info"></i> Faturamento exibido com os expurgos comerciais homologados. Produtos e equipamentos representam a descrição fiscal faturada; o vínculo individual por placa será refinado em uma próxima etapa.</p>
+            <p class="reports-disclaimer"><i class="ph ph-info"></i> Clique em meses, unidades, contratos, equipamentos ou consultores para filtrar os indicadores dinamicamente. Produtos e equipamentos representam a descrição fiscal faturada.</p>
           </div>
         </div>
 
@@ -485,6 +553,8 @@
               <span><i class="ph ph-plugs-connected"></i> Bitrix24 · Negócios ativos (Análise Jurídica, Elaboração, Assinatura, Ganho e Em Atendimento)</span>
               <span id="contratosAtualizadoEm" class="reports-updated-at"></span>
             </div>
+
+            <div id="contratosSyncAlert" class="report-status-banner is-warning" style="display: none; margin-bottom: 14px;"></div>
 
             <div class="contracts-kpi-grid">
               <article class="report-kpi-card kpi-total">
@@ -587,7 +657,934 @@
             <p class="reports-disclaimer"><i class="ph ph-info"></i> Painel alimentado ao vivo pelo Bitrix24 no DW (<code>stage_bitrix.b_crm_deal</code>). Datas e prazos usam os campos de previsão já replicados no DW (<code>UF_CRM_1704904017946</code>/<code>1704904033370</code> e <code>UF_CRM_1713470874</code>/<code>1713470907</code>); campos contratuais dedicados (nº contrato, aditivos, reajuste e assinatura formal) passarão a preencher automaticamente assim que forem incluídos na replicação do Bitrix.</p>
           </div>
         </div>
+
+        <!-- Relatório 3: RMR Comercial -->
+        <div id="relatorioRmr" style="display: none;">
+          <div id="rmrLoading" class="reports-loading-state">
+            <i class="ph ph-spinner-gap animate-spin"></i>
+            <span>Consolidando indicadores reais do RMR Comercial (Protheus + Bitrix)...</span>
+          </div>
+          <div id="rmrErro" class="reports-error-state" style="display: none;"></div>
+          <div id="rmrConteudo" style="display: none;">
+            <div class="reports-meta-bar">
+              <span><i class="ph ph-clock"></i> <strong id="rmrAtualizacaoTexto">Dados ao vivo</strong></span>
+              <span id="rmrFonteTexto">Protheus SD2 + ZI0/ZI1 + Dim_Meta + Bitrix24 DW</span>
+            </div>
+
+            <div class="rmr-subtabs" role="tablist" aria-label="Seções do RMR Comercial">
+              <button type="button" class="rmr-subtab is-active" data-rmr-tab="executivo"><i class="ph ph-gauge"></i> Visão Executiva</button>
+              <button type="button" class="rmr-subtab" data-rmr-tab="metas"><i class="ph ph-target"></i> Metas vs Realizado</button>
+              <button type="button" class="rmr-subtab" data-rmr-tab="backlog"><i class="ph ph-hourglass-medium"></i> Backlog &amp; Medições</button>
+              <button type="button" class="rmr-subtab" data-rmr-tab="clientes"><i class="ph ph-buildings"></i> Contratos &amp; Clientes</button>
+              <button type="button" class="rmr-subtab" data-rmr-tab="projecoes"><i class="ph ph-trend-up"></i> Projeções Comerciais</button>
+              <button type="button" class="rmr-subtab" data-rmr-tab="funil"><i class="ph ph-funnel"></i> Funil &amp; Perdas</button>
+            </div>
+
+            <!-- Aba 1: Visão Executiva -->
+            <div id="rmrPanelExecutivo" class="rmr-panel-section is-active">
+              <div class="reports-kpis">
+                <article class="kpi-card highlight">
+                  <span class="kpi-label" id="rmrKpiMesLabel">Faturamento Mês Ref.</span>
+                  <strong id="rmrKpiMesPrincipal" class="kpi-value">—</strong>
+                  <span id="rmrKpiMesDelta" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Meta Mês (Unidades)</span>
+                  <strong id="rmrKpiMesMeta" class="kpi-value">—</strong>
+                  <span id="rmrKpiMesAting" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Acumulado YTD</span>
+                  <strong id="rmrKpiYtdPrincipal" class="kpi-value">—</strong>
+                  <span id="rmrKpiYtdMeta" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Bruto Fiscal / Expurgos YTD</span>
+                  <strong id="rmrKpiYtdBruto" class="kpi-value">—</strong>
+                  <span id="rmrKpiYtdExpurgos" class="kpi-note">—</span>
+                </article>
+              </div>
+
+              <div id="rmrReconciliacaoAlert" class="report-status-banner is-info"></div>
+
+              <div class="reports-grid">
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Evolução Mensal: Realizado vs Meta Unidades vs Ano Anterior</h3>
+                    <span id="rmrSerieSub" class="report-panel-tag">—</span>
+                  </div>
+                  <div id="rmrGraficoMensal" class="monthly-bars"></div>
+                </article>
+
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Competência Fiscal (Protheus) vs Apropriação CRM (Bitrix)</h3>
+                    <span class="report-panel-tag">Série mensal detalhada</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Mês</th>
+                          <th class="num">Faturado</th>
+                          <th class="num">Meta</th>
+                          <th class="num">Ating %</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrMensal"></tbody>
+                      <tfoot id="tfootRmrMensal"></tfoot>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <!-- Aba 2: Metas vs Realizado -->
+            <div id="rmrPanelMetas" class="rmr-panel-section">
+              <div class="reports-grid">
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Metas vs Realizado por Unidade (ZI0/ZI1 · Alvo Comercial)</h3>
+                    <span class="report-panel-tag">Mês Ref · YTD · Anual</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Unidade</th>
+                          <th class="num">Realizado Mês</th>
+                          <th class="num">Meta Mês</th>
+                          <th class="num">Ating. Mês</th>
+                          <th class="num">Realizado YTD</th>
+                          <th class="num">Meta YTD</th>
+                          <th class="num">Ating. YTD</th>
+                          <th class="num">Meta Anual</th>
+                          <th class="num">Run-Rate Anual</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrMetasUnidades"></tbody>
+                      <tfoot id="tfootRmrMetasUnidades"></tfoot>
+                    </table>
+                  </div>
+                </article>
+
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Desempenho por Executivo vs Alvo Anual (dim_meta_vendedores)</h3>
+                    <span class="report-panel-tag">Alvo anual deduplicado via MAX(valor_alvo)</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Executivo</th>
+                          <th>Unidade Ref.</th>
+                          <th class="num">Realizado Mês</th>
+                          <th class="num">Realizado YTD</th>
+                          <th class="num">Alvo Proporcional YTD</th>
+                          <th class="num">Ating. YTD</th>
+                          <th class="num">Alvo Anual</th>
+                          <th class="num">Gap Anual</th>
+                          <th class="num">NFs / Clientes</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrMetasExecutivos"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <!-- Aba 3: Backlog & Medições Pendentes -->
+            <div id="rmrPanelBacklog" class="rmr-panel-section">
+              <div id="rmrBacklogPendencias" class="report-pendencias-stack"></div>
+
+              <div class="reports-kpis">
+                <article class="kpi-card highlight">
+                  <span class="kpi-label">Apropriação CRM no Mês Ref.</span>
+                  <strong id="rmrApropMes" class="kpi-value">—</strong>
+                  <span id="rmrApropMesQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Apropriação CRM YTD</span>
+                  <strong id="rmrApropYtd" class="kpi-value">—</strong>
+                  <span class="kpi-note">comercial.fato_apropriacao_receita_mensal</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Backlog CRM Meses Restantes + Futuro</span>
+                  <strong id="rmrApropFuturo" class="kpi-value">—</strong>
+                  <span id="rmrApropFuturoSub" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Carteira Contratos Ativos/Assinatura (Bitrix)</span>
+                  <strong id="rmrBacklogBitrixTotal" class="kpi-value">—</strong>
+                  <span id="rmrBacklogBitrixQtd" class="kpi-note">—</span>
+                </article>
+              </div>
+
+              <div class="reports-grid">
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Apropriação de Contratos CRM por Unidade</h3>
+                    <span class="report-panel-tag">Competência contratual Bitrix</span>
+                  </div>
+                  <div id="rmrApropUnidades" class="ranking-list"></div>
+                </article>
+
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Carteira em Contratação / Atendimento por Etapa</h3>
+                    <span class="report-panel-tag">Bitrix C4 + C19:WON</span>
+                  </div>
+                  <div id="rmrBacklogEtapas" class="ranking-list"></div>
+                </article>
+
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Principais Contratos em Atendimento / Assinatura / Jurídico (Bitrix)</h3>
+                    <span class="report-panel-tag">Top 30 por valor</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Contrato / Negócio</th>
+                          <th>Cliente</th>
+                          <th>Unidade</th>
+                          <th>Executivo</th>
+                          <th>Etapa</th>
+                          <th>Vigência</th>
+                          <th class="num">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrBacklogContratos"></tbody>
+                    </table>
+                  </div>
+                </article>
+
+                <article id="rmrPanelCtrOpProtheus" class="report-panel wide" style="display: none;">
+                  <div class="report-panel-header">
+                    <h3>Contratos Operacionais em Aberto (Protheus · contratos_operacional)</h3>
+                    <span id="rmrCtrOpTag" class="report-panel-tag">Top 15 em aberto</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Nº Contrato</th>
+                          <th>Cliente</th>
+                          <th>Unidade</th>
+                          <th>Modalidade</th>
+                          <th>Vigência</th>
+                          <th class="num">Valor Global</th>
+                          <th class="num">Faturado</th>
+                          <th class="num">Saldo Contratual</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrCtrOpProtheus"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <!-- Aba 4: Contratos & Resultados por Cliente -->
+            <div id="rmrPanelClientes" class="rmr-panel-section">
+              <div id="rmrClientesContratosBanner" class="report-status-banner is-warning"></div>
+              <div class="reports-grid">
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Top 30 Clientes por Faturamento YTD (Protheus)</h3>
+                    <span class="report-panel-tag">Com participação % e Pareto acumulado</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Cliente</th>
+                          <th>Unidade Princ.</th>
+                          <th>Executivo Princ.</th>
+                          <th class="num">Faturado Mês Ref.</th>
+                          <th class="num">Faturado YTD</th>
+                          <th class="num">Share %</th>
+                          <th class="num">Pareto %</th>
+                          <th class="num">NFs / Ctrs</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrClientes"></tbody>
+                    </table>
+                  </div>
+                </article>
+
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Top 25 Contratos Faturados no Protheus (YTD)</h3>
+                    <span class="report-panel-tag">Agrupado por numero_contrato</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Nº Contrato</th>
+                          <th>Cliente</th>
+                          <th>Unidade</th>
+                          <th>Executivo</th>
+                          <th class="num">Mês Ref.</th>
+                          <th class="num">Acumulado YTD</th>
+                          <th class="num">Qtd. NFs</th>
+                          <th>Última Emissão</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrContratosProtheus"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <!-- Aba 5: Projeções Comerciais -->
+            <div id="rmrPanelProjecoes" class="rmr-panel-section">
+              <div class="reports-kpis">
+                <article class="kpi-card">
+                  <span class="kpi-label">Run-Rate Mensal (Meses Fechados)</span>
+                  <strong id="rmrProjRunRate" class="kpi-value">—</strong>
+                  <span id="rmrProjMeses" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Gap Inicial vs Meta Anual</span>
+                  <strong id="rmrProjGapInicial" class="kpi-value">—</strong>
+                  <span id="rmrProjMetaRestante" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card highlight">
+                  <span class="kpi-label">Pipeline Janela do Ano (Bruto)</span>
+                  <strong id="rmrProjPipeAnoBruto" class="kpi-value">—</strong>
+                  <span id="rmrProjPipeAnoPond" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Pipeline Total Aberto (Bruto)</span>
+                  <strong id="rmrProjPipeTotalBruto" class="kpi-value">—</strong>
+                  <span id="rmrProjPipeTotalPond" class="kpi-note">—</span>
+                </article>
+              </div>
+
+              <div class="reports-grid">
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Matriz de Cenários de Fechamento Anual</h3>
+                    <span class="report-panel-tag">Metodologia Run-Rate + Funil Ponderado</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Cenário</th>
+                          <th>Premissa Metodológica</th>
+                          <th class="num">Projeção Anual</th>
+                          <th class="num">Atingimento vs Meta Anual</th>
+                          <th class="num">Gap Residual</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrCenarios"></tbody>
+                    </table>
+                  </div>
+                </article>
+
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Ponderação do Pipeline Aberto por Etapa</h3>
+                    <span class="report-panel-tag">Exclui Orçamento Orientativo</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Etapa</th>
+                          <th class="num">Peso</th>
+                          <th class="num">Qtd.</th>
+                          <th class="num">Bruto</th>
+                          <th class="num">Ponderado</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrProjEtapas"></tbody>
+                    </table>
+                  </div>
+                </article>
+
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Pipeline Ponderado por Unidade</h3>
+                    <span class="report-panel-tag">Top 12 Unidades</span>
+                  </div>
+                  <div id="rmrProjUnidades" class="ranking-list"></div>
+                </article>
+              </div>
+            </div>
+
+            <!-- Aba 6: Funil de Vendas & Motivos de Perda -->
+            <div id="rmrPanelFunil" class="rmr-panel-section">
+              <div class="reports-kpis">
+                <article class="kpi-card highlight">
+                  <span class="kpi-label">Ganhos no Ano (até Mês Ref.)</span>
+                  <strong id="rmrFunilGanhosVal" class="kpi-value">—</strong>
+                  <span id="rmrFunilGanhosQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Perdas Competitivas / Operacionais</span>
+                  <strong id="rmrFunilPerdasVal" class="kpi-value">—</strong>
+                  <span id="rmrFunilPerdasQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Cancelados pelo Cliente / Orientativos</span>
+                  <strong id="rmrFunilCancelVal" class="kpi-value">—</strong>
+                  <span id="rmrFunilCancelQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Taxa de Conversão Competitiva</span>
+                  <strong id="rmrFunilConv" class="kpi-value">—</strong>
+                  <span id="rmrFunilConvBruta" class="kpi-note">—</span>
+                </article>
+              </div>
+
+              <div class="reports-grid">
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Motivos de Perda Reais (Competitivas &amp; Operacionais)</h3>
+                    <span class="report-panel-tag">Exclui declínios/cancelamentos do cliente</span>
+                  </div>
+                  <div id="rmrMotivosReais" class="ranking-list"></div>
+                </article>
+
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Cancelamentos pelo Cliente / Orientativos / Licitações</h3>
+                    <span class="report-panel-tag">Separação oficial RMR</span>
+                  </div>
+                  <div id="rmrMotivosCancel" class="ranking-list"></div>
+                </article>
+
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Principais Negócios Ganhos no Período</h3>
+                    <span class="report-panel-tag">Bitrix C4 &amp; C19 · Top 15</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Negócio</th>
+                          <th>Cliente</th>
+                          <th>Unidade</th>
+                          <th>Executivo</th>
+                          <th>Data</th>
+                          <th class="num">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrUltimosGanhos"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <p class="reports-disclaimer"><i class="ph ph-info"></i> Nenhuma estimativa substitui fontes ausentes: os valores fiscais vêm diretamente de <code>comercial.fato_itens_vendas</code> com deduplicação multi-cliente, TES/CFOP comerciais e regras oficiais de expurgo; indicadores dependentes de tabelas bloqueadas (<code>comercial.protheus_gold_medicoes_pendentes</code>, <code>comercial.contratos_operacional</code>) ou planilhas SharePoint aparecem sinalizados como pendência.</p>
+          </div>
+        </div>
+
+        <!-- Relatório 4: Faturamento Detalhado & Recebimentos Efetivos -->
+        <div id="relatorioFaturamento" style="display: none;">
+          <div class="contracts-filters-bar faturamento-filters-grid">
+            <div class="filter-field">
+              <label for="fatStartDate">Emissão inicial</label>
+              <input type="date" id="fatStartDate" />
+            </div>
+            <div class="filter-field">
+              <label for="fatEndDate">Emissão final</label>
+              <input type="date" id="fatEndDate" />
+            </div>
+            <div class="filter-field">
+              <label for="fatUnidade">Unidade</label>
+              <select id="fatUnidade"><option value="">Todas as unidades</option></select>
+            </div>
+            <div class="filter-field">
+              <label for="fatCliente">Cliente</label>
+              <select id="fatCliente"><option value="">Todos os clientes</option></select>
+            </div>
+            <div class="filter-field">
+              <label for="fatExecutivo">Executivo</label>
+              <select id="fatExecutivo"><option value="">Todos os executivos</option></select>
+            </div>
+            <div class="filter-field">
+              <label for="fatEscopo">Escopo Filiais</label>
+              <select id="fatEscopo">
+                <option value="pbix">Regra PBIX (7 filiais)</option>
+                <option value="all">Todas as filiais Protheus</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label for="fatRegime">Visão de Receita</label>
+              <select id="fatRegime">
+                <option value="0">Comercial Puro (sem expurgos)</option>
+                <option value="1">Faturamento Bruto (com expurgos)</option>
+              </select>
+            </div>
+            <div class="filter-field filter-search-field">
+              <label for="fatBusca">Busca analítica</label>
+              <div class="filter-search-wrap">
+                <i class="ph ph-magnifying-glass"></i>
+                <input type="text" id="fatBusca" placeholder="NF, cliente, contrato, produto, CNPJ..." />
+              </div>
+            </div>
+          </div>
+
+          <div id="fatLoading" class="reports-loading-state">
+            <i class="ph ph-spinner-gap animate-spin"></i>
+            <span>Consultando itens fiscais e títulos no PostgreSQL corporativo...</span>
+          </div>
+          <div id="fatErro" class="reports-error-state" style="display: none;"></div>
+
+          <div id="fatConteudo" style="display: none;">
+            <div class="reports-meta-bar">
+              <span><i class="ph ph-clock"></i> <strong id="fatAtualizacaoTexto">Protheus SD2 ao vivo</strong></span>
+              <span id="fatFonteTexto">comercial.fato_itens_vendas · Competência Fiscal (Data de Emissão)</span>
+            </div>
+
+            <div class="reports-kpis">
+              <article class="kpi-card highlight">
+                <span class="kpi-label" id="fatKpiPrincipalLabel">Faturamento Comercial Puro</span>
+                <strong id="fatKpiPrincipal" class="kpi-value">—</strong>
+                <span id="fatKpiYoY" class="kpi-note">—</span>
+              </article>
+              <article class="kpi-card">
+                <span class="kpi-label">Faturamento Bruto Fiscal</span>
+                <strong id="fatKpiBruto" class="kpi-value">—</strong>
+                <span id="fatKpiExpurgos" class="kpi-note">—</span>
+              </article>
+              <article class="kpi-card">
+                <span class="kpi-label">Meta Unidades (Período)</span>
+                <strong id="fatKpiMeta" class="kpi-value">—</strong>
+                <span id="fatKpiAting" class="kpi-note">—</span>
+              </article>
+              <article class="kpi-card">
+                <span class="kpi-label">NFs / Clientes / Ticket Médio NF</span>
+                <strong id="fatKpiVolume" class="kpi-value">—</strong>
+                <span id="fatKpiTicket" class="kpi-note">—</span>
+              </article>
+            </div>
+
+            <div class="reports-grid">
+              <article class="report-panel wide">
+                <div class="report-panel-header">
+                  <h3>Evolução Mensal do Faturamento (Competência de Emissão Fiscal)</h3>
+                  <span id="fatMensalTag" class="report-panel-tag">Valor principal vs Meta</span>
+                </div>
+                <div id="fatGraficoMensal" class="monthly-bars"></div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header">
+                  <h3>Detalhamento por Unidade</h3>
+                  <span class="report-panel-tag">Realizado, NFs &amp; Participação %</span>
+                </div>
+                <div id="fatPorUnidade" class="ranking-list"></div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header">
+                  <h3>Detalhamento por Executivo</h3>
+                  <span class="report-panel-tag">Realizado vs Alvo Anual</span>
+                </div>
+                <div id="fatPorExecutivo" class="ranking-list"></div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header">
+                  <h3>Top Clientes no Período (Pareto)</h3>
+                  <span class="report-panel-tag">Por faturamento filtrado</span>
+                </div>
+                <div id="fatPorCliente" class="ranking-list"></div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header">
+                  <h3>Composição por Margem &amp; Top Equipamentos</h3>
+                  <span class="report-panel-tag">Sublinhas fiscais</span>
+                </div>
+                <div id="fatMargemProdutos" class="ranking-list"></div>
+              </article>
+
+              <article class="report-panel wide">
+                <div class="report-panel-header">
+                  <h3>Tabela Analítica de Notas Fiscais &amp; Itens</h3>
+                  <span id="fatAnaliticoResumo" class="report-panel-tag">—</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead>
+                      <tr>
+                        <th>Emissão</th>
+                        <th>NF / Série</th>
+                        <th>Filial</th>
+                        <th>Unidade</th>
+                        <th>Cliente</th>
+                        <th>Executivo</th>
+                        <th>Contrato</th>
+                        <th>Equipamento / Produto</th>
+                        <th>TES/CFOP</th>
+                        <th class="num">Valor Total</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbodyFatAnalitico"></tbody>
+                  </table>
+                </div>
+              </article>
+            </div>
+
+            <!-- SEÇÃO CLARAMENTE SEPARADA: RECEBIMENTOS EFETIVOS (BAIXA FINANCEIRA) -->
+            <div id="fatRecebimentosSection" class="recebimentos-separated-section">
+              <div class="recebimentos-header">
+                <div>
+                  <span class="section-eyebrow"><i class="ph ph-bank"></i> Regime de Caixa · Contas a Receber (SE1)</span>
+                  <h3>Recebimentos Efetivos (Data Real de Baixa Financeira)</h3>
+                  <p>Seção independente do faturamento acima: considera exclusivamente títulos liquidados pela data de baixa/liquidação (<code>e1_baixa</code> / <code>data_ultima_baixa</code>), nunca pela data de emissão da NF.</p>
+                </div>
+              </div>
+              <div id="fatRecebimentosConteudo"></div>
+            </div>
+
+            <p class="reports-disclaimer"><i class="ph ph-info"></i> Faturamento fiscal calculado exclusivamente sobre emissões validadas (<code>comercial.fato_itens_vendas</code>) com deduplicação multi-cliente e separação clara entre regime de emissão fiscal, apropriação contratual CRM e recebimento efetivo (baixa financeira SE1).</p>
+          </div>
+        </div>
+
+        <!-- Relatório 4B: Prévia de Faturamento SD2 (regras da premiação) -->
+        <div id="relatorioFaturamentoSd2" style="display: none;">
+          <div class="contracts-filters-bar faturamento-filters-grid">
+            <div class="filter-field">
+              <label for="fatSd2Periodo">Mês / Período</label>
+              <select id="fatSd2Periodo"></select>
+            </div>
+            <div class="filter-field" id="fatSd2DeWrap" style="display: none;">
+              <label for="fatSd2Start">De</label>
+              <input type="date" id="fatSd2Start" />
+            </div>
+            <div class="filter-field" id="fatSd2AteWrap" style="display: none;">
+              <label for="fatSd2End">Até</label>
+              <input type="date" id="fatSd2End" />
+            </div>
+            <div class="filter-field">
+              <label for="fatSd2Unidade">Unidade</label>
+              <select id="fatSd2Unidade"><option value="">Todas as unidades</option></select>
+            </div>
+            <div class="filter-field">
+              <label for="fatSd2Executivo">Executivo</label>
+              <select id="fatSd2Executivo"><option value="">Todos os executivos</option></select>
+            </div>
+          </div>
+
+          <div id="fatSd2Loading" class="reports-loading-state">
+            <i class="ph ph-spinner-gap animate-spin"></i>
+            <span>Consultando a SD2 no Protheus...</span>
+          </div>
+          <div id="fatSd2Erro" class="reports-error-state" style="display: none;"></div>
+
+          <div id="fatSd2Conteudo" style="display: none;">
+            <div class="reports-meta-bar">
+              <span><i class="ph ph-clock"></i> <strong id="fatSd2Atualizado">Protheus SD2</strong></span>
+              <span id="fatSd2Fonte">stage_protheus.sd2010</span>
+            </div>
+
+            <div class="reports-kpis">
+              <article class="kpi-card highlight">
+                <span class="kpi-label">Faturamento Comercial (prévia)</span>
+                <strong id="fatSd2KpiComercial" class="kpi-value">—</strong>
+                <span id="fatSd2KpiTicket" class="kpi-note">—</span>
+              </article>
+              <article class="kpi-card">
+                <span class="kpi-label">Faturamento SD2 bruto</span>
+                <strong id="fatSd2KpiBruto" class="kpi-value">—</strong>
+                <span class="kpi-note">
+                  <span id="fatSd2KpiReceitaTexto">—</span>
+                  <span class="kpi-help" role="note" tabindex="0" aria-label="O que é TES e CFOP" title="TES (Tipo de Saída) classifica o movimento de estoque, com 3 dígitos. CFOP (Código Fiscal de Operações e Prestações) classifica a operação fiscal, com 4 dígitos. Juntos separam venda/receita de transferência, remessa ou devolução. Em outubro, sem esse filtro a SD2 somaria R$ 28,0 mi em vez de R$ 9,5 mi de receita." style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:rgba(127,127,127,.25);font-size:11px;font-weight:700;cursor:help;margin-left:6px;">?</span>
+                </span>
+              </article>
+              <article class="kpi-card">
+                <span class="kpi-label">Expurgos aplicados</span>
+                <strong id="fatSd2KpiExpurgos" class="kpi-value">—</strong>
+                <span id="fatSd2KpiExpurgosNota" class="kpi-note">—</span>
+              </article>
+              <article class="kpi-card">
+                <span class="kpi-label">Volume</span>
+                <strong id="fatSd2KpiVolume" class="kpi-value">—</strong>
+                <span id="fatSd2KpiClientes" class="kpi-note">—</span>
+              </article>
+            </div>
+
+            <div class="reports-grid">
+              <article class="report-panel wide">
+                <div class="report-panel-header">
+                  <h3>Conciliação do faturamento no período</h3>
+                  <span class="report-panel-tag" id="fatSd2ConciliacaoTag">—</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead><tr><th>Etapa</th><th class="num">Valor (R$)</th></tr></thead>
+                    <tbody id="tbodyFatSd2Conciliacao"></tbody>
+                  </table>
+                </div>
+
+                <details style="margin-top:14px;">
+                  <summary style="cursor:pointer;font-weight:600;">Como este número é calculado (TES e CFOP)</summary>
+                  <div style="margin-top:10px;font-size:.9rem;line-height:1.55;">
+                    <p><strong>TES</strong> (Tipo de Saída, 3 dígitos) diz o que aconteceu com o estoque/produto: venda, remessa, transferência, devolução. Fica em <code>SD2.D2_TES</code>.</p>
+                    <p><strong>CFOP</strong> (Código Fiscal de Operações e Prestações, 4 dígitos) diz como a operação é tratada fiscalmente. O primeiro dígito indica a abrangência: <code>5</code> dentro do estado, <code>6</code> interestadual. Fica em <code>SD2.D2_CF</code>.</p>
+                    <p>A SD2 registra <em>todo</em> movimento de saída, não só venda. Por isso o relatório mantém apenas as combinações de TES e CFOP homologadas como receita. Sem esse filtro, outubro/2026 iria de <strong>R$ 9,5 mi</strong> de receita para <strong>R$ 28,0 mi</strong> de movimentação total — incluindo transferências, remessas e devoluções que não são faturamento.</p>
+                    <p>Depois do escopo de receita, permanecem as unidades comerciais pelos centros de custo <strong>413, 414, 415, 416, 417 e 423</strong>. São expurgados <strong>CM Máquinas</strong> (CC 421), <strong>Central ADM</strong> (CC 321/330), demais unidades não comerciais e a <strong>locação T&amp;A</strong> (contrato 68673, série 4).</p>
+                  </div>
+                </details>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header"><h3>Por unidade</h3></div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead><tr><th>Unidade</th><th class="num">Comercial</th><th class="num">NFs</th></tr></thead>
+                    <tbody id="tbodyFatSd2Unidades"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header"><h3>Por executivo</h3></div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead><tr><th>Executivo</th><th class="num">Comercial</th><th class="num">NFs</th></tr></thead>
+                    <tbody id="tbodyFatSd2Executivos"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="report-panel wide">
+                <div class="report-panel-header">
+                  <h3>Evolução mensal do faturamento comercial</h3>
+                  <span class="report-panel-tag">Emissão fiscal</span>
+                </div>
+                <div id="fatSd2Mensal" class="monthly-bars"></div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header">
+                  <h3>Faturamento por cliente</h3>
+                  <span class="report-panel-tag" id="fatSd2ClientesTag">—</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead>
+                      <tr><th>Cliente</th><th class="num">Contratos</th><th class="num">NFs</th><th class="num">Faturado</th></tr>
+                    </thead>
+                    <tbody id="tbodyFatSd2Clientes"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header">
+                  <h3>Cliente × contrato/negócio</h3>
+                  <span class="report-panel-tag" id="fatSd2ContratosTag">—</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead>
+                      <tr><th>Cliente</th><th>Contrato</th><th>Unidade / Executivo</th><th class="num">NFs</th><th class="num">Faturado</th></tr>
+                    </thead>
+                    <tbody id="tbodyFatSd2Contratos"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="report-panel wide">
+                <div class="report-panel-header">
+                  <h3>Notas fiscais estratificadas</h3>
+                  <span class="report-panel-tag" id="fatSd2NfsTag">—</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead>
+                      <tr>
+                        <th>Data</th><th>NF / Série</th><th>Cliente</th><th>Contrato</th>
+                        <th>Unidade</th><th>Executivo</th><th class="num">Itens</th><th class="num">Faturado</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbodyFatSd2Nfs"></tbody>
+                  </table>
+                </div>
+              </article>
+            </div>
+
+            <p class="reports-disclaimer"><i class="ph ph-info"></i> Prévia calculada diretamente na <code>stage_protheus.sd2010</code> (Protheus SD2), com TES/CFOP de receita e expurgos da planilha de premiação: CM Máquinas, Central ADM e locação T&amp;A. Valores sujeitos a fechamento contábil.</p>
+          </div>
+        </div>
+
+        <!-- Painel 5: Inadimplência por Executivo, Margem e Cliente -->
+        <div id="relatorioInadimplencia" style="display: none;">
+          <div class="contracts-filters-bar faturamento-filters-grid inad-filters-grid">
+            <div class="filter-field">
+              <label for="inadDataCorte">Vencimentos até (saldo atual)</label>
+              <input type="date" id="inadDataCorte" />
+            </div>
+            <div class="filter-field">
+              <label for="inadCompetencia">Posição</label>
+              <select id="inadCompetencia">
+                <option value="">Saldo atual (Protheus)</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label for="inadFaixaAtraso">Período de vencimento</label>
+              <select id="inadFaixaAtraso">
+                <option value="365">Janela de 365 dias</option>
+                <option value="antigos">365 dias ou mais</option>
+                <option value="todos">Todos os vencidos</option>
+              </select>
+            </div>
+            <div class="filter-field inad-filial-field" id="inadFiltroFilialWrap">
+              <label for="inadFiltroFilialBtn">Filiais</label>
+              <div class="multi-select-dropdown" id="inadFiltroFilialDropdown">
+                <button type="button" id="inadFiltroFilialBtn" class="multi-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span id="inadFiltroFilialLabel">Todas as filiais</span>
+                  <i class="ph ph-caret-down"></i>
+                </button>
+                <div id="inadFiltroFilialMenu" class="multi-select-menu" style="display: none;">
+                  <div class="multi-select-toolbar">
+                    <input type="search" id="inadFiltroFilialBusca" placeholder="Buscar código ou filial..." />
+                    <div class="multi-select-actions">
+                      <button type="button" id="btnInadFilialLimpar">Todas (Limpar)</button>
+                    </div>
+                  </div>
+                  <div id="inadFiltroFilialLista" class="multi-select-list" role="listbox" aria-multiselectable="true"></div>
+                </div>
+              </div>
+            </div>
+            <div class="filter-field">
+              <label for="inadFiltroExecutivo">Executivo</label>
+              <select id="inadFiltroExecutivo">
+                <option value="">Todos os executivos</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label for="inadFiltroMargem">Margem (D2_YMARGCT)</label>
+              <select id="inadFiltroMargem">
+                <option value="TODAS">Todas as margens</option>
+                <option value="A">Margem A</option>
+                <option value="B">Margem B</option>
+                <option value="C">Margem C</option>
+                <option value="Sem Margem">Sem Margem</option>
+              </select>
+            </div>
+            <div class="filter-field filter-search-field">
+              <label for="inadFiltroBusca">Busca Analítica</label>
+              <input type="search" id="inadFiltroBusca" placeholder="Cliente, CNPJ/Cód, contrato, NF ou filial..." />
+            </div>
+          </div>
+
+          <div id="inadLoading" class="reports-state-box" style="display: none;">
+            <div class="spinner-border-sm"></div>
+            <span>Consultando carteira inadimplente (SE1010 + SD2)...</span>
+          </div>
+
+          <div id="inadErro" class="alert-box alert-danger" style="display: none;"></div>
+          <div id="inadStatusBanner"></div>
+
+          <div id="inadConteudo" style="display: none;">
+            <div id="inadKpiGrid" class="report-kpi-grid"></div>
+
+            <div class="reports-grid">
+              <article class="report-panel">
+                <div class="report-panel-header">
+                  <h3>Inadimplência por Executivo × Margem (A, B, C)</h3>
+                  <span class="report-panel-tag">Clique para filtrar</span>
+                </div>
+                <div class="chart-box-tall"><canvas id="chartInadExecutivoMargem"></canvas></div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header">
+                  <h3>Top 10 Clientes Inadimplentes</h3>
+                  <span class="report-panel-tag">Saldo em aberto</span>
+                </div>
+                <div class="chart-box-tall"><canvas id="chartInadTopClientes"></canvas></div>
+              </article>
+            </div>
+
+            <div class="reports-grid">
+              <article class="report-panel wide">
+                <div class="report-panel-header">
+                  <h3>Resumo Consolidado por Executivo e Margem (D2_YMARGCT)</h3>
+                  <span class="report-panel-tag" id="inadResumoFonteTag">Protheus SE1010 + DW</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead>
+                      <tr>
+                        <th>Executivo Responsável</th>
+                        <th class="num">Margem A</th>
+                        <th class="num">Margem B</th>
+                        <th class="num">Margem C</th>
+                        <th class="num">Outras / Sem Margem</th>
+                        <th class="num">Saldo Total Líquido</th>
+                        <th class="num">% do Total</th>
+                        <th class="num">Qtd Títulos</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbodyInadResumoExecutivo"></tbody>
+                    <tfoot id="tfootInadResumoExecutivo"></tfoot>
+                  </table>
+                </div>
+              </article>
+            </div>
+
+            <div class="reports-grid">
+              <article class="report-panel wide">
+                <div class="report-panel-header">
+                  <h3>Detalhamento Analítico de Títulos Inadimplentes</h3>
+                  <span class="report-panel-tag" id="inadAnaliticoCountTag">0 títulos</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead>
+                      <tr>
+                        <th>Origem</th>
+                        <th>Executivo</th>
+                        <th>Cód.</th>
+                        <th>Cliente</th>
+                        <th>Margem</th>
+                        <th>Contrato</th>
+                        <th>Filial</th>
+                        <th>Série</th>
+                        <th>NF / Título</th>
+                        <th class="num">Valor Original</th>
+                        <th class="num">Saldo Inadimplente</th>
+                        <th>Emissão</th>
+                        <th>Venc. Real</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbodyInadAnalitico"></tbody>
+                  </table>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
       </section>
+
+      <footer id="farolGlobalFooter" class="farol-sync-footer" aria-live="polite">
+        <span class="farol-sync-footer-item">
+          <i class="ph ph-clock-clockwise"></i>
+          <span id="farolFooterTexto">Tela atualizada em —</span>
+        </span>
+        <div class="farol-sync-footer-meta">
+          <span id="farolFooterFonte" class="farol-sync-source"></span>
+          <span id="farolFooterAuto" class="farol-sync-pill">Auto-atualização: 30 min (aba ativa)</span>
+        </div>
+      </footer>
 
     </main>
   </div>
@@ -1001,6 +1998,7 @@
   <div id="toastContainer" class="toast-container"></div>
 
   <!-- Script Principal -->
-  <script src="assets/js/portal.js"></script>
+  <script src="/assets/js/portal.js"></script>
+  <script src="/assets/js/reports-extra.js"></script>
 </body>
 </html>
