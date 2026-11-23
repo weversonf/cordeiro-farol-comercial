@@ -198,6 +198,8 @@ let contratosPayload = null;
 let contratosFiltroPrazo = 'todos';
 const farolChildren = new Map();
 
+let authAutoHealPromise = null;
+
 async function obterSupabaseAccessToken() {
   let token = '';
   if (sbClient && sbClient.auth) {
@@ -207,6 +209,34 @@ async function obterSupabaseAccessToken() {
       if (!token) {
         const refreshed = await sbClient.auth.refreshSession();
         token = refreshed?.data?.session?.access_token || '';
+      }
+      // Auto-recuperação: se a sessão local do Farol já tem o usuário e a senha da tabela, autentica silenciosamente no Supabase Auth
+      if (!token && currentUser?.email && currentUser?.senha) {
+        if (!authAutoHealPromise) {
+          authAutoHealPromise = (async () => {
+            const email = String(currentUser.email).trim().toLowerCase();
+            const senhaAtual = String(currentUser.senha);
+            let res = await sbClient.auth.signInWithPassword({ email, password: senhaAtual });
+            if (res?.data?.session?.access_token) {
+              lastSupabaseAuthError = '';
+              return res.data.session.access_token;
+            }
+            if (senhaAtual !== 'Cordeiro@2026') {
+              const fallbackRes = await sbClient.auth.signInWithPassword({ email, password: 'Cordeiro@2026' });
+              if (fallbackRes?.data?.session?.access_token) {
+                try {
+                  await sbClient.auth.updateUser({ password: senhaAtual });
+                } catch (_) {}
+                lastSupabaseAuthError = '';
+                return fallbackRes.data.session.access_token;
+              }
+            }
+            return '';
+          })().finally(() => {
+            authAutoHealPromise = null;
+          });
+        }
+        token = await authAutoHealPromise;
       }
     } catch (_) {}
   }
@@ -2232,10 +2262,18 @@ async function handleSalvarPrimeiroAcesso(e) {
       }
     }
 
-    // 2. Atualiza no Supabase Auth caso o usuário tenha sessão ativa
+    // 2. Atualiza no Supabase Auth (garantindo sessão ativa com a senha provisória antes do updateUser)
     if (sbClient && sbClient.auth) {
       try {
+        const { data: sessData } = await sbClient.auth.getSession();
+        if (!sessData?.session?.access_token) {
+          await sbClient.auth.signInWithPassword({
+            email: currentUser.email.toLowerCase(),
+            password: currentUser.senha || 'Cordeiro@2026'
+          });
+        }
         await sbClient.auth.updateUser({ password: novaSenha });
+        lastSupabaseAuthError = '';
       } catch (authEx) {
         console.warn('Aviso ao sincronizar Auth:', authEx);
       }
