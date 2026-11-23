@@ -2105,9 +2105,18 @@ async function handleEnviarEsqueci(e) {
   showToast(`Instruções de redefinição enviadas para ${email}! Verifique sua caixa de entrada.`, 'success');
 }
 
+if (sbClient && sbClient.auth) {
+  sbClient.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      setTimeout(() => abrirModal('modalNovaSenhaRecovery'), 150);
+    }
+  });
+}
+
 function checkPasswordRecovery() {
   const hash = window.location.hash || '';
-  if (hash.includes('type=recovery') || hash.includes('access_token=')) {
+  const search = window.location.search || '';
+  if (hash.includes('type=recovery') || hash.includes('access_token=') || search.includes('type=recovery')) {
     setTimeout(() => {
       abrirModal('modalNovaSenhaRecovery');
     }, 400);
