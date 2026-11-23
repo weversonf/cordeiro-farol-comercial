@@ -414,7 +414,7 @@
                 <span class="report-source-pill is-live">Bitrix · Tempo real</span>
               </div>
               <h3>Gestão de Contratos Ativos (180 dias)</h3>
-              <p>Carteira ativa e em assinatura puxada do Bitrix em tempo real, com semáforo de vencimento em 30, 90 e 180 dias, equipamentos e exportação.</p>
+              <p>Carteira ativa puxada da Planilha Gestão de Contratos (PGC-CONSOLIDADA), com semáforo de vencimento em 30, 90 e 180 dias e exportação.</p>
               <ul class="report-option-meta">
                 <li><i class="ph ph-check"></i> Semáforo de renovação (Crítico, Alerta, 180d)</li>
                 <li><i class="ph ph-check"></i> Filtros por unidade, executivo, etapa e tipo</li>
@@ -543,14 +543,14 @@
         <div id="relatorioContratos" style="display: none;">
           <div id="contratosLoading" class="reports-loading-state">
             <i class="ph ph-spinner-gap animate-spin"></i>
-            <span>Consultando contratos ativos no Bitrix...</span>
+            <span>Carregando contratos ativos da planilha...</span>
           </div>
 
           <div id="contratosErro" class="reports-error-state" style="display: none;"></div>
 
           <div id="contratosConteudo" style="display: none;">
             <div class="reports-source-bar">
-              <span><i class="ph ph-plugs-connected"></i> Bitrix24 · Negócios ativos (Análise Jurídica, Elaboração, Assinatura, Ganho e Em Atendimento)</span>
+              <span><i class="ph ph-file-xls"></i> Planilha Gestão de Contratos · Aba PGC-CONSOLIDADA (Contratos em andamento)</span>
               <span id="contratosAtualizadoEm" class="reports-updated-at"></span>
             </div>
 
@@ -578,7 +578,7 @@
                 <small>Aguardando formalização ou assinatura</small>
               </article>
               <article class="report-kpi-card kpi-semdata">
-                <span>Sem data fim no Bitrix</span>
+                <span>Sem data fim na planilha</span>
                 <strong id="kpiContratosSemData">—</strong>
                 <small id="kpiContratosVencidosDetalhe">—</small>
               </article>
@@ -638,7 +638,7 @@
                 <table class="contracts-table contracts-table-centered">
                   <thead>
                     <tr>
-                      <th>Card</th>
+                      <th>Contrato</th>
                       <th>Cliente / Negócio</th>
                       <th>Unidade</th>
                       <th>Executivo</th>

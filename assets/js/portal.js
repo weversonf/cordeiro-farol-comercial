@@ -1364,7 +1364,7 @@ function renderizarContratos() {
   document.getElementById('kpiContratosVencidosDetalhe').textContent = `Vencidos (sem baixa/aditivo): ${vencidoCount}`;
 
   document.getElementById('contratosResumoTabela').textContent =
-    `Exibindo ${filtrados.length} de ${contratosPayload.contratos.length} negócios no Bitrix`;
+    `Exibindo ${filtrados.length} de ${contratosPayload.contratos.length} contratos da planilha`;
 
   const tbody = document.getElementById('tbodyContratos');
   if (!filtrados.length) {
@@ -1375,7 +1375,7 @@ function renderizarContratos() {
   tbody.innerHTML = filtrados.map(item => {
     const cardCell = item.bitrixUrl
       ? `<a href="${escaparHtml(item.bitrixUrl)}" target="_blank" rel="noopener" class="contract-card-link">#${escaparHtml(item.id)} <i class="ph ph-arrow-square-out"></i></a>`
-      : `<span class="contract-card-id">#${escaparHtml(item.id)}</span>`;
+      : `<span class="contract-card-id">${escaparHtml(item.id)}</span>`;
 
     const etapaClass = item.assinaturaPendente ? 'stage-pending' : 'stage-active';
     const vigenciaTexto = `${formatarDataBr(item.dataInicio)} → ${formatarDataBr(item.dataFim)}`;
@@ -1426,16 +1426,16 @@ async function carregarContratos(forcar = false) {
     contratosPayload = dados;
     contratosCarregados = true;
 
-    const bitrixAtualizado = dados.atualizacao?.bitrix
-      ? new Date(dados.atualizacao.bitrix).toLocaleString('pt-BR')
+    const importadoTexto = dados.atualizacao?.importadoEm
+      ? new Date(dados.atualizacao.importadoEm).toLocaleString('pt-BR')
       : 'sem data';
-    const extracaoTexto = dados.atualizacao?.extracaoBitrix
-      ? ` · extração DW ${new Date(dados.atualizacao.extracaoBitrix).toLocaleString('pt-BR')}`
+    const refTexto = dados.atualizacao?.planilha
+      ? ` · ref. planilha ${formatarDataBr(dados.atualizacao.planilha)}`
       : '';
-    document.getElementById('contratosAtualizadoEm').textContent = `Última alteração Bitrix: ${bitrixAtualizado}${extracaoTexto}`;
+    document.getElementById('contratosAtualizadoEm').textContent = `Base importada em: ${importadoTexto}${refTexto}`;
     registrarAtualizacaoTela('relatorios:contratos', {
       updatedAt: dados.geradoEm || Date.now(),
-      sourceInfo: `Bitrix última alt. ${bitrixAtualizado}${extracaoTexto}`,
+      sourceInfo: `Planilha PGC-CONSOLIDADA (${importadoTexto})`,
       autoRefresh: true
     });
 

@@ -1,30 +1,8 @@
-import { getPool, toNumber } from './_db.js';
+import fs from 'node:fs';
+import path from 'node:path';
 import { requireAdminMaster } from './_auth.js';
 
-const ACTIVE_CONTRACT_STAGES = [
-  'C4:UC_FOYMHF', // JURÍDICO - Análise do contrato
-  'C4:UC_VHKW1X', // Elaborar contrato
-  'C4:UC_JDNYZT', // Fechado - Enviar para Assinatura
-  'C4:UC_RPFFJU', // Negocio Ganho
-  'C4:UC_2ZQLVL', // Em atendimento
-  'C19:WON'       // Elaborar contrato (Funil de vendas)
-];
-
-const SIGNATURE_PENDING_STAGES = new Set([
-  'C4:UC_FOYMHF',
-  'C4:UC_VHKW1X',
-  'C4:UC_JDNYZT',
-  'C19:WON'
-]);
-
-const STAGE_LABELS = {
-  'C4:UC_FOYMHF': 'Análise Jurídica',
-  'C4:UC_VHKW1X': 'Elaborar Contrato',
-  'C4:UC_JDNYZT': 'Enviar p/ Assinatura',
-  'C4:UC_RPFFJU': 'Negócio Ganho',
-  'C4:UC_2ZQLVL': 'Em Atendimento',
-  'C19:WON': 'Elaborar Contrato (Funil)'
-};
+const DATA_FILE = path.join(process.cwd(), 'data', 'contratos-planilha.json');
 
 function classifyStatusPrazo(faltamDias) {
   if (faltamDias === null || faltamDias === undefined) return 'sem_data';
@@ -35,8 +13,34 @@ function classifyStatusPrazo(faltamDias) {
   return 'vigente';
 }
 
+function prazoOrderWeight(statusPrazo) {
+  if (statusPrazo === 'critico_30') return 0;
+  if (statusPrazo === 'alerta_90') return 1;
+  if (statusPrazo === 'atencao_180') return 2;
+  if (statusPrazo === 'vigente') return 3;
+  if (statusPrazo === 'vencido') return 4;
+  return 5;
+}
+
 function uniqueSorted(items) {
   return [...new Set(items.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+function getTodayIsoFortaleza() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Fortaleza',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
+function diffDaysIso(targetIso, baseIso) {
+  if (!targetIso || !baseIso) return null;
+  const t = Date.parse(`${targetIso}T00:00:00Z`);
+  const b = Date.parse(`${baseIso}T00:00:00Z`);
+  if (Number.isNaN(t) || Number.isNaN(b)) return null;
+  return Math.round((t - b) / 86400000);
 }
 
 export default async function handler(req, res) {
@@ -47,187 +51,55 @@ export default async function handler(req, res) {
   const user = await requireAdminMaster(req, res);
   if (!user) return;
 
-  const bitrixPortal = String(process.env.BITRIX_PORTAL_URL || 'https://grupocordeiro.bitrix24.com.br').trim().replace(/\/+$/, '');
-
   try {
-    const client = getPool();
+    const raw = fs.readFileSync(DATA_FILE, 'utf8');
+    const planilha = JSON.parse(raw);
+    const hojeIso = getTodayIsoFortaleza();
 
-    const ufColsResult = await client.query(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_schema = 'stage_bitrix'
-        AND table_name = 'b_crm_deal_uf'
-    `);
-    const ufCols = new Set(ufColsResult.rows.map(r => r.column_name));
-    const ufColOrNull = (name) => (ufCols.has(name) ? `uf."${name}"` : 'NULL::text');
-    const ufDateExpr = (name) =>
-      ufCols.has(name)
-        ? `CASE WHEN TRIM(COALESCE(uf."${name}"::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN uf."${name}"::date END`
-        : 'NULL::date';
-
-    const hasTipoContratoNovo = ufCols.has('UF_CRM_1794938969189');
-    const hasAssinadoNovo = ufCols.has('UF_CRM_1795008280665');
-    const hasReajusteNovo = ufCols.has('UF_CRM_1795008431097');
-    const hasAditivoNovo = ufCols.has('UF_CRM_1795008010146');
-
-    const [dealsResult, syncResult] = await Promise.all([
-      client.query(`
-        WITH unidades_deal AS (
-          SELECT
-            uf."ID"::text AS deal_id,
-            STRING_AGG(DISTINCT ev."VALOR", ', ' ORDER BY ev."VALOR") AS unidade_nome
-          FROM stage_bitrix.b_crm_deal_uf uf
-          CROSS JOIN LATERAL regexp_split_to_table(
-            regexp_replace(COALESCE(uf."UF_CRM_1705060456626", ''), '[^0-9,]', '', 'g'),
-            ','
-          ) AS uid
-          JOIN stage_bitrix.b_uf_enum_values ev
-            ON ev."FIELD_NAME" = 'UF_CRM_1705060456626'
-           AND ev."ITEM_ID"::text = NULLIF(uid, '')
-          GROUP BY uf."ID"::text
-        ),
-        equipamentos_deal AS (
-          SELECT
-            p."OWNER_ID"::text AS deal_id,
-            STRING_AGG(
-              DISTINCT COALESCE(NULLIF(TRIM(p."PRODUCT_NAME"), ''), 'Equipamento'),
-              ', '
-            ) AS equipamentos
-          FROM stage_bitrix.b_crm_product_row p
-          WHERE p."OWNER_TYPE" = 'D'
-          GROUP BY p."OWNER_ID"::text
-        ),
-        base AS (
-          SELECT
-            d."ID"::text AS id,
-            COALESCE(NULLIF(TRIM(d."TITLE"), ''), 'Negócio #' || d."ID"::text) AS titulo,
-            d."STAGE_ID" AS stage_id,
-            COALESCE(NULLIF(TRIM(s."NAME"), ''), d."STAGE_ID") AS stage_nome,
-            COALESCE(NULLIF(TRIM(c."TITLE"), ''), 'Empresa não vinculada') AS cliente,
-            COALESCE(NULLIF(TRIM(CONCAT(uv."NAME", ' ', COALESCE(uv."LAST_NAME", ''))), ''), 'Sem consultor') AS consultor,
-            COALESCE(
-              NULLIF(u_unid.unidade_nome, ''),
-              CASE
-                WHEN d."TITLE" ILIKE '%WIND%'   THEN 'Wind'
-                WHEN d."TITLE" ILIKE '%PEC%'    THEN 'Pecém'
-                WHEN d."TITLE" ILIKE '%CLCP%'   THEN 'Centro Logístico'
-                WHEN d."TITLE" ILIKE '%NORT%'   THEN 'Norte'
-                WHEN d."TITLE" ILIKE '%TRANSP%' THEN 'Transportes'
-                WHEN d."TITLE" ILIKE '%ENG%'    THEN 'Engenharia'
-                ELSE 'Não informado'
-              END
-            ) AS unidade,
-            COALESCE(NULLIF(TRIM(et_novo."VALOR"), ''), NULLIF(TRIM(et."VALOR"), ''), 'Não informado') AS tipo_contrato,
-            NULLIF(TRIM(ea."VALOR"), '') AS contrato_assinado,
-            NULLIF(TRIM(${ufColOrNull('UF_CRM_1795008431097')}::text), '') AS indice_reajuste,
-            NULLIF(TRIM(${ufColOrNull('UF_CRM_1795008010146')}::text), '') AS aditivo_pdf,
-            COALESCE(eq.equipamentos, '') AS equipamentos,
-            CASE
-              WHEN TRIM(COALESCE(d."OPPORTUNITY"::text, '')) ~ '^-?[0-9]+(\\.[0-9]+)?$'
-                THEN d."OPPORTUNITY"::numeric
-              ELSE 0
-            END AS valor,
-            COALESCE(
-              ${ufDateExpr('UF_CRM_1795008029033')},
-              ${ufDateExpr('UF_CRM_1704904017946')},
-              ${ufDateExpr('UF_CRM_1713470874')},
-              CASE WHEN TRIM(COALESCE(d."BEGINDATE"::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN d."BEGINDATE"::date END
-            ) AS dt_inicio,
-            COALESCE(
-              ${ufDateExpr('UF_CRM_1795008143114')},
-              ${ufDateExpr('UF_CRM_1704904033370')},
-              ${ufDateExpr('UF_CRM_1713470907')}
-            ) AS dt_fim,
-            d."DATE_MODIFY" AS date_modify
-          FROM stage_bitrix.b_crm_deal d
-          LEFT JOIN stage_bitrix.b_crm_deal_uf uf ON uf."ID"::text = d."ID"::text
-          LEFT JOIN stage_bitrix.b_crm_company c ON c."ID"::text = d."COMPANY_ID"::text
-          LEFT JOIN stage_bitrix.b_user uv ON uv."ID"::text = d."ASSIGNED_BY_ID"::text
-          LEFT JOIN stage_bitrix.b_crm_status s ON s."STATUS_ID" = d."STAGE_ID" AND s."ENTITY_ID" LIKE 'DEAL_STAGE%'
-          LEFT JOIN unidades_deal u_unid ON u_unid.deal_id = d."ID"::text
-          LEFT JOIN equipamentos_deal eq ON eq.deal_id = d."ID"::text
-          LEFT JOIN stage_bitrix.b_uf_enum_values et_novo
-            ON ${hasTipoContratoNovo ? `et_novo."FIELD_NAME" = 'UF_CRM_1794938969189' AND et_novo."ITEM_ID"::text = NULLIF(regexp_replace(COALESCE(uf."UF_CRM_1794938969189"::text, ''), '[^0-9]', '', 'g'), '')` : 'FALSE'}
-          LEFT JOIN stage_bitrix.b_uf_enum_values et
-            ON et."FIELD_NAME" = 'UF_CRM_1757342596090'
-           AND et."ITEM_ID"::text = NULLIF(regexp_replace(COALESCE(uf."UF_CRM_1757342596090"::text, ''), '[^0-9]', '', 'g'), '')
-          LEFT JOIN stage_bitrix.b_uf_enum_values ea
-            ON ${hasAssinadoNovo ? `ea."FIELD_NAME" = 'UF_CRM_1795008280665' AND ea."ITEM_ID"::text = NULLIF(regexp_replace(COALESCE(uf."UF_CRM_1795008280665"::text, ''), '[^0-9]', '', 'g'), '')` : 'FALSE'}
-          WHERE d."STAGE_ID" = ANY($1::text[])
-        )
-        SELECT
-          id,
-          titulo,
-          stage_id,
-          stage_nome,
-          cliente,
-          consultor,
-          unidade,
-          tipo_contrato,
-          contrato_assinado,
-          indice_reajuste,
-          aditivo_pdf,
-          equipamentos,
-          valor,
-          TO_CHAR(dt_inicio, 'YYYY-MM-DD') AS dt_inicio,
-          TO_CHAR(dt_fim, 'YYYY-MM-DD') AS dt_fim,
-          CASE WHEN dt_fim IS NOT NULL THEN (dt_fim - CURRENT_DATE)::int ELSE NULL END AS faltam_dias,
-          CASE WHEN dt_inicio IS NOT NULL AND dt_fim IS NOT NULL THEN (dt_fim - dt_inicio)::int ELSE NULL END AS vigencia_dias,
-          date_modify
-        FROM base
-        ORDER BY
-          CASE
-            WHEN dt_fim IS NULL THEN 5
-            WHEN dt_fim < CURRENT_DATE THEN 4
-            WHEN dt_fim <= CURRENT_DATE + 30 THEN 0
-            WHEN dt_fim <= CURRENT_DATE + 90 THEN 1
-            WHEN dt_fim <= CURRENT_DATE + 180 THEN 2
-            ELSE 3
-          END ASC,
-          (dt_fim - CURRENT_DATE) ASC NULLS LAST,
-          valor DESC
-      `, [ACTIVE_CONTRACT_STAGES]),
-      client.query(`
-        SELECT
-          (SELECT MAX("DATE_MODIFY") FROM stage_bitrix.b_crm_deal) AS bitrix,
-          (SELECT MAX(atualizado_em) FROM stage_bitrix._controle_extracao WHERE tabela_banco IN ('b_crm_deal', 'b_crm_deal_uf')) AS extracao_bitrix
-      `)
-    ]);
-
-    const contratos = dealsResult.rows.map(row => {
-      const faltamDias = row.faltam_dias === null ? null : Number(row.faltam_dias);
-      const vigenciaDias = row.vigencia_dias === null ? null : Number(row.vigencia_dias);
+    const contratos = (planilha.contratos || []).map(row => {
+      const faltamDias = diffDaysIso(row.dataFim, hojeIso);
+      const vigenciaDias = diffDaysIso(row.dataFim, row.dataInicio);
       const statusPrazo = classifyStatusPrazo(faltamDias);
-      const contratoAssinado = row.contrato_assinado || null;
+      const contratoAssinado = row.contratoAssinado || null;
       const assinaturaPendente =
-        contratoAssinado === 'Não'
-          ? true
-          : contratoAssinado === 'Sim' || contratoAssinado === 'Pedido de compra'
-            ? false
-            : SIGNATURE_PENDING_STAGES.has(row.stage_id);
+        contratoAssinado !== null &&
+        ['não', 'nao'].includes(String(contratoAssinado).trim().toLowerCase());
+
       return {
         id: row.id,
         titulo: row.titulo,
         cliente: row.cliente,
         consultor: row.consultor,
         unidade: row.unidade,
-        tipoContrato: row.tipo_contrato,
+        tipoContrato: row.tipoContrato || 'Não informado',
         contratoAssinado,
-        indiceReajuste: row.indice_reajuste || null,
-        aditivoPdf: row.aditivo_pdf || null,
-        stageId: row.stage_id,
-        etapa: STAGE_LABELS[row.stage_id] || row.stage_nome,
-        equipamentos: row.equipamentos,
-        valor: toNumber(row.valor),
-        dataInicio: row.dt_inicio,
-        dataFim: row.dt_fim,
+        indiceReajuste: row.indiceReajuste || null,
+        aditivoPdf: null,
+        stageId: null,
+        etapa: row.etapa || 'Em andamento',
+        equipamentos: row.equipamentos || '',
+        valor: Number(row.valor || 0),
+        dataInicio: row.dataInicio || null,
+        dataFim: row.dataFim || null,
         faltamDias,
         vigenciaDias,
         statusPrazo,
         assinaturaPendente,
-        dataAtualizacao: row.date_modify,
-        bitrixUrl: bitrixPortal ? `${bitrixPortal}/crm/deal/details/${encodeURIComponent(row.id)}/` : null
+        dataAtualizacao: planilha.importadoEm || null,
+        bitrixUrl: null
       };
+    });
+
+    contratos.sort((a, b) => {
+      const wA = prazoOrderWeight(a.statusPrazo);
+      const wB = prazoOrderWeight(b.statusPrazo);
+      if (wA !== wB) return wA - wB;
+      if (a.faltamDias !== null && b.faltamDias !== null && a.faltamDias !== b.faltamDias) {
+        return a.faltamDias - b.faltamDias;
+      }
+      if (a.faltamDias !== null && b.faltamDias === null) return -1;
+      if (a.faltamDias === null && b.faltamDias !== null) return 1;
+      return String(a.cliente || '').localeCompare(String(b.cliente || ''), 'pt-BR');
     });
 
     const resumo = {
@@ -276,18 +148,11 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       geradoEm: new Date().toISOString(),
-      fonte: 'stage_bitrix.b_crm_deal',
-      camposNovosSincronizados: {
-        tipoContrato: hasTipoContratoNovo,
-        vigenciaInicial: ufCols.has('UF_CRM_1795008029033'),
-        vigenciaFinal: ufCols.has('UF_CRM_1795008143114'),
-        contratoAssinado: hasAssinadoNovo,
-        indiceReajuste: hasReajusteNovo,
-        aditivoPdf: hasAditivoNovo
-      },
+      fonte: 'planilha_pgc_consolidada',
+      camposNovosSincronizados: {},
       atualizacao: {
-        bitrix: syncResult.rows[0]?.bitrix || null,
-        extracaoBitrix: syncResult.rows[0]?.extracao_bitrix || null
+        planilha: planilha.dataReferenciaPlanilha || null,
+        importadoEm: planilha.importadoEm || null
       },
       resumo,
       filtros: {
@@ -299,7 +164,7 @@ export default async function handler(req, res) {
       contratos
     });
   } catch (error) {
-    console.error('Falha ao consultar contratos do Bitrix:', error);
-    return res.status(500).json({ ok: false, error: 'Não foi possível consultar os contratos do Bitrix agora.' });
+    console.error('Falha ao carregar contratos da planilha:', error);
+    return res.status(500).json({ ok: false, error: 'Não foi possível carregar os contratos da planilha agora.' });
   }
 }
