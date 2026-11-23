@@ -6,6 +6,7 @@ import relatoriosHandler from './api/relatorios.js';
 import contratosHandler from './api/contratos.js';
 import rmrHandler from './api/rmr.js';
 import faturamentoHandler from './api/faturamento.js';
+import faturamentoSd2Handler from './api/faturamento-sd2.js';
 import inadimplenciaHandler from './api/inadimplencia.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -35,6 +36,7 @@ const server = http.createServer(async (req, res) => {
     '/api/contratos': contratosHandler,
     '/api/rmr': rmrHandler,
     '/api/faturamento': faturamentoHandler,
+    '/api/faturamento-sd2': faturamentoSd2Handler,
     '/api/inadimplencia': inadimplenciaHandler
   };
   if (apiRoutes[url.pathname]) {

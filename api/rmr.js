@@ -257,8 +257,10 @@ export default async function handler(req, res) {
       `, [year]),
       pool.query(`
         SELECT
-          (SELECT MAX(emissao) FROM comercial.fato_itens_vendas) AS max_emissao_protheus,
-          (SELECT MAX(data_criacao) FROM comercial.fato_itens_vendas) AS max_carga_protheus,
+          (SELECT MAX(TO_DATE(TRIM(d2_emissao), 'YYYYMMDD'))
+           FROM stage_protheus.sd2010
+           WHERE COALESCE(TRIM(d_e_l_e_t_), '') <> '*' AND TRIM(COALESCE(d2_emissao, '')) ~ '^\\d{8}$') AS max_emissao_protheus,
+          (SELECT MAX(s_t_a_m_p_) FROM stage_protheus.sd2010 WHERE COALESCE(TRIM(d_e_l_e_t_), '') <> '*') AS max_carga_protheus,
           (SELECT MAX("DATE_MODIFY") FROM stage_bitrix.b_crm_deal) AS max_modify_bitrix,
           (SELECT MAX(atualizado_em) FROM stage_bitrix._controle_extracao) AS max_extracao_bitrix
       `),
@@ -283,42 +285,99 @@ export default async function handler(req, res) {
     const clientesAtualRes = { rows: rmrAgg.clientes || [] };
     const contratosAtualRes = { rows: rmrAgg.contratos || [] };
 
-    // 2) Bitrix CRM + Apropriação + Funil + Perdas + Pipeline (consultados em paralelo e com guardas de leitura)
+    // 2) Bitrix CRM + Apropriação + Funil + Perdas + Pipeline + Backlog Protheus (consultados em paralelo e com guardas de leitura)
     let apropMensal = [];
     let apropPorUnidade = [];
     let apropBacklogResumo = { noAno: 0, noMesRef: 0, futurosProximoAno: 0, qtdContratosMes: 0, qtdContratosAno: 0 };
+    let contratosProtheusOp = { resumo: null, itens: [] };
+    let medicoesProtheusInfo = { resumoPorSituacao: [], maxEmissao: null };
 
-    if (permAprop.canSelect) {
-      const [apropMesRes, apropUnidRes, apropFutRes] = await Promise.all([
-        pool.query(`
-          SELECT
-            mes,
-            COUNT(DISTINCT id_negocio)::int AS qtd_contratos,
-            COALESCE(SUM(receita_apropriada), 0) AS receita_apropriada
-          FROM comercial.fato_apropriacao_receita_mensal
-          WHERE ano = $1
-          GROUP BY 1
-          ORDER BY 1
-        `, [year]),
-        pool.query(`
-          SELECT
-            COALESCE(NULLIF(TRIM(unidade_negocio), ''), 'Não informado') AS unidade,
-            COUNT(DISTINCT id_negocio)::int AS qtd_contratos,
-            COALESCE(SUM(CASE WHEN mes = $2 THEN receita_apropriada ELSE 0 END), 0) AS receita_mes,
-            COALESCE(SUM(CASE WHEN mes <= $2 THEN receita_apropriada ELSE 0 END), 0) AS receita_ytd,
-            COALESCE(SUM(receita_apropriada), 0) AS receita_ano_completo
-          FROM comercial.fato_apropriacao_receita_mensal
-          WHERE ano = $1
-          GROUP BY 1
-          ORDER BY receita_ytd DESC
-        `, [year, month]),
-        pool.query(`
-          SELECT
-            COALESCE(SUM(CASE WHEN ano = $1 AND mes > $2 THEN receita_apropriada ELSE 0 END), 0) AS restante_ano,
-            COALESCE(SUM(CASE WHEN ano > $1 THEN receita_apropriada ELSE 0 END), 0) AS anos_seguintes
-          FROM comercial.fato_apropriacao_receita_mensal
-        `, [year, month])
-      ]);
+    const [apropResult, contratosOpResult, medicoesOpResult] = await Promise.all([
+      permAprop.canSelect
+        ? Promise.all([
+            pool.query(`
+              SELECT
+                mes,
+                COUNT(DISTINCT id_negocio)::int AS qtd_contratos,
+                COALESCE(SUM(receita_apropriada), 0) AS receita_apropriada
+              FROM comercial.fato_apropriacao_receita_mensal
+              WHERE ano = $1
+              GROUP BY 1
+              ORDER BY 1
+            `, [year]),
+            pool.query(`
+              SELECT
+                COALESCE(NULLIF(TRIM(unidade_negocio), ''), 'Não informado') AS unidade,
+                COUNT(DISTINCT id_negocio)::int AS qtd_contratos,
+                COALESCE(SUM(CASE WHEN mes = $2 THEN receita_apropriada ELSE 0 END), 0) AS receita_mes,
+                COALESCE(SUM(CASE WHEN mes <= $2 THEN receita_apropriada ELSE 0 END), 0) AS receita_ytd,
+                COALESCE(SUM(receita_apropriada), 0) AS receita_ano_completo
+              FROM comercial.fato_apropriacao_receita_mensal
+              WHERE ano = $1
+              GROUP BY 1
+              ORDER BY receita_ytd DESC
+            `, [year, month]),
+            pool.query(`
+              SELECT
+                COALESCE(SUM(CASE WHEN ano = $1 AND mes > $2 THEN receita_apropriada ELSE 0 END), 0) AS restante_ano,
+                COALESCE(SUM(CASE WHEN ano > $1 THEN receita_apropriada ELSE 0 END), 0) AS anos_seguintes
+              FROM comercial.fato_apropriacao_receita_mensal
+            `, [year, month])
+          ])
+        : Promise.resolve(null),
+      permContratosOp.canSelect
+        ? Promise.all([
+            pool.query(`
+              SELECT
+                COUNT(*) FILTER (WHERE status = 'Aberto')::int AS qtd_abertos,
+                COUNT(*) FILTER (WHERE status = 'Aberto' AND modalidade_contrato = 'Contrato')::int AS qtd_contratos_abertos,
+                COUNT(*) FILTER (WHERE status = 'Aberto' AND modalidade_contrato = 'Spot')::int AS qtd_spot_abertos,
+                COALESCE(SUM(valor_global_contrato) FILTER (WHERE status = 'Aberto'), 0) AS valor_global_abertos,
+                COALESCE(SUM(valor_faturado) FILTER (WHERE status = 'Aberto'), 0) AS valor_faturado_abertos,
+                COALESCE(SUM(GREATEST(COALESCE(valor_global_contrato, 0) - COALESCE(valor_faturado, 0), 0)) FILTER (WHERE status = 'Aberto'), 0) AS saldo_contratual_abertos,
+                COALESCE(SUM(saldo_receber) FILTER (WHERE status = 'Aberto'), 0) AS saldo_receber_abertos,
+                MAX(data_emissao_contrato) AS ultima_emissao,
+                MAX(ultima_alteracao) AS ultima_alteracao
+              FROM comercial.contratos_operacional
+            `),
+            pool.query(`
+              SELECT
+                TRIM(COALESCE(nr_contrato, '')) AS nr_contrato,
+                TRIM(COALESCE(cod_filial, '')) AS cod_filial,
+                COALESCE(NULLIF(TRIM(modalidade_contrato), ''), 'Não informado') AS modalidade,
+                COALESCE(NULLIF(TRIM(nome_cliente), ''), 'Cliente N/I') AS cliente,
+                COALESCE(NULLIF(TRIM(nome_unidade), ''), NULLIF(TRIM(cod_unidade), ''), '—') AS unidade,
+                COALESCE(NULLIF(TRIM(nome_gerente), ''), NULLIF(TRIM(nome_vendedor), ''), '—') AS responsavel,
+                TO_CHAR(data_inicio_contrato, 'YYYY-MM-DD') AS data_inicio,
+                TO_CHAR(data_fim_contrato, 'YYYY-MM-DD') AS data_fim,
+                COALESCE(valor_global_contrato, 0)::numeric AS valor_global,
+                COALESCE(valor_faturado, 0)::numeric AS valor_faturado,
+                GREATEST(COALESCE(valor_global_contrato, 0) - COALESCE(valor_faturado, 0), 0)::numeric AS saldo_contratual,
+                COALESCE(saldo_receber, 0)::numeric AS saldo_receber
+              FROM comercial.contratos_operacional
+              WHERE status = 'Aberto'
+              ORDER BY COALESCE(valor_global_contrato, 0) DESC, data_inicio_contrato DESC NULLS LAST
+              LIMIT 15
+            `)
+          ]).catch(() => null)
+        : Promise.resolve(null),
+      permMedicoes.canSelect
+        ? pool.query(`
+            SELECT
+              COALESCE(NULLIF(TRIM(situacao), ''), 'Sem situação') AS situacao,
+              COALESCE(NULLIF(TRIM(modalidade), ''), 'Não informado') AS modalidade,
+              COUNT(*)::int AS qtd,
+              COALESCE(SUM(valor_global), 0)::numeric AS valor_global,
+              MAX(dt_emissao) AS max_emissao
+            FROM comercial.protheus_gold_medicoes_pendentes
+            GROUP BY 1, 2
+            ORDER BY qtd DESC
+          `).catch(() => null)
+        : Promise.resolve(null)
+    ]);
+
+    if (apropResult) {
+      const [apropMesRes, apropUnidRes, apropFutRes] = apropResult;
       apropMensal = apropMesRes.rows.map(r => ({
         mes: `${year}-${String(r.mes).padStart(2, '0')}`,
         qtdContratos: Number(r.qtd_contratos || 0),
@@ -341,6 +400,55 @@ export default async function handler(req, res) {
         noAnoTotal: apropMesRes.rows.reduce((s, r) => s + toNumber(r.receita_apropriada), 0),
         restanteAno: toNumber(apropFutRes.rows[0]?.restante_ano),
         anosSeguintes: toNumber(apropFutRes.rows[0]?.anos_seguintes)
+      };
+    }
+
+    if (contratosOpResult) {
+      const [ctrResumoRes, ctrItensRes] = contratosOpResult;
+      const cr = ctrResumoRes.rows[0] || {};
+      contratosProtheusOp = {
+        resumo: {
+          qtdAbertos: Number(cr.qtd_abertos || 0),
+          qtdContratosAbertos: Number(cr.qtd_contratos_abertos || 0),
+          qtdSpotAbertos: Number(cr.qtd_spot_abertos || 0),
+          valorGlobalAbertos: toNumber(cr.valor_global_abertos),
+          valorFaturadoAbertos: toNumber(cr.valor_faturado_abertos),
+          saldoContratualAbertos: toNumber(cr.saldo_contratual_abertos),
+          saldoReceberAbertos: toNumber(cr.saldo_receber_abertos),
+          ultimaEmissao: cr.ultima_emissao ? String(cr.ultima_emissao).slice(0, 10) : null,
+          ultimaAlteracao: cr.ultima_alteracao ? String(cr.ultima_alteracao).slice(0, 10) : null
+        },
+        itens: (ctrItensRes.rows || []).map(r => ({
+          nrContrato: r.nr_contrato,
+          codFilial: r.cod_filial,
+          modalidade: r.modalidade,
+          cliente: r.cliente,
+          unidade: r.unidade,
+          responsavel: r.responsavel,
+          dataInicio: r.data_inicio || null,
+          dataFim: r.data_fim || null,
+          valorGlobal: toNumber(r.valor_global),
+          valorFaturado: toNumber(r.valor_faturado),
+          saldoContratual: toNumber(r.saldo_contratual),
+          saldoReceber: toNumber(r.saldo_receber)
+        }))
+      };
+    }
+
+    if (medicoesOpResult) {
+      const medRows = medicoesOpResult.rows || [];
+      const maxDt = medRows.reduce((acc, r) => {
+        const d = r.max_emissao ? String(r.max_emissao).slice(0, 10) : '';
+        return d && d > acc ? d : acc;
+      }, '');
+      medicoesProtheusInfo = {
+        maxEmissao: maxDt || null,
+        resumoPorSituacao: medRows.map(r => ({
+          situacao: r.situacao,
+          modalidade: r.modalidade,
+          qtd: Number(r.qtd || 0),
+          valorGlobal: toNumber(r.valor_global)
+        }))
       };
     }
 
@@ -668,16 +776,18 @@ function isExecutivoComercialOficial(nome) {
         disponivel: Boolean(permMedicoes.canSelect),
         objeto: 'comercial.protheus_gold_medicoes_pendentes',
         observacao: permMedicoes.canSelect
-          ? 'Permissão liberada (atenção: objeto espelha cabeçalho ZC0010, validar contra ZD1010).'
+          ? 'Permissão liberada (objeto espelha cabeçalho ZC0010; não contém itens mensais da ZD1010 nem planilha SharePoint).'
           : 'Acesso bloqueado (SELECT negado em comercial.protheus_gold_medicoes_pendentes) e planilha SharePoint CONTROLE DE MEDICAO (Medições Pendentes / Fechamento Informakon) não ingerida no PostgreSQL.'
       },
       statusContratosProtheus: {
         disponivel: Boolean(permContratosOp.canSelect),
         objeto: 'comercial.contratos_operacional',
         observacao: permContratosOp.canSelect
-          ? 'Permissão liberada.'
+          ? 'Permissão liberada e contratos operacionais em aberto integrados abaixo.'
           : 'Acesso bloqueado (SELECT negado em comercial.contratos_operacional) e comercial.contratos_comercial possui 0 registros.'
       },
+      contratosProtheusOperacional: contratosProtheusOp,
+      medicoesProtheus: medicoesProtheusInfo,
       apropriacaoBitrix: {
         disponivel: Boolean(permAprop.canSelect),
         resumo: apropBacklogResumo,
@@ -918,7 +1028,7 @@ function isExecutivoComercialOficial(nome) {
       geradoEm: new Date().toISOString(),
       parametros: { year, month, mesRefIso, escopo, incluirExpurgos },
       fontes: {
-        faturamentoProtheus: 'comercial.fato_itens_vendas (SD2 · NFs multi-cliente deduplicadas + TES comerciais + CFOP receita)',
+        faturamentoProtheus: 'stage_protheus.sd2010 (SD2 · NFs ativas sem duplicidade + executivo via fato_itens_vendas)',
         metasUnidades: 'comercial.indicador_unidade (ZI0/ZI1 · zi0_metric=000001 · ZI1_VLMALV)',
         metasExecutivos: 'comercial.dim_meta_vendedores (alvo anual deduplicado via MAX)',
         crmFunil: 'stage_bitrix.b_crm_deal + b_crm_deal_uf + b_crm_status + comercial.fato_negocios + dim_motivo_perda',

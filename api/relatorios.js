@@ -15,6 +15,44 @@ export default async function handler(req, res) {
   const user = await requireAdminMaster(req, res);
   if (!user) return;
 
+  if (String(req.query?.modo || '').toLowerCase() === 'status') {
+    try {
+      const client = getPool();
+      const statusRes = await client.query(`
+        SELECT
+          (SELECT TO_CHAR(MAX(TO_DATE(TRIM(d2_emissao), 'YYYYMMDD')), 'YYYY-MM-DD')
+           FROM stage_protheus.sd2010
+           WHERE COALESCE(TRIM(d_e_l_e_t_), '') <> '*' AND TRIM(COALESCE(d2_emissao, '')) ~ '^\\d{8}$') AS sd2_emissao,
+          (SELECT MAX(s_t_a_m_p_) FROM stage_protheus.sd2010 WHERE COALESCE(TRIM(d_e_l_e_t_), '') <> '*') AS sd2_carga,
+          (SELECT TO_CHAR(MAX(TO_DATE(TRIM(e1_emissao), 'YYYYMMDD')), 'YYYY-MM-DD')
+           FROM stage_protheus.se1010
+           WHERE COALESCE(TRIM(d_e_l_e_t_), '') <> '*' AND TRIM(COALESCE(e1_emissao, '')) ~ '^\\d{8}$') AS se1_emissao,
+          (SELECT TO_CHAR(MAX(TO_DATE(TRIM(e1_baixa), 'YYYYMMDD')), 'YYYY-MM-DD')
+           FROM stage_protheus.se1010
+           WHERE COALESCE(TRIM(d_e_l_e_t_), '') <> '*' AND TRIM(COALESCE(e1_baixa, '')) ~ '^\\d{8}$') AS se1_baixa,
+          (SELECT MAX("DATE_MODIFY") FROM stage_bitrix.b_crm_deal) AS bitrix_modify,
+          (SELECT MAX(atualizado_em) FROM stage_bitrix._controle_extracao) AS bitrix_extracao
+      `);
+      const row = statusRes.rows[0] || {};
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      return res.status(200).json({
+        ok: true,
+        consultadoEm: new Date().toISOString(),
+        atualizacao: {
+          protheusSd2Emissao: row.sd2_emissao || null,
+          protheusSd2Carga: row.sd2_carga || null,
+          protheusSe1Emissao: row.se1_emissao || null,
+          protheusSe1Baixa: row.se1_baixa || null,
+          bitrixUltimaModificacao: row.bitrix_modify || null,
+          bitrixUltimaExtracao: row.bitrix_extracao || null
+        }
+      });
+    } catch (error) {
+      console.error('Falha ao consultar status do DW:', error);
+      return res.status(500).json({ ok: false, error: 'Não foi possível verificar o status de atualização do DW.' });
+    }
+  }
+
   const requestedYear = Number(req.query?.year);
   const currentYear = new Date().getFullYear();
   const year = Number.isInteger(requestedYear) && requestedYear >= 2023 && requestedYear <= currentYear + 1
@@ -236,7 +274,7 @@ export default async function handler(req, res) {
 
     const freshnessQuery = useFatBruto
       ? `SELECT (SELECT MAX(data_emissao) FROM comercial.faturamento_bruto) AS protheus, (SELECT MAX("DATE_MODIFY") FROM stage_bitrix.b_crm_deal) AS bitrix`
-      : `SELECT (SELECT MAX(emissao) FROM comercial.fato_itens_vendas) AS protheus, (SELECT MAX("DATE_MODIFY") FROM stage_bitrix.b_crm_deal) AS bitrix`;
+      : `SELECT (SELECT MAX(TO_DATE(TRIM(d2_emissao), 'YYYYMMDD')) FROM stage_protheus.sd2010 WHERE COALESCE(TRIM(d_e_l_e_t_), '') <> '*' AND TRIM(COALESCE(d2_emissao, '')) ~ '^\\d{8}$') AS protheus, (SELECT MAX("DATE_MODIFY") FROM stage_bitrix.b_crm_deal) AS bitrix`;
 
     const [protheusAggRes, pipeRankRes, pipeKpiRes, atualizacaoRes] = await Promise.all([
       client.query(crossProtheusQuery, protheusParams),
@@ -266,7 +304,7 @@ export default async function handler(req, res) {
         consultor: consultorFiltro
       },
       fontes: {
-        protheus: useFatBruto ? 'comercial.faturamento_bruto (SD2)' : 'comercial.fato_itens_vendas (SD2)',
+        protheus: useFatBruto ? 'comercial.faturamento_bruto (SD2)' : 'stage_protheus.sd2010 (SD2)',
         bitrix: 'stage_bitrix.b_crm_deal'
       },
       atualizacao: atualizacaoRes.rows[0] || {},

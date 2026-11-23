@@ -382,20 +382,26 @@
               <button type="button" id="btnAtualizarFaturamento" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
             </div>
 
+            <div id="acoesFaturamentoSd2" class="reports-actions" style="display: none;">
+              <button type="button" id="btnExportarFaturamentoSd2Base" class="btn-secondary-reports"><i class="ph ph-microsoft-excel-logo"></i> Exportar detalhamento (.xlsx)</button>
+              <button type="button" id="btnAtualizarFaturamentoSd2" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+            </div>
+
             <div id="acoesInadimplencia" class="reports-actions" style="display: none;">
-              <input type="file" id="inputImportarInadimplenciaXlsx" accept=".xlsx,.xls" style="display: none;" />
-              <button type="button" id="btnImportarInadimplenciaXlsx" class="btn-secondary-reports"><i class="ph ph-upload-simple"></i> Importar Planilha (.xlsx)</button>
+              <button type="button" id="btnFecharCompetencia" class="btn-secondary-reports"><i class="ph ph-lock-simple"></i> Fechar competência</button>
               <button type="button" id="btnExportarInadimplenciaXlsx" class="btn-secondary-reports"><i class="ph ph-microsoft-excel-logo"></i> Exportar Excel (.xlsx)</button>
               <button type="button" id="btnAtualizarInadimplencia" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
             </div>
           </div>
         </div>
 
-        <!-- Catálogo / Gama de Relatórios -->
+        <div id="relatoriosAuthBanner" class="report-status-banner is-warning" style="display: none; margin-bottom: 14px;"></div>
+
+        <!-- Catálogo / Gama de Relatórios -->
         <div id="relatoriosCatalogo">
           <div class="reports-toolbar">
             <div>
-              <div class="reports-count">3 painéis conectados ao vivo</div>
+              <div class="reports-count">4 painéis conectados ao vivo</div>
               <p>Selecione o relatório que deseja consultar. Todos os indicadores usam consultas validadas diretamente no PostgreSQL corporativo.</p>
             </div>
             <span class="reports-private-tag"><i class="ph ph-shield-check"></i> Acesso Master</span>
@@ -449,6 +455,23 @@
               </ul>
               <button type="button" class="btn-open-report is-primary" data-report-trigger="inadimplencia">
                 <span>Abrir Inadimplência</span>
+                <i class="ph ph-arrow-right"></i>
+              </button>
+            </article>
+
+            <article class="report-option-card is-featured" data-report="faturamento">
+              <div class="report-option-top">
+                <div class="report-option-icon icon-faturamento"><i class="ph ph-receipt"></i></div>
+                <span class="report-source-pill is-live">Protheus SD2 · Prévia</span>
+              </div>
+              <h3>Prévia de Faturamento (SD2)</h3>
+              <p>Faturamento comercial lido direto da SD2, com os expurgos da premiação (CM Máquinas, Central ADM e locação T&amp;A) e o impacto de cada regra.</p>
+              <ul class="report-option-meta">
+                <li><i class="ph ph-check"></i> TES e CFOP de receita homologados</li>
+                <li><i class="ph ph-check"></i> Por unidade, executivo e cliente</li>
+              </ul>
+              <button type="button" class="btn-open-report is-primary" data-report-trigger="faturamento">
+                <span>Abrir Prévia de Faturamento</span>
                 <i class="ph ph-arrow-right"></i>
               </button>
             </article>
@@ -530,6 +553,8 @@
               <span><i class="ph ph-plugs-connected"></i> Bitrix24 · Negócios ativos (Análise Jurídica, Elaboração, Assinatura, Ganho e Em Atendimento)</span>
               <span id="contratosAtualizadoEm" class="reports-updated-at"></span>
             </div>
+
+            <div id="contratosSyncAlert" class="report-status-banner is-warning" style="display: none; margin-bottom: 14px;"></div>
 
             <div class="contracts-kpi-grid">
               <article class="report-kpi-card kpi-total">
@@ -832,7 +857,31 @@
                           <th class="num">Valor</th>
                         </tr>
                       </thead>
-                      <tbody id="tbodyRmrBacklogContratos"></tbody>
+                      <tbody id="tbodyRmrBacklogContratos"></tbody>
+                    </table>
+                  </div>
+                </article>
+
+                <article id="rmrPanelCtrOpProtheus" class="report-panel wide" style="display: none;">
+                  <div class="report-panel-header">
+                    <h3>Contratos Operacionais em Aberto (Protheus · contratos_operacional)</h3>
+                    <span id="rmrCtrOpTag" class="report-panel-tag">Top 15 em aberto</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Nº Contrato</th>
+                          <th>Cliente</th>
+                          <th>Unidade</th>
+                          <th>Modalidade</th>
+                          <th>Vigência</th>
+                          <th class="num">Valor Global</th>
+                          <th class="num">Faturado</th>
+                          <th class="num">Saldo Contratual</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrCtrOpProtheus"></tbody>
                     </table>
                   </div>
                 </article>
@@ -1207,12 +1256,194 @@
           </div>
         </div>
 
+        <!-- Relatório 4B: Prévia de Faturamento SD2 (regras da premiação) -->
+        <div id="relatorioFaturamentoSd2" style="display: none;">
+          <div class="contracts-filters-bar faturamento-filters-grid">
+            <div class="filter-field">
+              <label for="fatSd2Periodo">Mês / Período</label>
+              <select id="fatSd2Periodo"></select>
+            </div>
+            <div class="filter-field" id="fatSd2DeWrap" style="display: none;">
+              <label for="fatSd2Start">De</label>
+              <input type="date" id="fatSd2Start" />
+            </div>
+            <div class="filter-field" id="fatSd2AteWrap" style="display: none;">
+              <label for="fatSd2End">Até</label>
+              <input type="date" id="fatSd2End" />
+            </div>
+            <div class="filter-field">
+              <label for="fatSd2Unidade">Unidade</label>
+              <select id="fatSd2Unidade"><option value="">Todas as unidades</option></select>
+            </div>
+            <div class="filter-field">
+              <label for="fatSd2Executivo">Executivo</label>
+              <select id="fatSd2Executivo"><option value="">Todos os executivos</option></select>
+            </div>
+          </div>
+
+          <div id="fatSd2Loading" class="reports-loading-state">
+            <i class="ph ph-spinner-gap animate-spin"></i>
+            <span>Consultando a SD2 no Protheus...</span>
+          </div>
+          <div id="fatSd2Erro" class="reports-error-state" style="display: none;"></div>
+
+          <div id="fatSd2Conteudo" style="display: none;">
+            <div class="reports-meta-bar">
+              <span><i class="ph ph-clock"></i> <strong id="fatSd2Atualizado">Protheus SD2</strong></span>
+              <span id="fatSd2Fonte">stage_protheus.sd2010</span>
+            </div>
+
+            <div class="reports-kpis">
+              <article class="kpi-card highlight">
+                <span class="kpi-label">Faturamento Comercial (prévia)</span>
+                <strong id="fatSd2KpiComercial" class="kpi-value">—</strong>
+                <span id="fatSd2KpiTicket" class="kpi-note">—</span>
+              </article>
+              <article class="kpi-card">
+                <span class="kpi-label">Faturamento SD2 bruto</span>
+                <strong id="fatSd2KpiBruto" class="kpi-value">—</strong>
+                <span class="kpi-note">
+                  <span id="fatSd2KpiReceitaTexto">—</span>
+                  <span class="kpi-help" role="note" tabindex="0" aria-label="O que é TES e CFOP" title="TES (Tipo de Saída) classifica o movimento de estoque, com 3 dígitos. CFOP (Código Fiscal de Operações e Prestações) classifica a operação fiscal, com 4 dígitos. Juntos separam venda/receita de transferência, remessa ou devolução. Em outubro, sem esse filtro a SD2 somaria R$ 28,0 mi em vez de R$ 9,5 mi de receita." style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:rgba(127,127,127,.25);font-size:11px;font-weight:700;cursor:help;margin-left:6px;">?</span>
+                </span>
+              </article>
+              <article class="kpi-card">
+                <span class="kpi-label">Expurgos aplicados</span>
+                <strong id="fatSd2KpiExpurgos" class="kpi-value">—</strong>
+                <span id="fatSd2KpiExpurgosNota" class="kpi-note">—</span>
+              </article>
+              <article class="kpi-card">
+                <span class="kpi-label">Volume</span>
+                <strong id="fatSd2KpiVolume" class="kpi-value">—</strong>
+                <span id="fatSd2KpiClientes" class="kpi-note">—</span>
+              </article>
+            </div>
+
+            <div class="reports-grid">
+              <article class="report-panel wide">
+                <div class="report-panel-header">
+                  <h3>Conciliação do faturamento no período</h3>
+                  <span class="report-panel-tag" id="fatSd2ConciliacaoTag">—</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead><tr><th>Etapa</th><th class="num">Valor (R$)</th></tr></thead>
+                    <tbody id="tbodyFatSd2Conciliacao"></tbody>
+                  </table>
+                </div>
+
+                <details style="margin-top:14px;">
+                  <summary style="cursor:pointer;font-weight:600;">Como este número é calculado (TES e CFOP)</summary>
+                  <div style="margin-top:10px;font-size:.9rem;line-height:1.55;">
+                    <p><strong>TES</strong> (Tipo de Saída, 3 dígitos) diz o que aconteceu com o estoque/produto: venda, remessa, transferência, devolução. Fica em <code>SD2.D2_TES</code>.</p>
+                    <p><strong>CFOP</strong> (Código Fiscal de Operações e Prestações, 4 dígitos) diz como a operação é tratada fiscalmente. O primeiro dígito indica a abrangência: <code>5</code> dentro do estado, <code>6</code> interestadual. Fica em <code>SD2.D2_CF</code>.</p>
+                    <p>A SD2 registra <em>todo</em> movimento de saída, não só venda. Por isso o relatório mantém apenas as combinações de TES e CFOP homologadas como receita. Sem esse filtro, outubro/2026 iria de <strong>R$ 9,5 mi</strong> de receita para <strong>R$ 28,0 mi</strong> de movimentação total — incluindo transferências, remessas e devoluções que não são faturamento.</p>
+                    <p>Depois do escopo de receita, permanecem as unidades comerciais pelos centros de custo <strong>413, 414, 415, 416, 417 e 423</strong>. São expurgados <strong>CM Máquinas</strong> (CC 421), <strong>Central ADM</strong> (CC 321/330), demais unidades não comerciais e a <strong>locação T&amp;A</strong> (contrato 68673, série 4).</p>
+                  </div>
+                </details>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header"><h3>Por unidade</h3></div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead><tr><th>Unidade</th><th class="num">Comercial</th><th class="num">NFs</th></tr></thead>
+                    <tbody id="tbodyFatSd2Unidades"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header"><h3>Por executivo</h3></div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead><tr><th>Executivo</th><th class="num">Comercial</th><th class="num">NFs</th></tr></thead>
+                    <tbody id="tbodyFatSd2Executivos"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="report-panel wide">
+                <div class="report-panel-header">
+                  <h3>Evolução mensal do faturamento comercial</h3>
+                  <span class="report-panel-tag">Emissão fiscal</span>
+                </div>
+                <div id="fatSd2Mensal" class="monthly-bars"></div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header">
+                  <h3>Faturamento por cliente</h3>
+                  <span class="report-panel-tag" id="fatSd2ClientesTag">—</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead>
+                      <tr><th>Cliente</th><th class="num">Contratos</th><th class="num">NFs</th><th class="num">Faturado</th></tr>
+                    </thead>
+                    <tbody id="tbodyFatSd2Clientes"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="report-panel">
+                <div class="report-panel-header">
+                  <h3>Cliente × contrato/negócio</h3>
+                  <span class="report-panel-tag" id="fatSd2ContratosTag">—</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead>
+                      <tr><th>Cliente</th><th>Contrato</th><th>Unidade / Executivo</th><th class="num">NFs</th><th class="num">Faturado</th></tr>
+                    </thead>
+                    <tbody id="tbodyFatSd2Contratos"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="report-panel wide">
+                <div class="report-panel-header">
+                  <h3>Notas fiscais estratificadas</h3>
+                  <span class="report-panel-tag" id="fatSd2NfsTag">—</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="contracts-table">
+                    <thead>
+                      <tr>
+                        <th>Data</th><th>NF / Série</th><th>Cliente</th><th>Contrato</th>
+                        <th>Unidade</th><th>Executivo</th><th class="num">Itens</th><th class="num">Faturado</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbodyFatSd2Nfs"></tbody>
+                  </table>
+                </div>
+              </article>
+            </div>
+
+            <p class="reports-disclaimer"><i class="ph ph-info"></i> Prévia calculada diretamente na <code>stage_protheus.sd2010</code> (Protheus SD2), com TES/CFOP de receita e expurgos da planilha de premiação: CM Máquinas, Central ADM e locação T&amp;A. Valores sujeitos a fechamento contábil.</p>
+          </div>
+        </div>
+
         <!-- Painel 5: Inadimplência por Executivo, Margem e Cliente -->
         <div id="relatorioInadimplencia" style="display: none;">
           <div class="contracts-filters-bar faturamento-filters-grid inad-filters-grid">
             <div class="filter-field">
-              <label for="inadDataCorte">Venc. Real anterior a</label>
+              <label for="inadDataCorte">Vencimentos até (saldo atual)</label>
               <input type="date" id="inadDataCorte" />
+            </div>
+            <div class="filter-field">
+              <label for="inadCompetencia">Posição</label>
+              <select id="inadCompetencia">
+                <option value="">Saldo atual (Protheus)</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label for="inadFaixaAtraso">Período de vencimento</label>
+              <select id="inadFaixaAtraso">
+                <option value="365">Janela de 365 dias</option>
+                <option value="antigos">365 dias ou mais</option>
+                <option value="todos">Todos os vencidos</option>
+              </select>
             </div>
             <div class="filter-field inad-filial-field" id="inadFiltroFilialWrap">
               <label for="inadFiltroFilialBtn">Filiais</label>
@@ -1343,6 +1574,17 @@
           </div>
         </div>
       </section>
+
+      <footer id="farolGlobalFooter" class="farol-sync-footer" aria-live="polite">
+        <span class="farol-sync-footer-item">
+          <i class="ph ph-clock-clockwise"></i>
+          <span id="farolFooterTexto">Tela atualizada em —</span>
+        </span>
+        <div class="farol-sync-footer-meta">
+          <span id="farolFooterFonte" class="farol-sync-source"></span>
+          <span id="farolFooterAuto" class="farol-sync-pill">Auto-atualização: 30 min (aba ativa)</span>
+        </div>
+      </footer>
 
     </main>
   </div>

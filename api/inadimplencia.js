@@ -1,6 +1,8 @@
 import { getPool, toNumber } from './_db.js';
 import { requireAdminMaster } from './_auth.js';
 import { PBIX_FILIAIS, checkTableReadable } from './_dw.js';
+import { INAD_RULES_VERSION, parseRegras } from './_inad_rules.js';
+import { queryInadimplencia } from './_inad_query.js';
 
 const FILIAL_NOMES = {
   '010101': '010101 - Matriz Fortaleza',
@@ -39,15 +41,6 @@ function normalizeMargin(raw) {
   if (txt === 'C' || txt.startsWith('MARGEM C')) return 'C';
   return txt;
 }
-
-const EXECUTIVOS_INAD_LISTA = [
-  'Cristiane',
-  'Cristiano',
-  'Bruno',
-  'Fernando',
-  'Fabricio',
-  'Marcio'
-];
 
 function normalizarExecutivoInad(nome) {
   const norm = String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
@@ -105,6 +98,88 @@ function getHojeSaoPauloIso() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 }
 
+const SNAPSHOT_MIGRATION_SQL = `CREATE SCHEMA IF NOT EXISTS farol;
+CREATE TABLE IF NOT EXISTS farol.inadimplencia_fechamento (
+  id bigserial PRIMARY KEY,
+  competencia char(7) NOT NULL UNIQUE,
+  data_ref date NOT NULL,
+  gerado_em timestamptz NOT NULL DEFAULT now(),
+  gerado_por text NOT NULL,
+  origem text NOT NULL,
+  regras_versao text NOT NULL,
+  regras text[] NOT NULL DEFAULT '{}',
+  qtd_titulos integer NOT NULL,
+  saldo_total numeric(18,2) NOT NULL,
+  valor_total numeric(18,2) NOT NULL,
+  impacto jsonb,
+  observacao text
+);
+CREATE TABLE IF NOT EXISTS farol.inadimplencia_fechamento_titulo (
+  id bigserial PRIMARY KEY,
+  fechamento_id bigint NOT NULL REFERENCES farol.inadimplencia_fechamento(id) ON DELETE CASCADE,
+  cod_filial text, serie text, titulo text, parcela text, tipo text, loja text,
+  cod_cliente text, nome_cliente text, natureza text, cod_vendedor text, executivo text,
+  margem text, contrato text, faixa text,
+  emissao date, vencimento_real date,
+  valor_original numeric(18,2), saldo numeric(18,2)
+);
+CREATE INDEX IF NOT EXISTS ix_inad_fech_titulo ON farol.inadimplencia_fechamento_titulo (fechamento_id);
+GRANT USAGE ON SCHEMA farol TO :ROLE;
+GRANT SELECT, INSERT, DELETE ON farol.inadimplencia_fechamento TO :ROLE;
+GRANT SELECT, INSERT, DELETE ON farol.inadimplencia_fechamento_titulo TO :ROLE;
+GRANT USAGE, SELECT ON SEQUENCE farol.inadimplencia_fechamento_id_seq TO :ROLE;
+GRANT USAGE, SELECT ON SEQUENCE farol.inadimplencia_fechamento_titulo_id_seq TO :ROLE;`;
+
+function tabelaAusente(error) {
+  return ['42P01', '3F000', '42501'].includes(String(error?.code || ''));
+}
+
+function mapTitulo(r) {
+  return {
+    origem: r.origem || 'PROTHEUS (SE1010)',
+    executivo: normalizarExecutivoInad(r.executivo),
+    codCliente: r.cod_cliente,
+    cliente: r.cliente,
+    margem: normalizeMargin(r.margem),
+    contrato: r.contrato || '',
+    filial: formatarNomeFilial(r.cod_filial),
+    codFilial: r.cod_filial,
+    serie: r.serie,
+    titulo: r.titulo,
+    parcela: r.parcela,
+    loja: r.loja,
+    natureza: r.natureza,
+    tipo: r.tipo,
+    valorOriginal: toNumber(r.valor_original),
+    saldoInadimplente: toNumber(r.saldo_inadimplente),
+    faixa: r.faixa || null,
+    emissao: r.emissao || null,
+    vencimentoReal: r.vencimento_real || null
+  };
+}
+
+async function carregarFechamento(pool, competencia) {
+  const header = await pool.query(
+    `SELECT id, competencia, data_ref, gerado_em, origem, regras_versao, regras,
+            qtd_titulos, saldo_total, valor_total, impacto, observacao
+     FROM farol.inadimplencia_fechamento
+     WHERE competencia = $1`,
+    [competencia]
+  );
+  if (!header.rows.length) return null;
+  const h = header.rows[0];
+  const rows = await pool.query(
+    `SELECT cod_filial, serie, titulo, parcela, tipo, loja, cod_cliente, nome_cliente,
+            natureza, cod_vendedor, executivo, margem, contrato, faixa, emissao,
+            vencimento_real, valor_original, saldo
+     FROM farol.inadimplencia_fechamento_titulo
+     WHERE fechamento_id = $1
+     ORDER BY saldo DESC`,
+    [h.id]
+  );
+  return { h, rows: rows.rows };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ ok: false, error: 'Método não permitido.' });
@@ -117,6 +192,9 @@ export default async function handler(req, res) {
   const dataCorte = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query?.data_corte || ''))
     ? String(req.query.data_corte)
     : getHojeSaoPauloIso();
+  const competencia = /^\d{4}-\d{2}$/.test(String(req.query?.competencia || ''))
+    ? String(req.query.competencia)
+    : null;
   const executivoFiltro = String(req.query?.executivo || '').trim();
   const margemFiltro = String(req.query?.margem || '').trim().toUpperCase();
   const filiaisFiltro = String(req.query?.filiais || '')
@@ -126,160 +204,110 @@ export default async function handler(req, res) {
 
   try {
     const pool = getPool();
-    const statusSe1 = await checkTableReadable(pool, 'stage_protheus', 'se1010');
-
-    if (!statusSe1.canSelect) {
-      return res.status(200).json({
-        ok: true,
-        disponivel: false,
-        fonte: 'stage_protheus.se1010',
-        dataCorte,
-        escopo,
-        motivo: statusSe1.exists
-          ? 'A tabela stage_protheus.se1010 existe no DW, mas o usuário atual ainda não possui permissão SELECT.'
-          : 'A tabela stage_protheus.se1010 ainda não está disponível no DW.',
-        sqlLiberacao: 'GRANT SELECT ON stage_protheus.se1010 TO "weverson_feitosa.7d5d4d8dwe";',
-        titulos: [],
-        resumoExecutivo: [],
-        topClientes: []
-      });
-    }
-
     const filiaisParam = escopo === 'pbix' ? PBIX_FILIAIS : null;
-    const result = await pool.query(`
-      WITH se1_base AS MATERIALIZED (
-        SELECT
-          TRIM(COALESCE(se1.e1_cliente, '')) AS cod_cliente,
-          TRIM(COALESCE(se1.e1_loja, '')) AS loja,
-          NULLIF(TRIM(COALESCE(se1.e1_nomcli, '')), '') AS nomcli,
-          TRIM(COALESCE(se1.e1_filial, '')) AS cod_filial,
-          TRIM(COALESCE(se1.e1_prefixo, '')) AS serie,
-          TRIM(COALESCE(se1.e1_num, '')) AS titulo,
-          TRIM(COALESCE(se1.e1_tipo, '')) AS tipo,
-          NULLIF(TRIM(COALESCE(se1.e1_vend1, '')), '') AS vend1,
-          COALESCE(se1.e1_valor, 0)::numeric AS valor_original,
-          COALESCE(se1.e1_saldo, 0)::numeric AS saldo_inadimplente,
-          CASE
-            WHEN TRIM(COALESCE(se1.e1_emissao::text, '')) ~ '^\\d{8}$' THEN TO_DATE(TRIM(se1.e1_emissao::text), 'YYYYMMDD')
-            WHEN TRIM(COALESCE(se1.e1_emissao::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN SUBSTRING(TRIM(se1.e1_emissao::text), 1, 10)::date
-            ELSE NULL
-          END AS emissao,
-          CASE
-            WHEN TRIM(COALESCE(se1.e1_vencrea::text, '')) ~ '^\\d{8}$' THEN TO_DATE(TRIM(se1.e1_vencrea::text), 'YYYYMMDD')
-            WHEN TRIM(COALESCE(se1.e1_vencrea::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN SUBSTRING(TRIM(se1.e1_vencrea::text), 1, 10)::date
-            WHEN TRIM(COALESCE(se1.e1_vencto::text, '')) ~ '^\\d{8}$' THEN TO_DATE(TRIM(se1.e1_vencto::text), 'YYYYMMDD')
-            WHEN TRIM(COALESCE(se1.e1_vencto::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}' THEN SUBSTRING(TRIM(se1.e1_vencto::text), 1, 10)::date
-            ELSE NULL
-          END AS vencimento_real
-        FROM stage_protheus.se1010 se1
-        WHERE COALESCE(TRIM(se1.d_e_l_e_t_), '') <> '*'
-          AND COALESCE(se1.e1_saldo, 0) > 0
-          AND TRIM(COALESCE(se1.e1_tipo, '')) NOT IN ('RA', 'NCC')
-          AND TRIM(COALESCE(se1.e1_tipo, '')) NOT LIKE '%-'
-          AND ($1::text[] IS NULL OR TRIM(COALESCE(se1.e1_filial, '')) = ANY($1::text[]))
-      ),
-      se1_inad AS MATERIALIZED (
-        SELECT *
-        FROM se1_base
-        WHERE vencimento_real IS NOT NULL
-          AND vencimento_real < $2::date
-      ),
-      fiv_nf AS (
-        SELECT DISTINCT ON (
-          TRIM(COALESCE(f.cod_cliente, '')),
-          TRIM(COALESCE(f.loja, '')),
-          TRIM(COALESCE(f.numero_documento, '')),
-          TRIM(COALESCE(f.serie, ''))
-        )
-          TRIM(COALESCE(f.cod_cliente, '')) AS cod_cliente,
-          TRIM(COALESCE(f.loja, '')) AS loja,
-          TRIM(COALESCE(f.numero_documento, '')) AS numero_documento,
-          TRIM(COALESCE(f.serie, '')) AS serie,
-          NULLIF(TRIM(COALESCE(f.margem, '')), '') AS margem,
-          NULLIF(TRIM(COALESCE(f.numero_contrato, '')), '') AS numero_contrato,
-          NULLIF(TRIM(COALESCE(f.cod_vendedor, '')), '') AS cod_vendedor
-        FROM comercial.fato_itens_vendas f
-        WHERE NULLIF(TRIM(COALESCE(f.numero_documento, '')), '') IS NOT NULL
-          AND TRIM(COALESCE(f.numero_documento, '')) IN (SELECT DISTINCT titulo FROM se1_inad WHERE titulo <> '')
-        ORDER BY
-          TRIM(COALESCE(f.cod_cliente, '')),
-          TRIM(COALESCE(f.loja, '')),
-          TRIM(COALESCE(f.numero_documento, '')),
-          TRIM(COALESCE(f.serie, '')),
-          f.emissao DESC NULLS LAST
-      ),
-      dim_cli_loja AS (
-        SELECT DISTINCT ON (TRIM(COALESCE(c.cod_cliente, '')), TRIM(COALESCE(c.loja, '')))
-          TRIM(COALESCE(c.cod_cliente, '')) AS cod_cliente,
-          TRIM(COALESCE(c.loja, '')) AS loja,
-          NULLIF(TRIM(c.nome_cliente), '') AS nome_cliente
-        FROM comercial.dim_clientes c
-        WHERE TRIM(COALESCE(c.cod_cliente, '')) IN (SELECT DISTINCT cod_cliente FROM se1_inad WHERE cod_cliente <> '')
-        ORDER BY TRIM(COALESCE(c.cod_cliente, '')), TRIM(COALESCE(c.loja, '')), c.data_modificacao DESC NULLS LAST, c.id DESC
-      ),
-      dim_cli_cod AS (
-        SELECT DISTINCT ON (TRIM(COALESCE(c.cod_cliente, '')))
-          TRIM(COALESCE(c.cod_cliente, '')) AS cod_cliente,
-          NULLIF(TRIM(c.nome_cliente), '') AS nome_cliente
-        FROM comercial.dim_clientes c
-        WHERE TRIM(COALESCE(c.cod_cliente, '')) IN (SELECT DISTINCT cod_cliente FROM se1_inad WHERE cod_cliente <> '')
-        ORDER BY TRIM(COALESCE(c.cod_cliente, '')), c.data_modificacao DESC NULLS LAST, c.id DESC
-      ),
-      vend_nome AS (
-        SELECT DISTINCT ON (TRIM(COALESCE(v.cod_vendedor, '')))
-          TRIM(COALESCE(v.cod_vendedor, '')) AS cod_vendedor,
-          UPPER(COALESCE(NULLIF(TRIM(v.nome_vendedor), ''), 'Vendedor ' || TRIM(COALESCE(v.cod_vendedor, '')))) AS nome_vendedor
-        FROM comercial.dim_vendedor v
-        ORDER BY TRIM(COALESCE(v.cod_vendedor, '')), v.id DESC
-      )
-      SELECT
-        'PROTHEUS (SE1010)' AS origem,
-        COALESCE(v.nome_vendedor, 'SEM EXECUTIVO') AS executivo,
-        s.cod_cliente,
-        COALESCE(cl.nome_cliente, cc.nome_cliente, s.nomcli, 'Cliente ' || s.cod_cliente) AS cliente,
-        COALESCE(fn.margem, 'Sem Margem') AS margem,
-        COALESCE(fn.numero_contrato, '') AS contrato,
-        s.cod_filial,
-        s.serie,
-        s.titulo,
-        s.tipo,
-        s.valor_original,
-        s.saldo_inadimplente,
-        TO_CHAR(s.emissao, 'YYYY-MM-DD') AS emissao,
-        TO_CHAR(s.vencimento_real, 'YYYY-MM-DD') AS vencimento_real
-      FROM se1_inad s
-      LEFT JOIN fiv_nf fn
-        ON fn.cod_cliente = s.cod_cliente
-       AND fn.loja = s.loja
-       AND fn.numero_documento = s.titulo
-       AND fn.serie = s.serie
-      LEFT JOIN dim_cli_loja cl
-        ON cl.cod_cliente = s.cod_cliente
-       AND cl.loja = s.loja
-      LEFT JOIN dim_cli_cod cc
-        ON cc.cod_cliente = s.cod_cliente
-      LEFT JOIN vend_nome v
-        ON v.cod_vendedor = COALESCE(s.vend1, fn.cod_vendedor)
-      ORDER BY s.saldo_inadimplente DESC
-    `, [filiaisParam, dataCorte]);
+    let titulos = [];
+    let meta = {};
 
-    let titulos = result.rows.map(r => ({
-      origem: r.origem,
-      executivo: normalizarExecutivoInad(r.executivo),
-      codCliente: r.cod_cliente,
-      cliente: r.cliente,
-      margem: normalizeMargin(r.margem),
-      contrato: r.contrato,
-      filial: formatarNomeFilial(r.cod_filial),
-      codFilial: r.cod_filial,
-      serie: r.serie,
-      titulo: r.titulo,
-      tipo: r.tipo,
-      valorOriginal: toNumber(r.valor_original),
-      saldoInadimplente: toNumber(r.saldo_inadimplente),
-      emissao: r.emissao || null,
-      vencimentoReal: r.vencimento_real || null
-    }));
+    if (competencia) {
+      let fechado;
+      try {
+        fechado = await carregarFechamento(pool, competencia);
+      } catch (error) {
+        if (!tabelaAusente(error)) throw error;
+        return res.status(200).json({
+          ok: true,
+          disponivel: false,
+          fonte: 'farol.inadimplencia_fechamento',
+          competencia,
+          motivo: 'O fechamento mensal ainda não está habilitado no DW.',
+          sqlLiberacao: SNAPSHOT_MIGRATION_SQL,
+          titulos: [],
+          resumoExecutivo: [],
+          topClientes: []
+        });
+      }
+      if (!fechado) {
+        return res.status(404).json({
+          ok: false,
+          error: `Não existe fechamento publicado para ${competencia}.`
+        });
+      }
+      const { h, rows } = fechado;
+      titulos = rows
+        .filter(r => escopo !== 'pbix' || PBIX_FILIAIS.includes(String(r.cod_filial || '').trim()))
+        .map(r => mapTitulo({
+          ...r,
+          cliente: r.nome_cliente,
+          saldo_inadimplente: r.saldo
+        }));
+      meta = {
+        posicao: 'fechamento',
+        dataCorte: h.data_ref,
+        competencia: h.competencia,
+        geradoEm: h.gerado_em,
+        origemFechamento: h.origem,
+        regrasVersao: h.regras_versao,
+        regras: h.regras,
+        impactoRegras: h.impacto || null,
+        observacao: h.observacao
+      };
+    } else {
+      const statusSe1 = await checkTableReadable(pool, 'stage_protheus', 'se1010');
+      if (!statusSe1.canSelect) {
+        return res.status(200).json({
+          ok: true,
+          disponivel: false,
+          fonte: 'stage_protheus.se1010',
+          dataCorte,
+          escopo,
+          motivo: statusSe1.exists
+            ? 'A tabela stage_protheus.se1010 existe no DW, mas o usuário atual ainda não possui permissão SELECT.'
+            : 'A tabela stage_protheus.se1010 ainda não está disponível no DW.',
+          sqlLiberacao: 'GRANT SELECT ON stage_protheus.se1010 TO "weverson_feitosa.7d5d4d8dwe";',
+          titulos: [],
+          resumoExecutivo: [],
+          topClientes: []
+        });
+      }
+
+      const regras = parseRegras(req.query?.regras);
+      const [{ titulos: linhas, impacto }, freshRes] = await Promise.all([
+        queryInadimplencia(pool, {
+          filiais: filiaisParam,
+          corte: dataCorte,
+          regras
+        }),
+        pool.query(`
+          SELECT
+            (SELECT TO_CHAR(MAX(TO_DATE(TRIM(e1_emissao), 'YYYYMMDD')), 'YYYY-MM-DD')
+             FROM stage_protheus.se1010
+             WHERE COALESCE(TRIM(d_e_l_e_t_), '') <> '*' AND TRIM(COALESCE(e1_emissao, '')) ~ '^\\d{8}$') AS max_emissao,
+            (SELECT TO_CHAR(MAX(TO_DATE(TRIM(e1_baixa), 'YYYYMMDD')), 'YYYY-MM-DD')
+             FROM stage_protheus.se1010
+             WHERE COALESCE(TRIM(d_e_l_e_t_), '') <> '*' AND TRIM(COALESCE(e1_baixa, '')) ~ '^\\d{8}$') AS max_baixa,
+            (SELECT MAX(s_t_a_m_p_) FROM stage_protheus.se1010 WHERE COALESCE(TRIM(d_e_l_e_t_), '') <> '*') AS max_stamp,
+            (SELECT MAX(emissao)::text FROM comercial.fato_itens_vendas) AS max_margem_emissao
+        `)
+      ]);
+      const fresh = freshRes.rows[0] || {};
+
+      titulos = linhas.map(mapTitulo);
+      meta = {
+        posicao: 'saldo_atual',
+        dataCorte,
+        atualizacao: {
+          protheusUltimaEmissao: fresh.max_emissao || null,
+          protheusUltimaBaixa: fresh.max_baixa || null,
+          protheusUltimaCarga: fresh.max_stamp || null,
+          protheusMargemAte: fresh.max_margem_emissao ? String(fresh.max_margem_emissao).slice(0, 10) : null
+        },
+        regrasVersao: INAD_RULES_VERSION,
+        regras,
+        impactoRegras: impacto,
+        observacao: 'Saldo atual da réplica Protheus (SE1010), com as regras do relatório: naturezas de faturamento, janela de 365 dias, exclusão de RA/ADT, mútuos, intercompany, venda de ativos e seguro Petrobras. Retenções de ISS/INSS são deduzidas. A data filtra vencimentos; não recompõe o saldo de uma data passada. Informakon não faz parte da SE1.',
+        conciliacao: 'pendente'
+      };
+    }
 
     const filialMap = new Map();
     for (const t of titulos) {
@@ -322,9 +350,12 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       disponivel: true,
-      fonte: 'stage_protheus.se1010 + comercial.fato_itens_vendas',
-      dataCorte,
+      fonte: competencia
+        ? 'farol.inadimplencia_fechamento (SE1010 congelada)'
+        : 'stage_protheus.se1010 + comercial.fato_itens_vendas',
       escopo,
+      consultadoEm: new Date().toISOString(),
+      ...meta,
       filiaisDisponiveis,
       resumoExecutivo,
       topClientes,

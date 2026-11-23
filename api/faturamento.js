@@ -298,8 +298,10 @@ export default async function handler(req, res) {
       `, [yearsInRange.map(Number)]),
       pool.query(`
         SELECT
-          (SELECT MAX(emissao)::text FROM comercial.fato_itens_vendas) AS max_emissao,
-          (SELECT MAX(data_alteracao)::text FROM comercial.fato_itens_vendas) AS max_alteracao,
+          (SELECT TO_CHAR(MAX(TO_DATE(TRIM(d2_emissao), 'YYYYMMDD')), 'YYYY-MM-DD')
+           FROM stage_protheus.sd2010
+           WHERE COALESCE(TRIM(d_e_l_e_t_), '') <> '*' AND TRIM(COALESCE(d2_emissao, '')) ~ '^\\d{8}$') AS max_emissao,
+          (SELECT MAX(s_t_a_m_p_)::text FROM stage_protheus.sd2010 WHERE COALESCE(TRIM(d_e_l_e_t_), '') <> '*') AS max_alteracao,
           (SELECT COUNT(*)::int FROM comercial.faturamento_bruto) AS fat_bruto_rows
       `),
       checkTableReadable(pool, 'financeiro', 'protheus_se1_gold_nota_fiscais_entrada'),
@@ -495,7 +497,7 @@ export default async function handler(req, res) {
         busca: buscaFiltro
       },
       fontes: {
-        faturamentoPrincipal: 'comercial.fato_itens_vendas (SD2 · deduplicação multi-cliente + TES comerciais + CFOP receita)',
+        faturamentoPrincipal: 'stage_protheus.sd2010 (SD2 · NFs ativas sem duplicidade + executivo via fato_itens_vendas)',
         metasUnidades: 'comercial.indicador_unidade (ZI0/ZI1 · ZI1_VLMALV)',
         metasExecutivos: 'comercial.dim_meta_vendedores (alvo anual deduplicado)',
         faturamentoBrutoLegadoRows: Number(freshRow.fat_bruto_rows || 0)

@@ -32,6 +32,118 @@ function podeAcessarRelatorios(user) {
   return isAdminMaster(user.email) || Boolean(user.permissoes?.relatorios?.liberado);
 }
 
+// Controle padrão de atualização das telas e auto-refresh leve (30 min apenas com aba ativa)
+const AUTO_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+const CATALOGO_STATUS_CACHE_MS = 5 * 60 * 1000;
+const farolSyncMeta = new Map();
+let telaAtualKey = 'launcher';
+let catalogoStatusLastFetch = 0;
+let autoRefreshEmCurso = false;
+
+function formatarDataHoraBr(valor) {
+  if (!valor) return '—';
+  const d = valor instanceof Date ? valor : new Date(valor);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('pt-BR');
+}
+
+function registrarAtualizacaoTela(chave, { updatedAt = Date.now(), sourceInfo = '', autoRefresh = false } = {}) {
+  const ts = typeof updatedAt === 'number' ? updatedAt : new Date(updatedAt).getTime();
+  farolSyncMeta.set(chave, {
+    updatedAt: Number.isFinite(ts) ? ts : Date.now(),
+    sourceInfo: String(sourceInfo || ''),
+    autoRefresh: Boolean(autoRefresh)
+  });
+  if (chave === telaAtualKey) {
+    renderizarRodapeSync();
+  }
+}
+
+function renderizarRodapeSync() {
+  const textoEl = document.getElementById('farolFooterTexto');
+  const fonteEl = document.getElementById('farolFooterFonte');
+  const autoEl = document.getElementById('farolFooterAuto');
+  if (!textoEl || !fonteEl || !autoEl) return;
+
+  const meta = farolSyncMeta.get(telaAtualKey);
+  if (!meta) {
+    textoEl.textContent = `Tela atualizada em ${formatarDataHoraBr(Date.now())}`;
+    fonteEl.textContent = '';
+    autoEl.textContent = 'Atualização sob demanda';
+    return;
+  }
+
+  textoEl.textContent = `Atualizado em ${formatarDataHoraBr(meta.updatedAt)}`;
+  fonteEl.textContent = meta.sourceInfo || '';
+  autoEl.textContent = meta.autoRefresh
+    ? 'Auto-atualização: 30 min (aba ativa)'
+    : 'Atualização sob demanda';
+}
+
+async function carregarStatusCatalogoRelatorios(forcar = false) {
+  if (!podeAcessarRelatorios(currentUser)) return;
+  const agora = Date.now();
+  if (!forcar && catalogoStatusLastFetch && (agora - catalogoStatusLastFetch) < CATALOGO_STATUS_CACHE_MS) {
+    return;
+  }
+  try {
+    const dados = await fetchRelatorioAutenticado('/api/relatorios?modo=status');
+    catalogoStatusLastFetch = Date.now();
+    const at = dados.atualizacao || {};
+    const partes = [];
+    if (at.protheusSd2Emissao) partes.push(`Protheus SD2 até ${formatarDataBr(at.protheusSd2Emissao)}`);
+    if (at.protheusSe1Emissao) partes.push(`SE1 até ${formatarDataBr(at.protheusSe1Emissao)}`);
+    if (at.bitrixUltimaModificacao) partes.push(`Bitrix ${formatarDataHoraBr(at.bitrixUltimaModificacao)}`);
+    registrarAtualizacaoTela('relatorios:catalogo', {
+      updatedAt: dados.consultadoEm || Date.now(),
+      sourceInfo: partes.join(' · ') || 'Bitrix + Protheus (DW)',
+      autoRefresh: true
+    });
+  } catch {
+    registrarAtualizacaoTela('relatorios:catalogo', {
+      updatedAt: Date.now(),
+      sourceInfo: 'Catálogo Central de Relatórios',
+      autoRefresh: true
+    });
+  }
+}
+
+async function atualizarTelaAtivaSilencioso() {
+  if (autoRefreshEmCurso || !currentUser || document.visibilityState !== 'visible') return;
+  const meta = farolSyncMeta.get(telaAtualKey);
+  if (!meta || !meta.autoRefresh) return;
+  if ((Date.now() - meta.updatedAt) < AUTO_REFRESH_INTERVAL_MS) return;
+
+  autoRefreshEmCurso = true;
+  try {
+    if (telaAtualKey === 'gestao') {
+      await carregarUsuarios();
+      renderTabelaUsuarios(document.getElementById('searchUsuario')?.value?.toLowerCase?.() || '');
+    } else if (telaAtualKey === 'relatorios:catalogo') {
+      await carregarStatusCatalogoRelatorios(true);
+    } else if (telaAtualKey === 'relatorios:contratos') {
+      await carregarContratos(true);
+    } else if (telaAtualKey === 'relatorios:visao-geral') {
+      await carregarRelatorios(true);
+    } else if (telaAtualKey === 'relatorios:rmr') {
+      await window.FarolReportsExtra?.refreshRmr?.();
+    } else if (telaAtualKey === 'relatorios:faturamento') {
+      await window.FarolReportsExtra?.refreshFaturamentoSd2?.();
+    } else if (telaAtualKey === 'relatorios:inadimplencia') {
+      await window.FarolReportsExtra?.refreshInadimplencia?.();
+    }
+  } finally {
+    autoRefreshEmCurso = false;
+  }
+}
+
+setInterval(atualizarTelaAtivaSilencioso, 60 * 1000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    atualizarTelaAtivaSilencioso();
+  }
+});
+
 // Domínios válidos corporativos
 const DOMINIOS_AUTORIZADOS = [
   'cordeiroguindastes.com.br',
@@ -84,6 +196,52 @@ let lastSupabaseAuthError = '';
 let contratosCarregados = false;
 let contratosPayload = null;
 let contratosFiltroPrazo = 'todos';
+const farolChildren = new Map();
+
+async function obterSupabaseAccessToken() {
+  let token = '';
+  if (sbClient && sbClient.auth) {
+    try {
+      const { data } = await sbClient.auth.getSession();
+      token = data?.session?.access_token || '';
+      if (!token) {
+        const refreshed = await sbClient.auth.refreshSession();
+        token = refreshed?.data?.session?.access_token || '';
+      }
+    } catch (_) {}
+  }
+  return token;
+}
+
+async function tratarRedirecionamentoDestino() {
+  const params = new URLSearchParams(window.location.search);
+  const destino = params.get('destino');
+  if (destino !== 'mapa' || !currentUser) return;
+
+  const isMaster = isAdminMaster(currentUser.email);
+  if ((currentUser.senha || '') === 'Cordeiro@2026' && !isMaster) return;
+
+  if (!currentUser.permissoes?.mapa?.liberado) {
+    showToast('Seu usuário não possui permissão de acesso ao Mapa de Ocupação.', 'error');
+    return;
+  }
+
+  const token = await obterSupabaseAccessToken();
+  if (token) {
+    window.location.replace(`${URLS_SISTEMAS.mapa}/#farol_jwt=${encodeURIComponent(token)}`);
+    return;
+  }
+
+  // Sessão local antiga sem JWT do Supabase Auth: exige login único para sincronizar
+  localStorage.removeItem(STORAGE_KEY_AUTH);
+  currentUser = null;
+  showLoginScreen();
+  const erroBox = document.getElementById('loginErro');
+  if (erroBox) {
+    erroBox.textContent = 'Confirme seu login para sincronizar o acesso direto ao Mapa de Ocupação.';
+    erroBox.style.display = 'flex';
+  }
+}
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', async () => {
@@ -258,9 +416,22 @@ function showAppScreen() {
   }
 
   aplicarRotaUrlAtual({ replace: true });
+  tratarRedirecionamentoDestino();
 }
 
 function setupEventListeners() {
+  // Handoff de sessão verificada para módulos externos (ex.: Mapa de Ocupação)
+  window.addEventListener('message', async (event) => {
+    if (event.data?.type !== 'farol-session-request') return;
+    if (event.origin !== URLS_SISTEMAS.mapa) return;
+    const expectedChild = farolChildren.get('mapa');
+    if (!expectedChild || event.source !== expectedChild) return;
+    const token = await obterSupabaseAccessToken();
+    if (token && event.source) {
+      event.source.postMessage({ type: 'farol-session', token }, event.origin);
+    }
+  });
+
   // Login
   document.getElementById('formLogin').addEventListener('submit', handleLogin);
 
@@ -436,6 +607,26 @@ async function handleLogin(e) {
     return;
   }
 
+  // Se o usuário existe na tabela usuarios_nps (legado), mas nunca foi criado no Supabase Auth, provisiona automaticamente
+  if (senhaTabelaValida && !authSessaoValida && sbClient && sbClient.auth) {
+    try {
+      const { data: signUpData, error: signUpErr } = await sbClient.auth.signUp({
+        email,
+        password: senha,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: { nome: user.nome, cargo: user.cargo }
+        }
+      });
+      if (!signUpErr && signUpData?.session?.access_token) {
+        authSessaoValida = true;
+        lastSupabaseAuthError = '';
+      } else if (signUpErr && !String(signUpErr.message || '').toLowerCase().includes('already')) {
+        lastSupabaseAuthError = signUpErr.message || lastSupabaseAuthError;
+      }
+    } catch (_) {}
+  }
+
   currentUser = user;
   localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(currentUser));
   showAppScreen();
@@ -480,7 +671,8 @@ const RELATORIO_ROTAS = {
   catalogo: '/relatorios',
   contratos: '/relatorios/contratos',
   rmr: '/relatorios/rmr-comercial',
-  inadimplencia: '/relatorios/inadimplencia'
+  inadimplencia: '/relatorios/inadimplencia',
+  faturamento: '/relatorios/faturamento'
 };
 
 const ROTA_PARA_RELATORIO = {
@@ -488,7 +680,8 @@ const ROTA_PARA_RELATORIO = {
   '/relatorios/': 'catalogo',
   '/relatorios/contratos': 'contratos',
   '/relatorios/rmr-comercial': 'rmr',
-  '/relatorios/inadimplencia': 'inadimplencia'
+  '/relatorios/inadimplencia': 'inadimplencia',
+  '/relatorios/faturamento': 'faturamento'
 };
 
 function sincronizarUrlNavegador(caminho, { skipHistory = false, replace = false } = {}) {
@@ -526,13 +719,17 @@ function switchTab(tab, options = {}) {
   document.querySelectorAll('.tab-view').forEach(view => view.classList.remove('active'));
 
   if (tab === 'launcher') {
+    telaAtualKey = 'launcher';
     document.getElementById('tabLauncherBtn').classList.add('active');
     document.getElementById('viewLauncher').classList.add('active');
+    renderizarRodapeSync();
     sincronizarUrlNavegador('/', options);
   } else if (tab === 'gestao' && isAdminMaster(currentUser?.email)) {
+    telaAtualKey = 'gestao';
     document.getElementById('tabGestaoBtn').classList.add('active');
     document.getElementById('viewGestao').classList.add('active');
     renderTabelaUsuarios();
+    renderizarRodapeSync();
     sincronizarUrlNavegador('/gestao', options);
   } else if (tab === 'relatorios' && podeAcessarRelatorios(currentUser)) {
     document.getElementById('tabRelatoriosBtn').classList.add('active');
@@ -544,11 +741,13 @@ function switchTab(tab, options = {}) {
 function abrirRelatorio(tipo = 'catalogo', options = {}) {
   if (!RELATORIO_ROTAS[tipo]) tipo = 'catalogo';
   relatorioAtivo = tipo;
+  telaAtualKey = `relatorios:${tipo}`;
   const catalogo = document.getElementById('relatoriosCatalogo');
   const visaoGeral = document.getElementById('relatorioVisaoGeral');
   const contratos = document.getElementById('relatorioContratos');
   const rmr = document.getElementById('relatorioRmr');
   const faturamento = document.getElementById('relatorioFaturamento');
+  const faturamentoSd2 = document.getElementById('relatorioFaturamentoSd2');
   const inadimplencia = document.getElementById('relatorioInadimplencia');
   const topBar = document.getElementById('relatoriosTopBar');
   const breadcrumbAtual = document.getElementById('relatoriosBreadcrumbAtual');
@@ -557,6 +756,7 @@ function abrirRelatorio(tipo = 'catalogo', options = {}) {
   const acoesContratos = document.getElementById('acoesContratos');
   const acoesRmr = document.getElementById('acoesRmr');
   const acoesFaturamento = document.getElementById('acoesFaturamento');
+  const acoesFaturamentoSd2 = document.getElementById('acoesFaturamentoSd2');
   const acoesInadimplencia = document.getElementById('acoesInadimplencia');
   const titulo = document.getElementById('relatoriosTitulo');
   const desc = document.getElementById('relatoriosDesc');
@@ -565,7 +765,8 @@ function abrirRelatorio(tipo = 'catalogo', options = {}) {
   visaoGeral.style.display = tipo === 'visao-geral' ? 'block' : 'none';
   contratos.style.display = tipo === 'contratos' ? 'block' : 'none';
   if (rmr) rmr.style.display = tipo === 'rmr' ? 'block' : 'none';
-  if (faturamento) faturamento.style.display = tipo === 'faturamento' ? 'block' : 'none';
+  if (faturamento) faturamento.style.display = 'none';
+  if (faturamentoSd2) faturamentoSd2.style.display = tipo === 'faturamento' ? 'block' : 'none';
   if (inadimplencia) inadimplencia.style.display = tipo === 'inadimplencia' ? 'block' : 'none';
 
   if (topBar) topBar.style.display = tipo === 'catalogo' ? 'none' : 'flex';
@@ -573,7 +774,8 @@ function abrirRelatorio(tipo = 'catalogo', options = {}) {
   acoesVisaoGeral.style.display = tipo === 'visao-geral' ? 'flex' : 'none';
   acoesContratos.style.display = tipo === 'contratos' ? 'flex' : 'none';
   if (acoesRmr) acoesRmr.style.display = tipo === 'rmr' ? 'flex' : 'none';
-  if (acoesFaturamento) acoesFaturamento.style.display = tipo === 'faturamento' ? 'flex' : 'none';
+  if (acoesFaturamento) acoesFaturamento.style.display = 'none';
+  if (acoesFaturamentoSd2) acoesFaturamentoSd2.style.display = tipo === 'faturamento' ? 'flex' : 'none';
   if (acoesInadimplencia) acoesInadimplencia.style.display = tipo === 'inadimplencia' ? 'flex' : 'none';
 
   if (tipo === 'visao-geral') {
@@ -592,10 +794,10 @@ function abrirRelatorio(tipo = 'catalogo', options = {}) {
     if (breadcrumbAtual) breadcrumbAtual.textContent = 'RMR Comercial';
     window.FarolReportsExtra?.openRmr?.();
   } else if (tipo === 'faturamento') {
-    titulo.textContent = 'Faturamento & Recebimentos Efetivos';
-    desc.textContent = 'Competência fiscal Protheus (emissão NF-e), evolução mensal, analítico exportável e seção separada de liquidação financeira (baixa).';
-    if (breadcrumbAtual) breadcrumbAtual.textContent = 'Faturamento';
-    window.FarolReportsExtra?.openFaturamento?.();
+    titulo.textContent = 'Prévia de Faturamento (SD2)';
+    desc.textContent = 'Faturamento comercial lido direto da SD2 do Protheus, com os expurgos da planilha de premiação e o impacto de cada regra.';
+    if (breadcrumbAtual) breadcrumbAtual.textContent = 'Prévia de Faturamento (SD2)';
+    window.FarolReportsExtra?.openFaturamentoSd2?.();
   } else if (tipo === 'inadimplencia') {
     titulo.textContent = 'Inadimplência por Executivo, Margem & Cliente';
     desc.textContent = 'Carteira inadimplente (Protheus SE1010 + Margem D2_YMARGCT) com visão consolidada por Executivo, Margem A/B/C e exportação Excel.';
@@ -604,8 +806,18 @@ function abrirRelatorio(tipo = 'catalogo', options = {}) {
   } else {
     titulo.textContent = 'Central de Relatórios';
     desc.textContent = 'Escolha um painel corporativo conectado em tempo real ao Bitrix e ao Protheus.';
+    if (!farolSyncMeta.has('relatorios:catalogo')) {
+      registrarAtualizacaoTela('relatorios:catalogo', {
+        updatedAt: Date.now(),
+        sourceInfo: 'Consultando status do DW...',
+        autoRefresh: true
+      });
+    }
+    carregarStatusCatalogoRelatorios(false);
   }
 
+  renderizarRodapeSync();
+  verificarBannerAuthRelatorios();
   sincronizarUrlNavegador(RELATORIO_ROTAS[tipo], options);
 }
 
@@ -852,22 +1064,49 @@ function renderizarGraficoMensal(itens) {
   });
 }
 
-async function fetchRelatorioAutenticado(url) {
-  let token = '';
-  if (sbClient && sbClient.auth) {
-    const { data } = await sbClient.auth.getSession();
-    token = data?.session?.access_token || '';
-    if (!token) {
-      try {
-        const refreshed = await sbClient.auth.refreshSession();
-        token = refreshed?.data?.session?.access_token || '';
-      } catch (_) {}
-    }
+async function verificarBannerAuthRelatorios() {
+  const banner = document.getElementById('relatoriosAuthBanner');
+  if (!banner) return;
+  if (!currentUser || !podeAcessarRelatorios(currentUser)) {
+    banner.style.display = 'none';
+    return;
   }
+  const token = await obterSupabaseAccessToken();
+  if (token) {
+    banner.style.display = 'none';
+    return;
+  }
+  const detalhe = lastSupabaseAuthError ? ` (${escaparHtml(lastSupabaseAuthError)})` : '';
+  banner.style.display = 'flex';
+  banner.innerHTML = `
+    <i class="ph ph-warning-circle"></i>
+    <div style="flex:1;">
+      <strong>Sessão do servidor não sincronizada${detalhe}:</strong>
+      você entrou com a senha do cadastro local, mas os painéis de Relatórios exigem sessão válida no Supabase Auth.
+      <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;">
+        <button type="button" id="btnSyncAuthEsqueci" class="btn-secondary-reports" style="padding:6px 12px;font-size:12px;">
+          <i class="ph ph-envelope-simple"></i> Enviar link para sincronizar senha
+        </button>
+        <button type="button" id="btnSyncAuthSair" class="btn-secondary-reports" style="padding:6px 12px;font-size:12px;">
+          <i class="ph ph-sign-out"></i> Sair e entrar novamente
+        </button>
+      </div>
+    </div>`;
+  document.getElementById('btnSyncAuthEsqueci')?.addEventListener('click', () => {
+    const emailInput = document.getElementById('inputEmailEsqueci');
+    if (emailInput && currentUser?.email) emailInput.value = currentUser.email;
+    abrirModal('modalEsqueci');
+  });
+  document.getElementById('btnSyncAuthSair')?.addEventListener('click', handleLogout);
+}
+
+async function fetchRelatorioAutenticado(url) {
+  const token = await obterSupabaseAccessToken();
 
   if (!token) {
+    verificarBannerAuthRelatorios();
     const detalhe = lastSupabaseAuthError ? ` (${lastSupabaseAuthError})` : '';
-    throw new Error(`Sessão não autenticada no servidor${detalhe}. Clique em "Sair" e entre novamente (ou use "Esqueci minha senha" para sincronizar sua conta).`);
+    throw new Error(`Sessão não autenticada no servidor${detalhe}. Clique em "Enviar link para sincronizar senha" no topo ou em "Sair" e entre novamente.`);
   }
 
   const resposta = await fetch(url, {
@@ -877,6 +1116,32 @@ async function fetchRelatorioAutenticado(url) {
   const dados = await resposta.json();
   if (!resposta.ok || !dados.ok) {
     throw new Error(dados.error || 'Falha ao consultar os dados.');
+  }
+  return dados;
+}
+
+async function enviarRelatorioAutenticado(url, payload) {
+  const token = await obterSupabaseAccessToken();
+
+  if (!token) {
+    const detalhe = lastSupabaseAuthError ? ` (${lastSupabaseAuthError})` : '';
+    throw new Error(`Sessão não autenticada no servidor${detalhe}. Clique em "Sair" e entre novamente.`);
+  }
+
+  const resposta = await fetch(url, {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload || {})
+  });
+  const dados = await resposta.json();
+  if (!resposta.ok || !dados.ok) {
+    const erro = new Error(dados.error || 'Falha ao executar a operação.');
+    erro.detalhe = dados;
+    throw erro;
   }
   return dados;
 }
@@ -918,9 +1183,14 @@ async function carregarRelatorios(forcar = false) {
     }
 
     const protheusAtualizado = dados.atualizacao?.protheus
-      ? new Date(dados.atualizacao.protheus).toLocaleDateString('pt-BR')
+      ? formatarDataBr(dados.atualizacao.protheus)
       : 'sem data';
     document.getElementById('relatoriosAtualizadoEm').textContent = `Protheus atualizado até ${protheusAtualizado}`;
+    registrarAtualizacaoTela('relatorios:visao-geral', {
+      updatedAt: dados.geradoEm || Date.now(),
+      sourceInfo: `Protheus SD2 até ${protheusAtualizado} · Bitrix pipeline`,
+      autoRefresh: true
+    });
 
     renderizarBarraFiltrosVisaoGeral();
     renderizarGraficoMensal(dados.mensal);
@@ -1131,7 +1401,44 @@ async function carregarContratos(forcar = false) {
     const bitrixAtualizado = dados.atualizacao?.bitrix
       ? new Date(dados.atualizacao.bitrix).toLocaleString('pt-BR')
       : 'sem data';
-    document.getElementById('contratosAtualizadoEm').textContent = `Bitrix atualizado em ${bitrixAtualizado}`;
+    const extracaoTexto = dados.atualizacao?.extracaoBitrix
+      ? ` · extração DW ${new Date(dados.atualizacao.extracaoBitrix).toLocaleString('pt-BR')}`
+      : '';
+    document.getElementById('contratosAtualizadoEm').textContent = `Última alteração Bitrix: ${bitrixAtualizado}${extracaoTexto}`;
+    registrarAtualizacaoTela('relatorios:contratos', {
+      updatedAt: dados.geradoEm || Date.now(),
+      sourceInfo: `Bitrix última alt. ${bitrixAtualizado}${extracaoTexto}`,
+      autoRefresh: true
+    });
+
+    const syncAlert = document.getElementById('contratosSyncAlert');
+    if (syncAlert) {
+      const syncMap = dados.camposNovosSincronizados || {};
+      const rotulosCampos = {
+        tipoContrato: 'Tipo de contrato (UF_CRM_1794938969189)',
+        vigenciaInicial: 'Vigência inicial (UF_CRM_1795008029033)',
+        vigenciaFinal: 'Vigência final (UF_CRM_1795008143114)',
+        contratoAssinado: 'Contrato assinado (UF_CRM_1795008280665)',
+        indiceReajuste: 'Índice de reajuste (UF_CRM_1795008431097)',
+        aditivoPdf: 'Aditivo PDF (UF_CRM_1795008010146)'
+      };
+      const pendentes = Object.entries(rotulosCampos)
+        .filter(([k]) => syncMap[k] === false)
+        .map(([, label]) => label);
+      if (pendentes.length) {
+        syncAlert.style.display = 'flex';
+        syncAlert.innerHTML = `
+          <i class="ph ph-warning"></i>
+          <div>
+            <strong>Campos novos do Bitrix ainda ausentes em <code>stage_bitrix.b_crm_deal_uf</code>:</strong>
+            ${escaparHtml(pendentes.join(', '))}.
+            <p>O painel está usando os campos legados de vigência e tipo de contrato como fallback até a TI incluir essas colunas na extração do DW.</p>
+          </div>`;
+      } else {
+        syncAlert.style.display = 'none';
+        syncAlert.innerHTML = '';
+      }
+    }
 
     preencherSelectFiltro('filtroContratoUnidade', dados.filtros?.unidades || [], 'Todas as unidades');
     preencherSelectFiltro('filtroContratoConsultor', dados.filtros?.consultores || [], 'Todos os executivos');
@@ -1209,15 +1516,21 @@ function renderLauncher() {
     mapaBadge.className = 'badge-status-app liberado';
     mapaBadge.innerHTML = `<i class="ph ph-check-circle"></i> Liberado (${p.mapa.perfil})`;
     mapaBtn.className = 'btn-launch-app btn-primary-launch';
-    mapaBtn.href = getSSORedirectUrl('mapa');
+    mapaBtn.href = URLS_SISTEMAS.mapa;
     mapaBtn.target = '_blank';
     mapaBtn.innerHTML = '<span>Acessar Mapa de Ocupação</span> <i class="ph ph-arrow-square-out"></i>';
+    mapaBtn.onclick = (e) => {
+      e.preventDefault();
+      const child = window.open(URLS_SISTEMAS.mapa, 'farol-mapa');
+      if (child) farolChildren.set('mapa', child);
+    };
   } else {
     mapaBadge.className = 'badge-status-app bloqueado';
     mapaBadge.innerHTML = '<i class="ph ph-lock-key"></i> Sem Acesso';
     mapaBtn.className = 'btn-launch-app btn-disabled-launch';
     mapaBtn.removeAttribute('href');
     mapaBtn.removeAttribute('target');
+    mapaBtn.onclick = null;
     mapaBtn.innerHTML = '<span>Acesso Bloqueado</span> <i class="ph ph-lock"></i>';
   }
 
@@ -1260,6 +1573,12 @@ function renderLauncher() {
     funilBtn.removeAttribute('target');
     funilBtn.innerHTML = '<span>Acesso Bloqueado</span> <i class="ph ph-lock"></i>';
   }
+
+  registrarAtualizacaoTela('launcher', {
+    updatedAt: Date.now(),
+    sourceInfo: 'Painel Farol · Sessão corporativa',
+    autoRefresh: false
+  });
 }
 
 function getSSORedirectUrl(appKey) {
@@ -1363,6 +1682,12 @@ function renderTabelaUsuarios(termoBusca = '') {
       </td>
     `;
     tbody.appendChild(tr);
+  });
+
+  registrarAtualizacaoTela('gestao', {
+    updatedAt: Date.now(),
+    sourceInfo: `Supabase IAM · ${usersList.length} colaboradores`,
+    autoRefresh: true
   });
 }
 
@@ -1961,10 +2286,12 @@ function showToast(mensagem, tipo = 'success') {
 window.FarolReportsCore = {
   podeAcessarRelatorios: () => podeAcessarRelatorios(currentUser),
   fetchRelatorioAutenticado,
+  enviarRelatorioAutenticado,
   formatarMoeda,
   formatarMoedaCompleta,
   formatarDataBr,
   escaparHtml,
   preencherSelectFiltro,
-  showToast
+  showToast,
+  registrarAtualizacaoTela
 };

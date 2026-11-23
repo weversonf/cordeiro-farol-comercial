@@ -187,7 +187,11 @@ export default async function handler(req, res) {
           (dt_fim - CURRENT_DATE) ASC NULLS LAST,
           valor DESC
       `, [ACTIVE_CONTRACT_STAGES]),
-      client.query(`SELECT MAX("DATE_MODIFY") AS bitrix FROM stage_bitrix.b_crm_deal`)
+      client.query(`
+        SELECT
+          (SELECT MAX("DATE_MODIFY") FROM stage_bitrix.b_crm_deal) AS bitrix,
+          (SELECT MAX(atualizado_em) FROM stage_bitrix._controle_extracao WHERE tabela_banco IN ('b_crm_deal', 'b_crm_deal_uf')) AS extracao_bitrix
+      `)
     ]);
 
     const contratos = dealsResult.rows.map(row => {
@@ -282,7 +286,8 @@ export default async function handler(req, res) {
         aditivoPdf: hasAditivoNovo
       },
       atualizacao: {
-        bitrix: syncResult.rows[0]?.bitrix || null
+        bitrix: syncResult.rows[0]?.bitrix || null,
+        extracaoBitrix: syncResult.rows[0]?.extracao_bitrix || null
       },
       resumo,
       filtros: {

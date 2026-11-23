@@ -275,8 +275,16 @@
     const mName = MESES_PT[(d.parametros?.month || 1) - 1] || '';
 
     const protData = d.atualizacao?.protheusUltimaEmissao ? core().formatarDataBr(d.atualizacao.protheusUltimaEmissao) : '—';
+    const protCarga = d.atualizacao?.protheusUltimaCarga ? new Date(d.atualizacao.protheusUltimaCarga).toLocaleString('pt-BR') : '';
     const bitData = d.atualizacao?.bitrixUltimaModificacao ? new Date(d.atualizacao.bitrixUltimaModificacao).toLocaleString('pt-BR') : '—';
-    document.getElementById('rmrAtualizacaoTexto').textContent = `Protheus emissão até ${protData} · Bitrix atualizado em ${bitData}`;
+    const bitExtr = d.atualizacao?.bitrixUltimaExtracao ? new Date(d.atualizacao.bitrixUltimaExtracao).toLocaleString('pt-BR') : '';
+    const textoRmrAt = `Protheus emissão até ${protData}${protCarga ? ` (carga ${protCarga})` : ''} · Bitrix mod. ${bitData}${bitExtr ? ` (extração ${bitExtr})` : ''}`;
+    document.getElementById('rmrAtualizacaoTexto').textContent = textoRmrAt;
+    core().registrarAtualizacaoTela?.('relatorios:rmr', {
+      updatedAt: d.geradoEm || Date.now(),
+      sourceInfo: textoRmrAt,
+      autoRefresh: true
+    });
     document.getElementById('rmrFonteTexto').textContent =
       `Competência: ${mName}/${ex.ano} · Escopo: ${d.parametros?.escopo === 'all' ? 'Todas Filiais' : '7 Filiais PBIX'} (${d.parametros?.incluirExpurgos ? 'Bruto' : 'Comercial Puro'})`;
 
@@ -419,6 +427,8 @@
     const bm = d.backlogMedicoes || {};
     const stMed = bm.statusMedicoesProtheus || {};
     const stCtr = bm.statusContratosProtheus || {};
+    const ctrOp = bm.contratosProtheusOperacional || {};
+    const medInfo = bm.medicoesProtheus || {};
     const pendHtml = [];
     if (!stMed.disponivel) {
       pendHtml.push(`
@@ -427,6 +437,19 @@
           <div>
             <strong>Medições Pendentes Protheus / SharePoint pendente de acesso:</strong>
             ${esc(stMed.observacao)} Objeto alvo: <code>${esc(stMed.objeto)}</code>.
+          </div>
+        </div>`);
+    } else if (Array.isArray(medInfo.resumoPorSituacao) && medInfo.resumoPorSituacao.length) {
+      const abertosMed = medInfo.resumoPorSituacao.filter(x => x.situacao === 'Aberto');
+      const qtdAbertosMed = abertosMed.reduce((s, x) => s + Number(x.qtd || 0), 0);
+      const valAbertosMed = abertosMed.reduce((s, x) => s + Number(x.valorGlobal || 0), 0);
+      pendHtml.push(`
+        <div class="report-status-banner is-info">
+          <i class="ph ph-info"></i>
+          <div>
+            <strong>Medições Protheus (<code>comercial.protheus_gold_medicoes_pendentes</code> · espelho ZC0010):</strong>
+            ${fmtInt(qtdAbertosMed)} contratos em situação <em>Aberto</em> (${fmtMoeda(valAbertosMed)} em valor global; última emissão ${medInfo.maxEmissao ? core().formatarDataBr(medInfo.maxEmissao) : '—'}).
+            <p>${esc(stMed.observacao)}</p>
           </div>
         </div>`);
     }
@@ -441,6 +464,34 @@
         </div>`);
     }
     document.getElementById('rmrBacklogPendencias').innerHTML = pendHtml.join('');
+
+    const panelCtrOp = document.getElementById('rmrPanelCtrOpProtheus');
+    if (panelCtrOp) {
+      if (stCtr.disponivel && ctrOp.resumo) {
+        panelCtrOp.style.display = 'block';
+        const rOp = ctrOp.resumo;
+        const tagOp = document.getElementById('rmrCtrOpTag');
+        if (tagOp) {
+          tagOp.textContent = `${fmtInt(rOp.qtdAbertos)} abertos · Global ${fmtMoeda(rOp.valorGlobalAbertos)} · Faturado ${fmtMoeda(rOp.valorFaturadoAbertos)} · Saldo ${fmtMoeda(rOp.saldoContratualAbertos)}`;
+        }
+        const itensOp = ctrOp.itens || [];
+        document.getElementById('tbodyRmrCtrOpProtheus').innerHTML = itensOp.length
+          ? itensOp.map(c => `
+              <tr>
+                <td><strong>${esc(c.nrContrato)}</strong></td>
+                <td>${esc(c.cliente)}</td>
+                <td>${esc(c.unidade)}</td>
+                <td><span class="metric-pill is-info">${esc(c.modalidade)}</span></td>
+                <td>${c.dataInicio ? core().formatarDataBr(c.dataInicio) : '—'} → ${c.dataFim ? core().formatarDataBr(c.dataFim) : '—'}</td>
+                <td class="num">${fmtMoedaExata(c.valorGlobal)}</td>
+                <td class="num">${fmtMoedaExata(c.valorFaturado)}</td>
+                <td class="num"><strong>${fmtMoedaExata(c.saldoContratual)}</strong></td>
+              </tr>`).join('')
+          : '<tr><td colspan="8" class="contracts-empty">Sem contratos operacionais em aberto no Protheus.</td></tr>';
+      } else {
+        panelCtrOp.style.display = 'none';
+      }
+    }
 
     const apropRes = bm.apropriacaoBitrix?.resumo || {};
     const cartBitrix = bm.carteiraContratosBitrix || {};
@@ -478,12 +529,18 @@
       : '<tr><td colspan="7" class="contracts-empty">Sem contratos ativos ou em contratação no Bitrix.</td></tr>';
 
     // Aba 4: Contratos & Resultados por Cliente
-    document.getElementById('rmrClientesContratosBanner').innerHTML = `
-      <i class="ph ph-info"></i>
-      <div>
-        <strong>Visão por Cliente e Contrato (Protheus SD2):</strong>
-        Ranking baseado nas notas fiscais emitidas e validadas no Protheus. Contratos sem NFs emitidas no período dependem da liberação de <code>comercial.contratos_operacional</code>.
-      </div>`;
+    const bannerCliEl = document.getElementById('rmrClientesContratosBanner');
+    if (bannerCliEl) {
+      bannerCliEl.className = stCtr.disponivel ? 'report-status-banner is-info' : 'report-status-banner is-warning';
+      bannerCliEl.innerHTML = `
+        <i class="ph ph-info"></i>
+        <div>
+          <strong>Visão por Cliente e Contrato (Protheus SD2):</strong>
+          ${stCtr.disponivel
+            ? 'Ranking baseado nas notas fiscais emitidas e validadas na SD2 do Protheus. Os contratos operacionais em aberto sem faturamento recente já estão listados na aba <em>Backlog &amp; Medições</em>.'
+            : 'Ranking baseado nas notas fiscais emitidas e validadas no Protheus. Contratos sem NFs emitidas no período dependem da liberação de <code>comercial.contratos_operacional</code>.'}
+        </div>`;
+    }
 
     const cliRows = d.contratosClientes?.clientes || [];
     document.getElementById('tbodyRmrClientes').innerHTML = cliRows.length
@@ -1068,6 +1125,11 @@
         carregarInadimplencia(true);
       }
     });
+    document.getElementById('inadCompetencia')?.addEventListener('change', () => {
+      inadCarregado = false;
+      carregarInadimplencia(true);
+    });
+    document.getElementById('btnFecharCompetencia')?.addEventListener('click', fecharCompetenciaInad);
 
     const btnFilial = document.getElementById('inadFiltroFilialBtn');
     const menuFilial = document.getElementById('inadFiltroFilialMenu');
@@ -1104,7 +1166,7 @@
       renderizarInadimplencia();
     });
 
-    ['inadFiltroExecutivo', 'inadFiltroMargem'].forEach(id => {
+    ['inadFiltroExecutivo', 'inadFiltroMargem', 'inadFaixaAtraso'].forEach(id => {
       document.getElementById(id)?.addEventListener('change', renderizarInadimplencia);
     });
     document.getElementById('inadFiltroBusca')?.addEventListener('input', renderizarInadimplencia);
@@ -1291,7 +1353,9 @@
 
     try {
       const dataCorte = document.getElementById('inadDataCorte')?.value || hojeLocalIso();
+      const competencia = document.getElementById('inadCompetencia')?.value || '';
       const qs = new URLSearchParams({ data_corte: dataCorte, escopo: 'all' });
+      if (competencia) qs.set('competencia', competencia);
       const dados = await core().fetchRelatorioAutenticado(`/api/inadimplencia?${qs.toString()}`);
       if (Array.isArray(dados?.titulos)) {
         dados.titulos.forEach(t => {
@@ -1319,8 +1383,66 @@
 
       preencherFiltroFiliaisInad(dados.titulos || []);
       preencherSelectExecutivoInad(dados.titulos || []);
+
+      const corteEl = document.getElementById('inadDataCorte');
+      if (dados.posicao === 'fechamento' && dados.dataCorte) {
+        if (corteEl) {
+          corteEl.value = String(dados.dataCorte).slice(0, 10);
+          corteEl.disabled = true;
+        }
+        banner.innerHTML = `<div class="report-status-banner is-info">
+          <i class="ph ph-lock-simple"></i><div>
+          <strong>Fechamento congelado · competência ${esc(dados.competencia || '')}</strong>
+          <p>Posição de ${core().formatarDataBr(dados.dataCorte)} capturada em ${esc(dados.geradoEm ? new Date(dados.geradoEm).toLocaleString('pt-BR') : '')} · regras v${esc(dados.regrasVersao || '')}.</p>
+          <p>Este valor não muda com novos recebimentos. Para ver a carteira de hoje, selecione “Saldo atual”.</p>
+          </div></div>`;
+      } else {
+        if (corteEl) corteEl.disabled = false;
+        const impacto = Array.isArray(dados.impactoRegras) ? dados.impactoRegras : [];
+        const rotulos = {
+          natureza_faturamento: 'naturezas fora do relatório',
+          janela_365: 'vencidos há mais de 365 dias',
+          ra_adt: 'RA/ADT e NCC',
+          mutuos: 'mútuos',
+          intercompany: 'intercompany',
+          venda_ativos: 'venda de ativos',
+          petrobras_seguro: 'seguro Petrobras'
+        };
+        const detalheImpacto = impacto.length
+          ? impacto.map(i => `${rotulos[i.motivo] || i.motivo}: ${fmtInt(i.qtd)} títulos · ${fmtMoedaExata(i.saldo)}`).join(' | ')
+          : 'nenhuma exclusão aplicada';
+        const at = dados.atualizacao || {};
+        const partesAtualizacao = [];
+        if (at.protheusUltimaEmissao) partesAtualizacao.push(`emissões até ${core().formatarDataBr(at.protheusUltimaEmissao)}`);
+        if (at.protheusUltimaBaixa) partesAtualizacao.push(`baixas até ${core().formatarDataBr(at.protheusUltimaBaixa)}`);
+        if (at.protheusUltimaCarga) partesAtualizacao.push(`carga DW ${new Date(at.protheusUltimaCarga).toLocaleString('pt-BR')}`);
+        const resumoReplica = partesAtualizacao.length
+          ? `Protheus SE1 (${partesAtualizacao.join(' · ')}) · `
+          : '';
+        banner.innerHTML = `<div class="report-status-banner is-info">
+          <i class="ph ph-info"></i><div>
+          <strong>Saldo atual do Protheus</strong>
+          <p>${esc(dados.observacao || '')}</p>
+          <p><strong>Excluídos pelas regras (v${esc(dados.regrasVersao || '')}):</strong> ${esc(detalheImpacto)}</p>
+          <p>${esc(resumoReplica)}Consulta: ${esc(dados.consultadoEm ? new Date(dados.consultadoEm).toLocaleString('pt-BR') : 'agora')}.</p>
+          </div></div>`;
+      }
+
       renderizarInadimplencia();
       conteudo.style.display = 'block';
+      const atInad = dados.atualizacao || {};
+      const fonteInad = dados.posicao === 'fechamento'
+        ? `Fechamento congelado ${dados.competencia || ''} (corte ${core().formatarDataBr(dados.dataCorte)})`
+        : [
+            atInad.protheusUltimaEmissao ? `Protheus SE1 emissões até ${core().formatarDataBr(atInad.protheusUltimaEmissao)}` : 'Protheus SE1',
+            atInad.protheusUltimaBaixa ? `baixas até ${core().formatarDataBr(atInad.protheusUltimaBaixa)}` : '',
+            atInad.protheusUltimaCarga ? `carga DW ${new Date(atInad.protheusUltimaCarga).toLocaleString('pt-BR')}` : ''
+          ].filter(Boolean).join(' · ');
+      core().registrarAtualizacaoTela?.('relatorios:inadimplencia', {
+        updatedAt: dados.consultadoEm || Date.now(),
+        sourceInfo: fonteInad,
+        autoRefresh: dados.posicao !== 'fechamento'
+      });
     } catch (ex) {
       erro.innerHTML = `<i class="ph ph-warning-circle"></i><span>${esc(ex.message || 'Não foi possível consultar a inadimplência.')}</span>`;
       erro.style.display = 'flex';
@@ -1339,8 +1461,16 @@
     const temFiltroFilial = inadFiliaisSelecionadas.size > 0 && inadFiliaisSelecionadas.size < inadFiliaisCatalogo.length;
 
     return todos.filter(t => {
-      if (!(Number(t.saldoInadimplente || 0) > 0)) return false;
-      if (dataCorte && t.vencimentoReal && t.vencimentoReal >= dataCorte) return false;
+      // Retenções são deduções: não descartar saldos negativos do consolidado.
+      if (!Number.isFinite(Number(t.saldoInadimplente)) || Number(t.saldoInadimplente) === 0) return false;
+      if (dataCorte && t.vencimentoReal && t.vencimentoReal > dataCorte) return false;
+      const faixa = document.getElementById('inadFaixaAtraso')?.value || '365';
+      const dias = t.vencimentoReal
+        ? Math.round((Date.parse(`${dataCorte}T00:00:00Z`) - Date.parse(`${t.vencimentoReal}T00:00:00Z`)) / 86400000)
+        : NaN;
+      if (faixa !== 'todos' && !Number.isFinite(dias)) return false;
+      if (faixa === '365' && (dias < 0 || dias >= 365)) return false;
+      if (faixa === 'antigos' && dias < 365) return false;
       if (temFiltroFilial) {
         const keyFil = extrairCodFilialInad(t.codFilial, t.filial) || formatarFilialInad(t.codFilial, t.filial);
         if (!inadFiliaisSelecionadas.has(keyFil)) return false;
@@ -1396,7 +1526,7 @@
     const pct = (v) => totalSaldo !== 0 ? `${((v / totalSaldo) * 100).toFixed(1).replace('.', ',')}% do saldo` : '0,0%';
     document.getElementById('inadKpiGrid').innerHTML = `
       <article class="report-kpi-card kpi-danger">
-        <span class="report-kpi-label">Saldo Inadimplente</span>
+        <span class="report-kpi-label">Saldo líquido atual</span>
         <strong class="report-kpi-value">${fmtMoedaExata(totalSaldo)}</strong>
         <span class="report-kpi-sub">${fmtInt(filtrados.length)} títulos · ${fmtInt(clientesUnicos)} clientes</span>
       </article>
@@ -1537,7 +1667,9 @@
     }
 
     // Tabela Analitico (13 colunas do modelo Excel)
-    document.getElementById('inadAnaliticoCountTag').textContent = `${fmtInt(filtrados.length)} títulos`;
+    document.getElementById('inadAnaliticoCountTag').textContent = filtrados.length > 300
+      ? `Exibindo 300 de ${fmtInt(filtrados.length)} registros · Excel completo`
+      : `${fmtInt(filtrados.length)} registros`;
     document.getElementById('tbodyInadAnalitico').innerHTML = filtrados.length
       ? filtrados.slice(0, 300).map(t => `
           <tr>
@@ -1549,7 +1681,7 @@
             <td>${esc(t.contrato || '—')}</td>
             <td>${esc(t.filial || '—')}</td>
             <td>${esc(t.serie || '—')}</td>
-            <td><strong>${esc(t.titulo || '—')}</strong></td>
+            <td><strong>${esc(t.titulo || '—')}</strong><br><small>${esc(t.tipo || '')}${t.parcela ? ` · Parc. ${esc(t.parcela)}` : ''}${t.loja ? ` · Loja ${esc(t.loja)}` : ''}</small></td>
             <td class="num">${fmtMoedaExata(t.valorOriginal)}</td>
             <td class="num"><strong>${fmtMoedaExata(t.saldoInadimplente)}</strong></td>
             <td>${t.emissao ? core().formatarDataBr(t.emissao) : '—'}</td>
@@ -1588,7 +1720,8 @@
       [
         'Origem', 'Executivo Responsável (NF/Título)', 'Cód. Cliente', 'Cliente (Razão Social / Nome)',
         'Margem (D2_YMARGCT)', 'Nº Contrato', 'Filial', 'Série/Pref.', 'Nº Título / NF',
-        'Valor Original Título (R$)', 'Saldo Inadimplente (R$)', 'Emissão', 'Vencimento Real'
+        'Valor Original Título (R$)', 'Saldo Inadimplente (R$)', 'Emissão', 'Vencimento Real',
+        'Parcela', 'Tipo', 'Loja', 'Natureza'
       ],
       ...filtrados.map(t => [
         t.origem || 'PROTHEUS (SE1010)',
@@ -1603,7 +1736,8 @@
         Number(t.valorOriginal || 0),
         Number(t.saldoInadimplente || 0),
         t.emissao ? core().formatarDataBr(t.emissao) : '',
-        t.vencimentoReal ? core().formatarDataBr(t.vencimentoReal) : ''
+        t.vencimentoReal ? core().formatarDataBr(t.vencimentoReal) : '',
+        t.parcela || '', t.tipo || '', t.loja || '', t.natureza || ''
       ])
     ];
     const ws1 = XLSX.utils.aoa_to_sheet(aoa1);
@@ -1653,19 +1787,842 @@
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws1, '1. INADIMPLENCIA');
     XLSX.utils.book_append_sheet(wb, ws2, '2. RESUMO EXECUTIVO E MARGEM');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      ['Fonte', inadPayload?.fonte || 'Protheus'],
+      ['Posição', inadPayload?.posicao || 'Planilha importada'],
+      ['Consultado em', inadPayload?.consultadoEm || ''],
+      ['Vencimentos até', document.getElementById('inadDataCorte')?.value || ''],
+      ['Competência', inadPayload?.competencia || 'Saldo atual'],
+      ['Regras (versão)', inadPayload?.regrasVersao || ''],
+      ['Faixa', document.getElementById('inadFaixaAtraso')?.selectedOptions[0]?.textContent || ''],
+      ['Metodologia', inadPayload?.observacao || ''],
+      ['Conciliação', inadPayload?.conciliacao || 'Não informada']
+    ]), '3. METODOLOGIA');
     const dataTag = document.getElementById('inadDataCorte')?.value || hojeLocalIso();
     XLSX.writeFile(wb, `Inadimplencia_Executivo_Cliente_Margem_${dataTag}.xlsx`);
   }
 
+  async function carregarPosicoesInad() {
+    const sel = document.getElementById('inadCompetencia');
+    if (!sel) return;
+    try {
+      const dados = await core().fetchRelatorioAutenticado('/api/inadimplencia-fechamento');
+      const atual = sel.value;
+      const lista = Array.isArray(dados.fechamentos) ? dados.fechamentos : [];
+      sel.innerHTML = '<option value="">Saldo atual (Protheus)</option>' + lista.map(f => {
+        const [ano, mes] = String(f.competencia).split('-');
+        const rotulo = `${MESES_PT[Number(mes) - 1]} / ${ano}`;
+        return `<option value="${esc(f.competencia)}">Fechamento ${esc(rotulo)}</option>`;
+      }).join('');
+      if (lista.some(f => f.competencia === atual)) sel.value = atual;
+      if (!lista.length && !dados.disponivel) {
+        sel.title = 'Nenhum fechamento publicado. Falta habilitar as tabelas no DW.';
+      }
+    } catch (_) {
+      // Lista é opcional: o relatório ao vivo continua funcionando.
+    }
+  }
+
+  async function fecharCompetenciaInad() {
+    const btn = document.getElementById('btnFecharCompetencia');
+    const hoje = hojeLocalIso();
+    const [ano, mes] = hoje.split('-').map(Number);
+    const anterior = new Date(Date.UTC(ano, mes - 2, 1));
+    const competencia = anterior.toISOString().slice(0, 7);
+    const [anoComp, mesComp] = competencia.split('-');
+    const rotulo = `${MESES_PT[Number(mesComp) - 1]} / ${anoComp}`;
+
+    if (!window.confirm(`Fechar a competência ${rotulo}?\n\nO saldo atual da SE1 será congelado título a título. Esta ação não recalcula meses anteriores.`)) {
+      return;
+    }
+
+    if (btn) btn.disabled = true;
+    try {
+      const dados = await core().enviarRelatorioAutenticado('/api/inadimplencia-fechamento', { competencia });
+      core().showToast(`Competência ${rotulo} fechada: ${fmtInt(dados.fechamento.qtdTitulos)} títulos · ${fmtMoedaExata(dados.fechamento.saldoTotal)}.`, 'success');
+      await carregarPosicoesInad();
+      const sel = document.getElementById('inadCompetencia');
+      if (sel) sel.value = competencia;
+      inadCarregado = false;
+      await carregarInadimplencia(true);
+    } catch (ex) {
+      const detalhe = ex?.detalhe;
+      if (detalhe?.sqlLiberacao) {
+        core().showToast('Fechamento indisponível: falta criar as tabelas no DW. O comando está no parecer técnico.', 'warning');
+        console.warn('SQL de liberação do fechamento:\n' + detalhe.sqlLiberacao);
+      } else {
+        core().showToast(ex.message || 'Não foi possível fechar a competência.', 'error');
+      }
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Prévia de Faturamento (SD2 + regras da premiação)
+  // ------------------------------------------------------------------
+  let fatSd2Payload = null;
+  let fatSd2Detalhe = [];
+  let fatSd2Carregado = false;
+  let fatSd2Binded = false;
+
+  function mesesFatSd2(qtd = 24) {
+    const hoje = new Date();
+    const lista = [];
+    for (let i = 0; i < qtd; i += 1) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      lista.push({
+        iso,
+        inicio: `${iso}-01`,
+        fim: `${iso}-${String(ultimo).padStart(2, '0')}`,
+        rotulo: `${MESES_PT[d.getMonth()]} / ${d.getFullYear()}`
+      });
+    }
+    return lista;
+  }
+
+  function montarPeriodosFatSd2() {
+    const sel = document.getElementById('fatSd2Periodo');
+    if (!sel || sel.options.length) return;
+    sel.innerHTML =
+      mesesFatSd2(24).map(m => `<option value="${m.iso}">${esc(m.rotulo)}</option>`).join('') +
+      '<option value="personalizado">Personalizado…</option>';
+    const atual = hojeLocalIso().slice(0, 7);
+    sel.value = [...sel.options].some(o => o.value === atual) ? atual : sel.options[0].value;
+  }
+
+  function alternarPeriodoPersonalizadoFatSd2() {
+    const sel = document.getElementById('fatSd2Periodo');
+    const personalizado = sel?.value === 'personalizado';
+    const de = document.getElementById('fatSd2DeWrap');
+    const ate = document.getElementById('fatSd2AteWrap');
+    if (de) de.style.display = personalizado ? '' : 'none';
+    if (ate) ate.style.display = personalizado ? '' : 'none';
+    return personalizado;
+  }
+
+  function obterPeriodoFatSd2() {
+    const sel = document.getElementById('fatSd2Periodo');
+    const valor = sel?.value || '';
+    if (valor === 'personalizado') {
+      return {
+        startDate: document.getElementById('fatSd2Start')?.value || '',
+        endDate: document.getElementById('fatSd2End')?.value || ''
+      };
+    }
+    const item = mesesFatSd2(24).find(m => m.iso === valor);
+    if (item) return { startDate: item.inicio, endDate: item.fim };
+    const hoje = hojeLocalIso();
+    return { startDate: `${hoje.slice(0, 7)}-01`, endDate: hoje };
+  }
+
+  function preencherSelectFatSd2(id, itens, rotuloTodos) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const atual = sel.value;
+    sel.innerHTML = `<option value="">${esc(rotuloTodos)}</option>` +
+      itens.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    if (itens.includes(atual)) sel.value = atual;
+  }
+
+  async function carregarFaturamentoSd2(forcar = false) {
+    if (fatSd2Carregado && !forcar) return;
+    montarPeriodosFatSd2();
+
+    const loading = document.getElementById('fatSd2Loading');
+    const conteudo = document.getElementById('fatSd2Conteudo');
+    const erro = document.getElementById('fatSd2Erro');
+    const btn = document.getElementById('btnAtualizarFaturamentoSd2');
+
+    const { startDate, endDate } = obterPeriodoFatSd2();
+    const unidade = document.getElementById('fatSd2Unidade')?.value || '';
+    const executivo = document.getElementById('fatSd2Executivo')?.value || '';
+
+    if (!startDate || !endDate) {
+      if (conteudo) conteudo.style.display = 'none';
+      if (erro) {
+        erro.innerHTML = '<i class="ph ph-info"></i><span>Selecione as duas datas do período personalizado.</span>';
+        erro.style.display = 'flex';
+      }
+      return;
+    }
+
+    const qs = new URLSearchParams({ startDate, endDate });
+    if (unidade) qs.set('unidade', unidade);
+    if (executivo) qs.set('executivo', executivo);
+
+    if (loading) loading.style.display = 'flex';
+    if (erro) erro.style.display = 'none';
+    if (btn) btn.disabled = true;
+
+    try {
+      const qsDetalhe = new URLSearchParams(qs);
+      qsDetalhe.set('detalhe', '1');
+      const [dados, detalhe] = await Promise.all([
+        core().fetchRelatorioAutenticado(`/api/faturamento-sd2?${qs.toString()}`),
+        core().fetchRelatorioAutenticado(`/api/faturamento-sd2?${qsDetalhe.toString()}`)
+      ]);
+      fatSd2Payload = dados;
+      fatSd2Detalhe = detalhe?.linhas || [];
+      fatSd2Carregado = true;
+      preencherSelectFatSd2('fatSd2Unidade', dados.filtros?.unidades || [], 'Todas as unidades');
+      preencherSelectFatSd2('fatSd2Executivo', dados.filtros?.executivos || [], 'Todos os executivos');
+      renderizarFaturamentoSd2();
+      if (conteudo) conteudo.style.display = 'block';
+    } catch (ex) {
+      fatSd2Carregado = false;
+      if (conteudo) conteudo.style.display = 'none';
+      if (erro) {
+        erro.innerHTML = `<i class="ph ph-warning-circle"></i><span>${esc(ex.message || 'Não foi possível carregar a prévia de faturamento.')}</span>`;
+        erro.style.display = 'flex';
+      }
+    } finally {
+      if (loading) loading.style.display = 'none';
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function renderizarFaturamentoSd2() {
+    const d = fatSd2Payload;
+    if (!d) return;
+    const res = d.resumo || {};
+
+    const atualizado = document.getElementById('fatSd2Atualizado');
+    const atSd2 = d.atualizacao || {};
+    const dtEmisSd2 = atSd2.protheusUltimaEmissao ? core().formatarDataBr(atSd2.protheusUltimaEmissao) : '—';
+    const dtCargaSd2 = atSd2.protheusUltimaCarga ? new Date(atSd2.protheusUltimaCarga).toLocaleString('pt-BR') : '';
+    const dtConsSd2 = d.consultadoEm ? new Date(d.consultadoEm).toLocaleString('pt-BR') : 'agora';
+    const textoSd2At = `Protheus SD2 · emissões até ${dtEmisSd2}${dtCargaSd2 ? ` (carga DW ${dtCargaSd2})` : ''}`;
+    if (atualizado) {
+      atualizado.textContent = `${textoSd2At} · consultado em ${dtConsSd2}`;
+    }
+    core().registrarAtualizacaoTela?.('relatorios:faturamento', {
+      updatedAt: d.consultadoEm || Date.now(),
+      sourceInfo: textoSd2At,
+      autoRefresh: true
+    });
+    const fonte = document.getElementById('fatSd2Fonte');
+    if (fonte) {
+      fonte.textContent = `${d.fonte || 'stage_protheus.sd2010'} · regras v${d.regrasVersao || ''} · período ${core().formatarDataBr(d.periodo?.startDate)} a ${core().formatarDataBr(d.periodo?.endDate)}`;
+    }
+
+    document.getElementById('fatSd2KpiComercial').textContent = fmtMoeda(res.comercial);
+    document.getElementById('fatSd2KpiTicket').textContent = `Ticket médio/NF: ${fmtMoeda(res.ticketMedioNf)}`;
+    document.getElementById('fatSd2KpiBruto').textContent = fmtMoeda(res.bruto);
+    document.getElementById('fatSd2KpiReceitaTexto').textContent = `Receita após TES/CFOP: ${fmtMoeda(res.receita)}`;
+    document.getElementById('fatSd2KpiExpurgos').textContent = fmtMoeda(res.expurgos);
+    document.getElementById('fatSd2KpiExpurgosNota').textContent = `Fora do escopo de receita: ${fmtMoeda(res.foraEscopo)}`;
+    document.getElementById('fatSd2KpiVolume').textContent = `${fmtInt(res.qtdNfs)} NFs`;
+    document.getElementById('fatSd2KpiClientes').textContent = `${fmtInt(res.qtdClientes)} clientes · ${fmtInt(res.qtdItens)} itens`;
+
+    const tag = document.getElementById('fatSd2ConciliacaoTag');
+    if (tag) tag.textContent = `Regras v${d.regrasVersao || ''}`;
+
+    const linhas = [
+      ['Faturamento SD2 bruto (todas as linhas do período)', res.bruto, ''],
+      ['(−) Fora do escopo de receita (TES/CFOP)', -Math.abs(res.foraEscopo || 0), ''],
+      ['(=) Receita comercial (TES/CFOP homologados)', res.receita, 'total'],
+      ...(d.expurgos || [])
+        .filter(e => e.motivo !== 'fora_escopo')
+        .map(e => [`(−) ${e.rotulo}`, -Math.abs(e.valor || 0), '']),
+      ['(=) Faturamento comercial da prévia', res.comercial, 'total']
+    ];
+
+    document.getElementById('tbodyFatSd2Conciliacao').innerHTML = linhas.map(([rotulo, valor, tipo]) => `
+      <tr${tipo === 'total' ? ' style="font-weight:600;"' : ''}>
+        <td>${esc(rotulo)}</td>
+        <td class="num">${fmtMoedaExata(valor)}</td>
+      </tr>`).join('');
+
+    document.getElementById('tbodyFatSd2Unidades').innerHTML = (d.porUnidade || [])
+      .filter(u => Math.abs(u.comercial) > 0.004)
+      .map(u => `<tr><td>${esc(u.unidade)}</td><td class="num">${fmtMoedaExata(u.comercial)}</td><td class="num">${fmtInt(u.qtdNfs)}</td></tr>`)
+      .join('') || '<tr><td colspan="3">Sem faturamento no recorte.</td></tr>';
+
+    document.getElementById('tbodyFatSd2Executivos').innerHTML = (d.porExecutivo || [])
+      .filter(e => Math.abs(e.comercial) > 0.004)
+      .slice(0, 15)
+      .map(e => `<tr><td>${esc(e.executivo)}</td><td class="num">${fmtMoedaExata(e.comercial)}</td><td class="num">${fmtInt(e.qtdNfs)}</td></tr>`)
+      .join('') || '<tr><td colspan="3">Sem faturamento no recorte.</td></tr>';
+
+    renderizarEstratificacaoFatSd2();
+
+    renderMonthlyComparisonBars('fatSd2Mensal', (d.mensal || []).map(m => ({
+      mes: m.mesIso,
+      comercial: m.comercial,
+      bruto: m.bruto,
+      fechado: true
+    })), {
+      valKey: 'comercial',
+      metaKey: '',
+      closedKey: 'fechado',
+      onClick: mesIso => {
+        const sel = document.getElementById('fatSd2Periodo');
+        if (sel && [...sel.options].some(o => o.value === mesIso)) {
+          sel.value = mesIso;
+          alternarPeriodoPersonalizadoFatSd2();
+          carregarFaturamentoSd2(true);
+          return;
+        }
+        const [yy, mm] = mesIso.split('-').map(Number);
+        const ultimoDia = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+        const ini = document.getElementById('fatSd2Start');
+        const fim = document.getElementById('fatSd2End');
+        if (sel) sel.value = 'personalizado';
+        alternarPeriodoPersonalizadoFatSd2();
+        if (ini && fim) {
+          ini.value = `${mesIso}-01`;
+          fim.value = `${mesIso}-${String(ultimoDia).padStart(2, '0')}`;
+          carregarFaturamentoSd2(true);
+        }
+      }
+    });
+  }
+
+  function renderizarEstratificacaoFatSd2() {
+    const linhas = (fatSd2Detalhe || []).filter(l => l.isReceita && !l.motivo);
+    const clientes = new Map();
+    const contratos = new Map();
+    const nfs = new Map();
+
+    const criarAcumulador = () => ({
+      valor: 0,
+      itens: 0,
+      nfs: new Set(),
+      contratos: new Set(),
+      unidades: new Set(),
+      executivos: new Set()
+    });
+
+    for (const l of linhas) {
+      const codCliente = String(l.codCliente || '').trim();
+      const loja = String(l.loja || '').trim();
+      const cliente = l.cliente || `Cliente ${codCliente}${loja ? `/${loja}` : ''}`;
+      const contrato = String(l.numeroContrato || '').trim() || 'Sem contrato';
+      const chaveNf = `${l.codFilial}|${l.numeroDocumento}|${l.serie}`;
+      const chaveCliente = `${codCliente}|${loja}`;
+      const chaveContrato = `${chaveCliente}|${contrato}`;
+      const valor = Number(l.valor || 0);
+
+      if (!clientes.has(chaveCliente)) {
+        clientes.set(chaveCliente, { ...criarAcumulador(), codCliente, loja, cliente });
+      }
+      const cli = clientes.get(chaveCliente);
+      cli.valor += valor;
+      cli.itens += 1;
+      cli.nfs.add(chaveNf);
+      cli.contratos.add(contrato);
+
+      if (!contratos.has(chaveContrato)) {
+        contratos.set(chaveContrato, {
+          ...criarAcumulador(),
+          codCliente,
+          loja,
+          cliente,
+          contrato
+        });
+      }
+      const ctr = contratos.get(chaveContrato);
+      ctr.valor += valor;
+      ctr.itens += 1;
+      ctr.nfs.add(chaveNf);
+      if (l.unidade) ctr.unidades.add(l.unidade);
+      if (l.executivo) ctr.executivos.add(l.executivo);
+
+      if (!nfs.has(chaveNf)) {
+        nfs.set(chaveNf, {
+          ...criarAcumulador(),
+          filial: l.codFilial || '',
+          nf: l.numeroDocumento || '',
+          serie: l.serie || '',
+          emissao: l.emissao || '',
+          cliente,
+          contratos: new Set()
+        });
+      }
+      const nf = nfs.get(chaveNf);
+      nf.valor += valor;
+      nf.itens += 1;
+      nf.contratos.add(contrato);
+      if (l.unidade) nf.unidades.add(l.unidade);
+      if (l.executivo) nf.executivos.add(l.executivo);
+    }
+
+    const clientesLista = [...clientes.values()]
+      .sort((a, b) => b.valor - a.valor || a.cliente.localeCompare(b.cliente, 'pt-BR'));
+    const contratosLista = [...contratos.values()]
+      .sort((a, b) => b.valor - a.valor || a.cliente.localeCompare(b.cliente, 'pt-BR'));
+    const nfsLista = [...nfs.values()]
+      .sort((a, b) => b.emissao.localeCompare(a.emissao) || b.valor - a.valor);
+
+    document.getElementById('fatSd2ClientesTag').textContent = `${fmtInt(clientesLista.length)} clientes`;
+    document.getElementById('fatSd2ContratosTag').textContent = `${fmtInt(contratosLista.length)} negócios`;
+    document.getElementById('fatSd2NfsTag').textContent = `${fmtInt(nfsLista.length)} NFs`;
+
+    document.getElementById('tbodyFatSd2Clientes').innerHTML = clientesLista.length
+      ? clientesLista.map(c => `
+          <tr>
+            <td><strong>${esc(c.cliente)}</strong><br><small>${esc(c.codCliente)}${c.loja ? `/${esc(c.loja)}` : ''}</small></td>
+            <td class="num">${fmtInt(c.contratos.size)}</td>
+            <td class="num">${fmtInt(c.nfs.size)}</td>
+            <td class="num"><strong>${fmtMoedaExata(c.valor)}</strong></td>
+          </tr>`).join('')
+      : '<tr><td colspan="4">Sem faturamento comercial no recorte.</td></tr>';
+
+    document.getElementById('tbodyFatSd2Contratos').innerHTML = contratosLista.length
+      ? contratosLista.map(c => `
+          <tr>
+            <td><strong>${esc(c.cliente)}</strong><br><small>${esc(c.codCliente)}${c.loja ? `/${esc(c.loja)}` : ''}</small></td>
+            <td><strong>${esc(c.contrato)}</strong></td>
+            <td>${esc([...c.unidades].join(' | ') || '—')}<br><small>${esc([...c.executivos].join(' | ') || '—')}</small></td>
+            <td class="num">${fmtInt(c.nfs.size)}</td>
+            <td class="num"><strong>${fmtMoedaExata(c.valor)}</strong></td>
+          </tr>`).join('')
+      : '<tr><td colspan="5">Sem contratos faturados no recorte.</td></tr>';
+
+    document.getElementById('tbodyFatSd2Nfs').innerHTML = nfsLista.length
+      ? nfsLista.map(n => `
+          <tr>
+            <td>${n.emissao ? core().formatarDataBr(n.emissao) : '—'}</td>
+            <td><strong>${esc(n.nf)}</strong> / ${esc(n.serie || '—')}<br><small>Filial ${esc(n.filial)}</small></td>
+            <td>${esc(n.cliente)}</td>
+            <td>${esc([...n.contratos].join(' | '))}</td>
+            <td>${esc([...n.unidades].join(' | ') || '—')}</td>
+            <td>${esc([...n.executivos].join(' | ') || '—')}</td>
+            <td class="num">${fmtInt(n.itens)}</td>
+            <td class="num"><strong>${fmtMoedaExata(n.valor)}</strong></td>
+          </tr>`).join('')
+      : '<tr><td colspan="8">Sem notas fiscais no recorte.</td></tr>';
+  }
+
+  async function exportarBaseSd2Xlsx() {
+    if (typeof window.XLSX === 'undefined') {
+      core().showToast('Biblioteca de Excel não carregada. Recarregue a página.', 'error');
+      return;
+    }
+    const btn = document.getElementById('btnExportarFaturamentoSd2Base');
+    const { startDate, endDate } = obterPeriodoFatSd2();
+    const unidade = document.getElementById('fatSd2Unidade')?.value || '';
+    const executivo = document.getElementById('fatSd2Executivo')?.value || '';
+
+    if (!startDate || !endDate) {
+      core().showToast('Selecione as duas datas do período personalizado.', 'warning');
+      return;
+    }
+
+    const qs = new URLSearchParams({ startDate, endDate, detalhe: '1' });
+    if (unidade) qs.set('unidade', unidade);
+    if (executivo) qs.set('executivo', executivo);
+
+    if (btn) btn.disabled = true;
+    try {
+      const dados = await core().fetchRelatorioAutenticado(`/api/faturamento-sd2?${qs.toString()}`);
+      const linhas = dados.linhas || [];
+
+      const cabecalho = [
+        'Filial', 'NF', 'Série', 'Item', 'Emissão', 'Cliente', 'Loja', 'Nome Cliente',
+        'Produto', 'Descrição Produto', 'Qtd', 'Vlr. Unitário', 'Vlr. Total',
+        'TES', 'CFOP', 'Pedido', 'Contrato', 'Centro Custo', 'Item Conta',
+        'Margem Contrato', 'Unidade', 'Cód. Vendedor', 'Executivo',
+        'Receita?', 'Motivo Expurgo'
+      ];
+
+      const aoa = [cabecalho];
+      for (const l of linhas) {
+        aoa.push([
+          l.codFilial, l.numeroDocumento, l.serie, l.item, l.emissao,
+          l.codCliente, l.loja, l.cliente, l.codProduto, l.produto,
+          Number(l.quantidade || 0), Number(l.valorUnitario || 0), Number(l.valor || 0),
+          l.tes, l.cfop, l.numeroPedido, l.numeroContrato, l.centroCusto, l.itemConta,
+          l.margemContrato || '', l.unidade, l.codVendedor, l.executivo,
+          l.isReceita ? 'SIM' : 'NÃO',
+          !l.isReceita ? 'Fora do escopo TES/CFOP'
+            : l.motivo === 'cm_maquinas' ? 'CM Máquinas'
+            : l.motivo === 'central_adm' ? 'Central ADM'
+              : l.motivo === 'fora_unidades' ? 'Fora das unidades comerciais'
+              : l.motivo === 't_a_contrato' ? 'Locação T&A'
+                : ''
+        ]);
+      }
+
+      const wsBase = XLSX.utils.aoa_to_sheet(aoa);
+      wsBase['!cols'] = [
+        { wch: 8 }, { wch: 11 }, { wch: 6 }, { wch: 5 }, { wch: 11 },
+        { wch: 10 }, { wch: 6 }, { wch: 34 }, { wch: 14 }, { wch: 34 },
+        { wch: 10 }, { wch: 14 }, { wch: 15 }, { wch: 7 }, { wch: 8 },
+        { wch: 10 }, { wch: 11 }, { wch: 12 }, { wch: 14 }, { wch: 10 },
+        { wch: 14 }, { wch: 10 }, { wch: 26 }, { wch: 9 }, { wch: 16 }
+      ];
+      wsBase['!autofilter'] = { ref: `A1:Y${Math.max(1, aoa.length)}` };
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsBase, 'BASE SD2');
+
+      const somarLinha = (destino, linha) => {
+        destino.itens += 1;
+        destino.bruto += Number(linha.valor || 0);
+        if (linha.isReceita) {
+          destino.receita += Number(linha.valor || 0);
+          if (linha.motivo) destino.expurgos += Number(linha.valor || 0);
+          else destino.comercial += Number(linha.valor || 0);
+        } else {
+          destino.foraEscopo += Number(linha.valor || 0);
+        }
+      };
+
+      const contratos = new Map();
+      const notas = new Map();
+      const clientes = new Map();
+      const clienteContratos = new Map();
+      for (const l of linhas) {
+        const contrato = String(l.numeroContrato || '').trim() || 'Sem contrato';
+        if (!contratos.has(contrato)) {
+          contratos.set(contrato, {
+            contrato,
+            unidades: new Set(),
+            executivos: new Set(),
+            clientes: new Set(),
+            notas: new Set(),
+            itens: 0,
+            bruto: 0,
+            foraEscopo: 0,
+            receita: 0,
+            expurgos: 0,
+            comercial: 0
+          });
+        }
+        const ctr = contratos.get(contrato);
+        if (l.unidade) ctr.unidades.add(l.unidade);
+        if (l.executivo) ctr.executivos.add(l.executivo);
+        if (l.cliente) ctr.clientes.add(l.cliente);
+        ctr.notas.add(`${l.codFilial}|${l.numeroDocumento}|${l.serie}`);
+        somarLinha(ctr, l);
+
+        const chaveNf = `${l.codFilial}|${l.numeroDocumento}|${l.serie}`;
+        if (!notas.has(chaveNf)) {
+          notas.set(chaveNf, {
+            contratos: new Set(),
+            filial: l.codFilial || '',
+            nf: l.numeroDocumento || '',
+            serie: l.serie || '',
+            emissao: l.emissao || '',
+            cliente: l.cliente || '',
+            codCliente: l.codCliente || '',
+            loja: l.loja || '',
+            unidade: l.unidade || '',
+            executivo: l.executivo || '',
+            itens: 0,
+            bruto: 0,
+            foraEscopo: 0,
+            receita: 0,
+            expurgos: 0,
+            comercial: 0,
+            motivos: new Set()
+          });
+        }
+        const nf = notas.get(chaveNf);
+        nf.contratos.add(contrato);
+        if (l.motivo) {
+          nf.motivos.add(
+            l.motivo === 'cm_maquinas' ? 'CM Máquinas'
+              : l.motivo === 'central_adm' ? 'Central ADM'
+                : l.motivo === 'fora_unidades' ? 'Fora das unidades comerciais'
+                  : l.motivo === 't_a_contrato' ? 'Locação T&A'
+                    : l.motivo
+          );
+        }
+        if (!l.isReceita) nf.motivos.add('Fora do escopo TES/CFOP');
+        somarLinha(nf, l);
+
+        const codCliente = String(l.codCliente || '').trim() || 'Sem código';
+        const loja = String(l.loja || '').trim();
+        const chaveCliente = `${codCliente}|${loja}`;
+        if (!clientes.has(chaveCliente)) {
+          clientes.set(chaveCliente, {
+            codCliente,
+            loja,
+            cliente: l.cliente || 'Cliente não identificado',
+            unidades: new Set(),
+            executivos: new Set(),
+            contratos: new Set(),
+            notas: new Set(),
+            itens: 0,
+            bruto: 0,
+            foraEscopo: 0,
+            receita: 0,
+            expurgos: 0,
+            comercial: 0
+          });
+        }
+        const cli = clientes.get(chaveCliente);
+        if (l.unidade) cli.unidades.add(l.unidade);
+        if (l.executivo) cli.executivos.add(l.executivo);
+        cli.contratos.add(contrato);
+        cli.notas.add(chaveNf);
+        somarLinha(cli, l);
+
+        const chaveClienteContrato = `${chaveCliente}|${contrato}`;
+        if (!clienteContratos.has(chaveClienteContrato)) {
+          clienteContratos.set(chaveClienteContrato, {
+            codCliente,
+            loja,
+            cliente: l.cliente || 'Cliente não identificado',
+            contrato,
+            unidades: new Set(),
+            executivos: new Set(),
+            notas: new Set(),
+            itens: 0,
+            bruto: 0,
+            foraEscopo: 0,
+            receita: 0,
+            expurgos: 0,
+            comercial: 0
+          });
+        }
+        const clienteContrato = clienteContratos.get(chaveClienteContrato);
+        if (l.unidade) clienteContrato.unidades.add(l.unidade);
+        if (l.executivo) clienteContrato.executivos.add(l.executivo);
+        clienteContrato.notas.add(chaveNf);
+        somarLinha(clienteContrato, l);
+      }
+
+      const contratosAoa = [[
+        'Contrato', 'Unidade', 'Executivo', 'Clientes', 'Qtd. NFs', 'Qtd. Itens',
+        'SD2 Bruto', 'Fora Escopo TES/CFOP', 'Receita', 'Expurgos', 'Faturamento Comercial'
+      ]];
+      [...contratos.values()]
+        .sort((a, b) => b.comercial - a.comercial || a.contrato.localeCompare(b.contrato, 'pt-BR'))
+        .forEach(c => contratosAoa.push([
+          c.contrato,
+          [...c.unidades].join(' | '),
+          [...c.executivos].join(' | '),
+          [...c.clientes].join(' | '),
+          c.notas.size,
+          c.itens,
+          c.bruto,
+          c.foraEscopo,
+          c.receita,
+          c.expurgos,
+          c.comercial
+        ]));
+      const wsContratos = XLSX.utils.aoa_to_sheet(contratosAoa);
+      wsContratos['!cols'] = [
+        { wch: 16 }, { wch: 18 }, { wch: 28 }, { wch: 48 }, { wch: 10 },
+        { wch: 11 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 22 }
+      ];
+      wsContratos['!autofilter'] = { ref: `A1:K${Math.max(1, contratosAoa.length)}` };
+      XLSX.utils.book_append_sheet(wb, wsContratos, 'POR CONTRATO');
+
+      const notasAoa = [[
+        'Contrato', 'Filial', 'NF', 'Série', 'Emissão', 'Cód. Cliente', 'Loja',
+        'Cliente', 'Unidade', 'Executivo', 'Qtd. Itens', 'SD2 Bruto',
+        'Fora Escopo TES/CFOP', 'Receita', 'Expurgos', 'Faturamento Comercial', 'Classificação'
+      ]];
+      [...notas.values()]
+        .sort((a, b) => [...a.contratos].join(' | ').localeCompare([...b.contratos].join(' | '), 'pt-BR')
+          || a.emissao.localeCompare(b.emissao)
+          || a.nf.localeCompare(b.nf))
+        .forEach(n => notasAoa.push([
+          [...n.contratos].join(' | '),
+          n.filial,
+          n.nf,
+          n.serie,
+          n.emissao,
+          n.codCliente,
+          n.loja,
+          n.cliente,
+          n.unidade,
+          n.executivo,
+          n.itens,
+          n.bruto,
+          n.foraEscopo,
+          n.receita,
+          n.expurgos,
+          n.comercial,
+          n.motivos.size ? [...n.motivos].join(' | ') : 'Faturamento comercial'
+        ]));
+      const wsNotas = XLSX.utils.aoa_to_sheet(notasAoa);
+      wsNotas['!cols'] = [
+        { wch: 16 }, { wch: 9 }, { wch: 13 }, { wch: 7 }, { wch: 12 },
+        { wch: 13 }, { wch: 7 }, { wch: 38 }, { wch: 18 }, { wch: 28 },
+        { wch: 11 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 16 },
+        { wch: 22 }, { wch: 34 }
+      ];
+      wsNotas['!autofilter'] = { ref: `A1:Q${Math.max(1, notasAoa.length)}` };
+      XLSX.utils.book_append_sheet(wb, wsNotas, 'POR NF');
+
+      const clientesAoa = [[
+        'Cód. Cliente', 'Loja', 'Cliente', 'Unidades', 'Executivos', 'Contratos',
+        'Qtd. Contratos', 'Qtd. NFs', 'Qtd. Itens', 'SD2 Bruto',
+        'Fora Escopo TES/CFOP', 'Receita', 'Expurgos', 'Faturamento Comercial'
+      ]];
+      [...clientes.values()]
+        .sort((a, b) => b.comercial - a.comercial
+          || a.cliente.localeCompare(b.cliente, 'pt-BR'))
+        .forEach(c => clientesAoa.push([
+          c.codCliente,
+          c.loja,
+          c.cliente,
+          [...c.unidades].join(' | '),
+          [...c.executivos].join(' | '),
+          [...c.contratos].join(' | '),
+          c.contratos.size,
+          c.notas.size,
+          c.itens,
+          c.bruto,
+          c.foraEscopo,
+          c.receita,
+          c.expurgos,
+          c.comercial
+        ]));
+      const wsClientes = XLSX.utils.aoa_to_sheet(clientesAoa);
+      wsClientes['!cols'] = [
+        { wch: 13 }, { wch: 7 }, { wch: 42 }, { wch: 28 }, { wch: 34 },
+        { wch: 38 }, { wch: 14 }, { wch: 10 }, { wch: 11 }, { wch: 16 },
+        { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 22 }
+      ];
+      wsClientes['!autofilter'] = { ref: `A1:N${Math.max(1, clientesAoa.length)}` };
+      XLSX.utils.book_append_sheet(wb, wsClientes, 'POR CLIENTE');
+
+      const clienteContratosAoa = [[
+        'Cód. Cliente', 'Loja', 'Cliente', 'Contrato / Negócio', 'Unidades',
+        'Executivos', 'Qtd. NFs', 'NFs (Filial/Número/Série)', 'Qtd. Itens',
+        'SD2 Bruto', 'Fora Escopo TES/CFOP', 'Receita', 'Expurgos',
+        'Faturamento Comercial'
+      ]];
+      [...clienteContratos.values()]
+        .sort((a, b) => b.comercial - a.comercial
+          || a.cliente.localeCompare(b.cliente, 'pt-BR')
+          || a.contrato.localeCompare(b.contrato, 'pt-BR'))
+        .forEach(n => clienteContratosAoa.push([
+          n.codCliente,
+          n.loja,
+          n.cliente,
+          n.contrato,
+          [...n.unidades].join(' | '),
+          [...n.executivos].join(' | '),
+          n.notas.size,
+          [...n.notas].map(chave => {
+            const [filial, nf, serie] = chave.split('|');
+            return `${filial}/${nf}/${serie}`;
+          }).join(' | '),
+          n.itens,
+          n.bruto,
+          n.foraEscopo,
+          n.receita,
+          n.expurgos,
+          n.comercial
+        ]));
+      const wsClienteContratos = XLSX.utils.aoa_to_sheet(clienteContratosAoa);
+      wsClienteContratos['!cols'] = [
+        { wch: 13 }, { wch: 7 }, { wch: 42 }, { wch: 20 }, { wch: 28 },
+        { wch: 34 }, { wch: 10 }, { wch: 56 }, { wch: 11 }, { wch: 16 },
+        { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 22 }
+      ];
+      wsClienteContratos['!autofilter'] = {
+        ref: `A1:N${Math.max(1, clienteContratosAoa.length)}`
+      };
+      XLSX.utils.book_append_sheet(wb, wsClienteContratos, 'CLIENTE X CONTRATO');
+
+      const r = fatSd2Payload?.resumo || {};
+      const resumo = [
+        ['PRÉVIA DE FATURAMENTO - SD2'],
+        ['Fonte', dados.fonte || 'stage_protheus.sd2010'],
+        ['Período', `${startDate} a ${endDate}`],
+        ['Regras', `v${dados.regrasVersao || ''}`],
+        ['Consultado em', dados.consultadoEm || ''],
+        [],
+        ['Etapa', 'Valor (R$)'],
+        ['Faturamento SD2 bruto', Number(r.bruto || 0)],
+        ['(-) Fora do escopo de receita (TES/CFOP)', Number(r.foraEscopo || 0)],
+        ['(=) Receita comercial', Number(r.receita || 0)],
+        ['(-) CM Máquinas', Number((fatSd2Payload?.expurgos || []).find(e => e.motivo === 'cm_maquinas')?.valor || 0)],
+        ['(-) Central ADM', Number((fatSd2Payload?.expurgos || []).find(e => e.motivo === 'central_adm')?.valor || 0)],
+        ['(-) Fora das unidades comerciais', Number((fatSd2Payload?.expurgos || []).find(e => e.motivo === 'fora_unidades')?.valor || 0)],
+        ['(-) Locação T&A', Number((fatSd2Payload?.expurgos || []).find(e => e.motivo === 't_a_contrato')?.valor || 0)],
+        ['(=) Faturamento comercial', Number(r.comercial || 0)],
+        [],
+        ['Linhas exportadas', linhas.length],
+        ['Clientes exportados', clientes.size],
+        ['Contratos exportados', contratos.size],
+        ['Negócios cliente x contrato', clienteContratos.size],
+        ['Notas fiscais exportadas', notas.size]
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumo), 'RESUMO');
+
+      const regras = [
+        ['REGRA', 'CRITÉRIO'],
+        ['Escopo de receita', 'TES comerciais: 501, 503, 511, 520, 522, 586, 620, 623, 628, 629, 630, 633, 636, 653'],
+        ['', 'CFOPs de receita: 5933, 6933, 000, 5405, 6932, 6404, 6353, 5353, 5352, 5932, 5102'],
+        ['Unidades comerciais', 'Centros de custo iniciados por 413, 414, 415, 416, 417 ou 423'],
+        ['CM Máquinas', 'Centro de custo iniciado por 421'],
+        ['Central ADM', 'Centro de custo iniciado por 321 ou 330'],
+        ['Locação T&A', 'Contrato 68673, série 4'],
+        ['', ''],
+        ['OBSERVAÇÃO', 'Prévia sujeita a fechamento contábil. O executivo vem do código de vendedor gravado na NF.']
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(regras), 'REGRAS');
+
+      const nome = `base-sd2-${startDate}-a-${endDate}.xlsx`;
+      XLSX.writeFile(wb, nome);
+      core().showToast(
+        `XLSX exportado: ${fmtInt(clientes.size)} clientes, ${fmtInt(contratos.size)} contratos e ${fmtInt(notas.size)} NFs.`,
+        'success'
+      );
+    } catch (ex) {
+      core().showToast(ex.message || 'Não foi possível exportar a base SD2.', 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function bindControlesFaturamentoSd2() {
+    if (fatSd2Binded) return;
+    fatSd2Binded = true;
+    montarPeriodosFatSd2();
+    alternarPeriodoPersonalizadoFatSd2();
+    document.getElementById('fatSd2Periodo')?.addEventListener('change', () => {
+      const personalizado = alternarPeriodoPersonalizadoFatSd2();
+      if (personalizado) {
+        const de = document.getElementById('fatSd2Start');
+        const ate = document.getElementById('fatSd2End');
+        if (!de?.value || !ate?.value) return;
+      }
+      carregarFaturamentoSd2(true);
+    });
+    ['fatSd2Start', 'fatSd2End', 'fatSd2Unidade', 'fatSd2Executivo'].forEach(id => {
+      document.getElementById(id)?.addEventListener('change', () => carregarFaturamentoSd2(true));
+    });
+    document.getElementById('btnAtualizarFaturamentoSd2')?.addEventListener('click', () => carregarFaturamentoSd2(true));
+    document.getElementById('btnExportarFaturamentoSd2Base')?.addEventListener('click', exportarBaseSd2Xlsx);
+  }
+
   window.FarolReportsExtra = {
     openRmr: () => carregarRmr(false),
+    refreshRmr: () => carregarRmr(true),
     openFaturamento: () => carregarFaturamento(false),
-    openInadimplencia: () => carregarInadimplencia(false),
+    openFaturamentoSd2: () => {
+      bindControlesFaturamentoSd2();
+      return carregarFaturamentoSd2(false);
+    },
+    refreshFaturamentoSd2: () => {
+      bindControlesFaturamentoSd2();
+      return carregarFaturamentoSd2(true);
+    },
+    openInadimplencia: () => {
+      carregarPosicoesInad();
+      return carregarInadimplencia(false);
+    },
+    refreshInadimplencia: () => carregarInadimplencia(true),
     reset: () => {
       rmrPayload = null;
       rmrCarregadoKey = '';
       fatPayload = null;
       fatCarregado = false;
+      fatSd2Payload = null;
+      fatSd2Carregado = false;
       inadPayload = null;
       inadCarregado = false;
       inadFiliaisSelecionadas = new Set();

@@ -57,46 +57,73 @@ export const EXPURGO_COND_SQL = `
 `;
 
 /**
- * CTE base de faturamento fiscal deduplicado (NFs multi-cliente em comercial.fato_itens_vendas).
- * Mantém apenas a primeira chave cod_cliente por (cod_filial, numero_documento, serie).
+ * CTE base de faturamento fiscal lida direto da stage_protheus.sd2010 (itens ativos),
+ * enriquecida com cod_vendedor da comercial.fato_itens_vendas (deduplicada por NF)
+ * e deduplicada para NFs multi-cliente.
  */
 export function buildBillingBaseCte({ startParam = '$1', endParam = '$2', escopo = 'pbix' } = {}) {
   const filialArraySql = `ARRAY[${PBIX_FILIAIS.map(f => `'${f}'`).join(',')}]`;
   const filialFilter = alias => (escopo === 'all'
     ? ''
-    : `AND TRIM(COALESCE(${alias}.cod_filial::text, '')) = ANY(${filialArraySql})`);
+    : `AND TRIM(COALESCE(${alias}.d2_filial::text, '')) = ANY(${filialArraySql})`);
 
   const tesList = COMMERCIAL_TES.map(t => `'${t}'`).join(',');
   const cfopList = REVENUE_CFOPS.map(c => `'${c}'`).join(',');
 
   return `
-    WITH fiv_scope AS MATERIALIZED (
+    WITH fiv_vend_nf AS MATERIALIZED (
+      SELECT DISTINCT ON (
+        TRIM(COALESCE(cod_filial::text, '')),
+        TRIM(COALESCE(numero_documento::text, '')),
+        TRIM(COALESCE(serie::text, ''))
+      )
+        TRIM(COALESCE(cod_filial::text, '')) AS cod_filial,
+        TRIM(COALESCE(numero_documento::text, '')) AS numero_documento,
+        TRIM(COALESCE(serie::text, '')) AS serie,
+        TRIM(COALESCE(cod_vendedor::text, '')) AS cod_vendedor
+      FROM comercial.fato_itens_vendas
+      WHERE emissao >= (${startParam}::date - INTERVAL '14 days')
+        AND emissao < (${endParam}::date + INTERVAL '14 days')
+      ORDER BY
+        TRIM(COALESCE(cod_filial::text, '')),
+        TRIM(COALESCE(numero_documento::text, '')),
+        TRIM(COALESCE(serie::text, '')),
+        data_criacao DESC NULLS LAST,
+        id DESC
+    ),
+    fiv_scope AS MATERIALIZED (
       SELECT
-        fiv.id,
-        fiv.emissao,
-        fiv.data_criacao,
-        TRIM(COALESCE(fiv.cod_filial::text, '')) AS cod_filial,
-        TRIM(COALESCE(fiv.numero_documento::text, '')) AS numero_documento,
-        TRIM(COALESCE(fiv.serie::text, '')) AS serie,
-        TRIM(COALESCE(fiv.numero_pedido::text, '')) AS numero_pedido,
-        TRIM(COALESCE(fiv.numero_contrato::text, '')) AS numero_contrato,
-        TRIM(COALESCE(fiv.cod_cliente::text, '')) AS cod_cliente,
-        TRIM(COALESCE(fiv.loja::text, '')) AS loja,
-        TRIM(COALESCE(fiv.cod_vendedor::text, '')) AS cod_vendedor,
-        TRIM(COALESCE(fiv.cod_centro_custo::text, '')) AS cod_centro_custo,
-        TRIM(COALESCE(fiv.cod_produto::text, '')) AS cod_produto,
-        TRIM(COALESCE(fiv.tipo_saida::text, '')) AS tipo_saida,
-        TRIM(COALESCE(fiv.cod_fiscal::text, '')) AS cod_fiscal,
-        NULLIF(TRIM(COALESCE(fiv.margem::text, '')), '') AS margem,
-        COALESCE(fiv.quantidade_produto, 0)::numeric AS quantidade_produto,
-        COALESCE(fiv.valor_unitario, 0)::numeric AS valor_unitario,
-        COALESCE(fiv.valor_total, 0)::numeric AS valor_total
-      FROM comercial.fato_itens_vendas fiv
-      WHERE fiv.emissao >= ${startParam}::date
-        AND fiv.emissao < ${endParam}::date
-        AND TRIM(COALESCE(fiv.tipo_saida::text, '')) IN (${tesList})
-        AND TRIM(COALESCE(fiv.cod_fiscal::text, '')) IN (${cfopList})
-        ${filialFilter('fiv')}
+        sd.r_e_c_n_o_ AS id,
+        TO_DATE(TRIM(sd.d2_emissao::text), 'YYYYMMDD') AS emissao,
+        sd.s_t_a_m_p_ AS data_criacao,
+        TRIM(COALESCE(sd.d2_filial::text, '')) AS cod_filial,
+        TRIM(COALESCE(sd.d2_doc::text, '')) AS numero_documento,
+        TRIM(COALESCE(sd.d2_serie::text, '')) AS serie,
+        TRIM(COALESCE(sd.d2_pedido::text, '')) AS numero_pedido,
+        TRIM(COALESCE(sd.d2_ynumctr::text, '')) AS numero_contrato,
+        TRIM(COALESCE(sd.d2_cliente::text, '')) AS cod_cliente,
+        TRIM(COALESCE(sd.d2_loja::text, '')) AS loja,
+        COALESCE(vn.cod_vendedor, '') AS cod_vendedor,
+        TRIM(COALESCE(sd.d2_ccusto::text, '')) AS cod_centro_custo,
+        TRIM(COALESCE(sd.d2_cod::text, '')) AS cod_produto,
+        TRIM(COALESCE(sd.d2_tes::text, '')) AS tipo_saida,
+        TRIM(COALESCE(sd.d2_cf::text, '')) AS cod_fiscal,
+        NULLIF(TRIM(COALESCE(sd.d2_ymargct::text, '')), '') AS margem,
+        COALESCE(sd.d2_quant, 0)::numeric AS quantidade_produto,
+        COALESCE(sd.d2_prcven, 0)::numeric AS valor_unitario,
+        COALESCE(sd.d2_total, 0)::numeric AS valor_total
+      FROM stage_protheus.sd2010 sd
+      LEFT JOIN fiv_vend_nf vn
+        ON vn.cod_filial = TRIM(COALESCE(sd.d2_filial::text, ''))
+       AND vn.numero_documento = TRIM(COALESCE(sd.d2_doc::text, ''))
+       AND vn.serie = TRIM(COALESCE(sd.d2_serie::text, ''))
+      WHERE COALESCE(TRIM(sd.d_e_l_e_t_), '') <> '*'
+        AND TRIM(COALESCE(sd.d2_emissao::text, '')) ~ '^\\d{8}$'
+        AND TRIM(sd.d2_emissao::text) >= TO_CHAR(${startParam}::date, 'YYYYMMDD')
+        AND TRIM(sd.d2_emissao::text) < TO_CHAR(${endParam}::date, 'YYYYMMDD')
+        AND TRIM(COALESCE(sd.d2_tes::text, '')) IN (${tesList})
+        AND TRIM(COALESCE(sd.d2_cf::text, '')) IN (${cfopList})
+        ${filialFilter('sd')}
     ),
     cli_dedup_nf AS MATERIALIZED (
       SELECT DISTINCT ON (cod_filial, numero_documento, serie)
