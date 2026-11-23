@@ -1368,7 +1368,7 @@ function renderizarContratos() {
 
   const tbody = document.getElementById('tbodyContratos');
   if (!filtrados.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="contracts-empty-row">Nenhum contrato encontrado com os filtros aplicados.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="contracts-empty-row">Nenhum contrato encontrado com os filtros aplicados.</td></tr>';
     return;
   }
 
@@ -1377,7 +1377,6 @@ function renderizarContratos() {
       ? `<a href="${escaparHtml(item.bitrixUrl)}" target="_blank" rel="noopener" class="contract-card-link">#${escaparHtml(item.id)} <i class="ph ph-arrow-square-out"></i></a>`
       : `<span class="contract-card-id">#${escaparHtml(item.id)}</span>`;
 
-    const eqTexto = item.equipamentos || 'Não especificado no card';
     const etapaClass = item.assinaturaPendente ? 'stage-pending' : 'stage-active';
     const vigenciaTexto = `${formatarDataBr(item.dataInicio)} → ${formatarDataBr(item.dataFim)}`;
     const extrasContrato = [
@@ -1400,10 +1399,9 @@ function renderizarContratos() {
           <div class="contract-type-sub">${escaparHtml(item.tipoContrato)}</div>
           ${extrasContrato.length ? `<div class="contract-type-sub">${escaparHtml(extrasContrato.join(' · '))}</div>` : ''}
         </td>
-        <td data-label="Equipamentos"><div class="contract-equip" title="${escaparHtml(eqTexto)}">${escaparHtml(eqTexto)}</div></td>
         <td data-label="Vigência" class="contract-dates">${escaparHtml(vigenciaTexto)}</td>
         <td class="contract-cell-badge" data-label="Prazo">${badgeFaltamContrato(item)}</td>
-        <td data-label="Valor" style="text-align: right;" class="contract-value">${formatarMoedaCompleta(item.valor)}</td>
+        <td data-label="Valor" class="contract-value">${formatarMoedaCompleta(item.valor)}</td>
       </tr>
     `;
   }).join('');
