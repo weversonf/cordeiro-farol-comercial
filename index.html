@@ -369,7 +369,7 @@
             <div id="acoesRmr" class="reports-actions" style="display: none;">
               <select id="rmrAnoSelect" class="reports-year-select" aria-label="Ano RMR"></select>
               <select id="rmrMesSelect" class="reports-year-select" aria-label="Mês de referência RMR"></select>
-              <label class="report-inline-toggle">
+              <label class="report-inline-toggle" style="display: none;">
                 <input type="checkbox" id="rmrIncluirExpurgos" />
                 <span>Incluir expurgos (Bruto)</span>
               </label>
@@ -397,7 +397,8 @@
 
         <div id="relatoriosAuthBanner" class="report-status-banner is-warning" style="display: none; margin-bottom: 14px;"></div>
 
-        <!-- Catálogo / Gama de Relatórios -->
+        <!-- Catálogo / Gama de Relatórios -->
+
         <div id="relatoriosCatalogo">
           <div class="reports-toolbar">
             <div>
@@ -672,11 +673,13 @@
 
             <div class="rmr-subtabs" role="tablist" aria-label="Seções do RMR Comercial">
               <button type="button" class="rmr-subtab is-active" data-rmr-tab="executivo"><i class="ph ph-gauge"></i> Visão Executiva</button>
-              <button type="button" class="rmr-subtab" data-rmr-tab="metas"><i class="ph ph-target"></i> Metas vs Realizado</button>
-              <button type="button" class="rmr-subtab" data-rmr-tab="backlog"><i class="ph ph-hourglass-medium"></i> Backlog &amp; Medições</button>
+              <button type="button" class="rmr-subtab" data-rmr-tab="metas"><i class="ph ph-chart-bar"></i> Desempenho</button>
+              <button type="button" class="rmr-subtab" data-rmr-tab="medicoes"><i class="ph ph-clipboard-text"></i> Medições Pendentes</button>
+              <button type="button" class="rmr-subtab" data-rmr-tab="backlog"><i class="ph ph-hourglass-medium"></i> Backlog</button>
+              <button type="button" class="rmr-subtab" data-rmr-tab="funil"><i class="ph ph-funnel"></i> Funil de Vendas</button>
+              <button type="button" class="rmr-subtab" data-rmr-tab="executivos"><i class="ph ph-users-three"></i> Executivos</button>
+              <button type="button" class="rmr-subtab" data-rmr-tab="perdidos"><i class="ph ph-x-circle"></i> Negócios Perdidos</button>
               <button type="button" class="rmr-subtab" data-rmr-tab="clientes"><i class="ph ph-buildings"></i> Contratos &amp; Clientes</button>
-              <button type="button" class="rmr-subtab" data-rmr-tab="projecoes"><i class="ph ph-trend-up"></i> Projeções Comerciais</button>
-              <button type="button" class="rmr-subtab" data-rmr-tab="funil"><i class="ph ph-funnel"></i> Funil &amp; Perdas</button>
             </div>
 
             <!-- Aba 1: Visão Executiva -->
@@ -688,20 +691,24 @@
                   <span id="rmrKpiMesDelta" class="kpi-note">—</span>
                 </article>
                 <article class="kpi-card">
-                  <span class="kpi-label">Meta Mês (Unidades)</span>
-                  <strong id="rmrKpiMesMeta" class="kpi-value">—</strong>
-                  <span id="rmrKpiMesAting" class="kpi-note">—</span>
+                  <span class="kpi-label">Inadimplência (SE1 · &le;365d)</span>
+                  <strong id="rmrKpiExecInad" class="kpi-value">—</strong>
+                  <span id="rmrKpiExecInadSub" class="kpi-note">—</span>
                 </article>
                 <article class="kpi-card">
-                  <span class="kpi-label">Acumulado YTD</span>
-                  <strong id="rmrKpiYtdPrincipal" class="kpi-value">—</strong>
-                  <span id="rmrKpiYtdMeta" class="kpi-note">—</span>
+                  <span class="kpi-label">Backlog Restante (Protheus)</span>
+                  <strong id="rmrKpiExecBacklog" class="kpi-value">—</strong>
+                  <span id="rmrKpiExecBacklogSub" class="kpi-note">—</span>
                 </article>
                 <article class="kpi-card">
-                  <span class="kpi-label">Bruto Fiscal / Expurgos YTD</span>
-                  <strong id="rmrKpiYtdBruto" class="kpi-value">—</strong>
-                  <span id="rmrKpiYtdExpurgos" class="kpi-note">—</span>
+                  <span class="kpi-label">Funil de Vendas (Bitrix)</span>
+                  <strong id="rmrKpiExecFunil" class="kpi-value">—</strong>
+                  <span id="rmrKpiExecFunilSub" class="kpi-note">—</span>
                 </article>
+              </div>
+              <div style="display:none;">
+                <span id="rmrKpiMesMeta"></span><span id="rmrKpiMesAting"></span>
+                <span id="rmrKpiYtdBruto"></span><span id="rmrKpiYtdExpurgos"></span><span id="rmrKpiYtdPrincipal"></span><span id="rmrKpiYtdMeta"></span>
               </div>
 
               <div id="rmrReconciliacaoAlert" class="report-status-banner is-info"></div>
@@ -715,9 +722,30 @@
                   <div id="rmrGraficoMensal" class="monthly-bars"></div>
                 </article>
 
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Inadimplência por Faixa de Atraso (Protheus SE1)</h3>
+                    <span id="rmrInadFonteTag" class="report-panel-tag">NF · Sem expurgos</span>
+                  </div>
+                  <div id="rmrExecInadFaixas" class="ranking-list"></div>
+                </article>
+
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Top Clientes Inadimplentes (&le; 365 dias)</h3>
+                    <span class="report-panel-tag">Protheus SE1010</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead><tr><th>Cliente</th><th class="num">Títulos</th><th class="num">Maior Atraso</th><th class="num">Saldo Vencido</th></tr></thead>
+                      <tbody id="tbodyRmrExecInadClientes"></tbody>
+                    </table>
+                  </div>
+                </article>
+
                 <article class="report-panel wide">
                   <div class="report-panel-header">
-                    <h3>Competência Fiscal (Protheus) vs Apropriação CRM (Bitrix)</h3>
+                    <h3>Série Mensal: Faturado vs Meta</h3>
                     <span class="report-panel-tag">Série mensal detalhada</span>
                   </div>
                   <div class="table-responsive">
@@ -769,18 +797,20 @@
 
                 <article class="report-panel wide">
                   <div class="report-panel-header">
-                    <h3>Desempenho por Executivo vs Alvo Anual (dim_meta_vendedores)</h3>
-                    <span class="report-panel-tag">Alvo anual deduplicado via MAX(valor_alvo)</span>
+                    <h3>Desempenho por Executivo (Meta Mensal + Alvo Anual)</h3>
+                    <span class="report-panel-tag">Planilha Editável RMR + DW (dim_meta_vendedores)</span>
                   </div>
                   <div class="table-responsive">
-                    <table class="contracts-table">
+                    <table id="tableRmrMetasExecutivos" class="contracts-table">
                       <thead>
                         <tr>
                           <th>Executivo</th>
                           <th>Unidade Ref.</th>
                           <th class="num">Realizado Mês</th>
+                          <th class="num">Meta Mês</th>
+                          <th class="num">Ating. Mês</th>
                           <th class="num">Realizado YTD</th>
-                          <th class="num">Alvo Proporcional YTD</th>
+                          <th class="num">Alvo / Meta YTD</th>
                           <th class="num">Ating. YTD</th>
                           <th class="num">Alvo Anual</th>
                           <th class="num">Gap Anual</th>
@@ -794,8 +824,132 @@
               </div>
             </div>
 
-            <!-- Aba 3: Backlog & Medições Pendentes -->
+            <!-- Aba Medições Pendentes -->
+            <div id="rmrPanelMedicoes" class="rmr-panel-section">
+              <div id="rmrMedicoesStatusBanner" class="report-status-banner is-warning"></div>
+              <div class="reports-kpis">
+                <article class="kpi-card highlight">
+                  <span class="kpi-label">Total Medições Pendentes</span>
+                  <strong id="rmrMedTotalVal" class="kpi-value">—</strong>
+                  <span id="rmrMedTotalQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Contratos</span>
+                  <strong id="rmrMedContratoVal" class="kpi-value">—</strong>
+                  <span id="rmrMedContratoQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Spot</span>
+                  <strong id="rmrMedSpotVal" class="kpi-value">—</strong>
+                  <span id="rmrMedSpotQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Aguardando Pedido</span>
+                  <strong id="rmrMedAguardVal" class="kpi-value">—</strong>
+                  <span id="rmrMedAguardQtd" class="kpi-note">—</span>
+                </article>
+              </div>
+              <div class="reports-grid">
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Detalhamento de Medições Pendentes (Planilha Editável / SharePoint)</h3>
+                    <span id="rmrMedicoesTabTag" class="report-panel-tag">—</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Modalidade</th>
+                          <th>Cliente</th>
+                          <th>Unidade</th>
+                          <th>Status Pedido</th>
+                          <th class="num">Valor (R$)</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrMedicoesTab"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <!-- Aba Backlog (Protheus Real: Global - Faturado SD2010 · Timeline + Tabela) -->
             <div id="rmrPanelBacklog" class="rmr-panel-section">
+              <div class="reports-kpis">
+                <article class="kpi-card highlight">
+                  <span class="kpi-label">Backlog Restante Real (Protheus)</span>
+                  <strong id="rmrBlRealTotal" class="kpi-value">—</strong>
+                  <span id="rmrBlRealQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Valor Global Vigente</span>
+                  <strong id="rmrBlRealGlobal" class="kpi-value">—</strong>
+                  <span class="kpi-note">Contratos ativos e vigentes</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Já Faturado (SD2010 + Cabeçalho)</span>
+                  <strong id="rmrBlRealFat" class="kpi-value">—</strong>
+                  <span id="rmrBlRealPct" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Vencendo em até 60 dias</span>
+                  <strong id="rmrBlRealVenc60" class="kpi-value">—</strong>
+                  <span id="rmrBlRealVenc60Qtd" class="kpi-note">—</span>
+                </article>
+              </div>
+
+              <div class="reports-grid" style="margin-bottom:16px;">
+                <article class="report-panel wide">
+                  <div class="report-panel-header" style="flex-wrap:wrap;gap:10px;">
+                    <div>
+                      <h3>Backlog de Contratos Vigentes (Timeline &amp; Tabela)</h3>
+                      <span class="report-panel-tag">Global − Faturado (SD2010) · Sem divisão mensal</span>
+                    </div>
+                    <div class="rmr-bl-toolbar">
+                      <div class="rmr-bl-filters">
+                        <label class="rmr-bl-field" title="Filtrar por Unidade">
+                          <i class="ph ph-buildings"></i>
+                          <select id="rmrBlUnidadeFilter" aria-label="Filtrar por Unidade">
+                            <option value="ALL">Todas as unidades</option>
+                          </select>
+                        </label>
+                        <label class="rmr-bl-field" title="Filtrar por Executivo">
+                          <i class="ph ph-user"></i>
+                          <select id="rmrBlExecutivoFilter" aria-label="Filtrar por Executivo">
+                            <option value="ALL">Todos os executivos</option>
+                          </select>
+                        </label>
+                        <button type="button" id="rmrBlClearBtn" class="rmr-bl-clear-btn" style="display:none;"><i class="ph ph-x"></i> Limpar</button>
+                      </div>
+                      <div class="rmr-view-toggle" role="group" aria-label="Modo de visualização">
+                        <button type="button" class="rmr-bl-view-btn is-active" data-bl-view="ambos"><i class="ph ph-squares-four"></i> Ambos</button>
+                        <button type="button" class="rmr-bl-view-btn" data-bl-view="timeline"><i class="ph ph-chart-bar-horizontal"></i> Timeline</button>
+                        <button type="button" class="rmr-bl-view-btn" data-bl-view="tabela"><i class="ph ph-table"></i> Tabela</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="rmrBlTimelineContainer" style="margin-bottom:18px;"></div>
+                  <div id="rmrBlTableContainer" class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Contrato</th>
+                          <th>Cliente</th>
+                          <th>Unidade</th>
+                          <th>Executivo</th>
+                          <th>Modalidade</th>
+                          <th>Vigência (Início · Hoje · Fim)</th>
+                          <th class="num">Valor Global</th>
+                          <th class="num">Faturado</th>
+                          <th class="num">Backlog Restante</th>
+                          <th class="num">% Exec.</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrBlReal"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
               <div id="rmrBacklogPendencias" class="report-pendencias-stack"></div>
 
               <div class="reports-kpis">
@@ -856,9 +1010,33 @@
                           <th class="num">Valor</th>
                         </tr>
                       </thead>
-                      <tbody id="tbodyRmrBacklogContratos"></tbody>
-                    </table>
-                  </div>
+                      <tbody id="tbodyRmrBacklogContratos"></tbody>
+
+                    </table>
+
+                  </div>
+
+                </article>
+
+                <article id="rmrPanelMedicoesPlanilha" class="report-panel wide" style="display: none;">
+                  <div class="report-panel-header">
+                    <h3>Medições Pendentes (Planilha Editável RMR)</h3>
+                    <span id="rmrMedicoesPlanilhaTag" class="report-panel-tag">—</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Modalidade</th>
+                          <th>Cliente</th>
+                          <th>Unidade</th>
+                          <th>Status Pedido</th>
+                          <th class="num">Valor (R$)</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrMedicoesPlanilha"></tbody>
+                    </table>
+                  </div>
                 </article>
 
                 <article id="rmrPanelCtrOpProtheus" class="report-panel wide" style="display: none;">
@@ -889,7 +1067,6 @@
 
             <!-- Aba 4: Contratos & Resultados por Cliente -->
             <div id="rmrPanelClientes" class="rmr-panel-section">
-              <div id="rmrClientesContratosBanner" class="report-status-banner is-warning"></div>
               <div class="reports-grid">
                 <article class="report-panel wide">
                   <div class="report-panel-header">
@@ -985,6 +1162,43 @@
                         </tr>
                       </thead>
                       <tbody id="tbodyRmrCenarios"></tbody>
+
+                    </table>
+
+                  </div>
+
+                </article>
+
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Cenário Consolidado: Realizado + Backlog Contratado</h3>
+                    <span id="rmrBacklogCenarioTag" class="report-panel-tag">Protheus + Apropriação CRM</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead id="theadRmrBacklogCenario"></thead>
+                      <tbody id="tbodyRmrBacklogCenario"></tbody>
+                      <tfoot id="tfootRmrBacklogCenario"></tfoot>
+                    </table>
+                  </div>
+                </article>
+
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Funil de Vendas (Meses Restantes) + Diferença Meta</h3>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                      <select id="rmrFunilCenarioModo" class="filter-select" style="min-width:150px;padding:4px 8px;font-size:12px;">
+                        <option value="bruto">Funil Cheio (100%)</option>
+                        <option value="ponderado">Funil Ponderado</option>
+                      </select>
+                      <span id="rmrFunilCenarioTag" class="report-panel-tag">Bitrix24 · Previsão de fechamento</span>
+                    </div>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead id="theadRmrFunilCenario"></thead>
+                      <tbody id="tbodyRmrFunilCenario"></tbody>
+                      <tfoot id="tfootRmrFunilCenario"></tfoot>
                     </table>
                   </div>
                 </article>
@@ -1020,16 +1234,405 @@
               </div>
             </div>
 
-            <!-- Aba 6: Funil de Vendas & Motivos de Perda -->
+            <!-- Aba Funil de Vendas (Slide 7) -->
             <div id="rmrPanelFunil" class="rmr-panel-section">
               <div class="reports-kpis">
                 <article class="kpi-card highlight">
-                  <span class="kpi-label">Ganhos no Ano (até Mês Ref.)</span>
+                  <span class="kpi-label">Funil de Vendas</span>
+                  <strong id="rmrFunilAbertoBruto" class="kpi-value">—</strong>
+                  <span id="rmrFunilAbertoQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Negócios Quentes</span>
+                  <strong id="rmrFunilAbertoPond" class="kpi-value">—</strong>
+                  <span id="rmrFunilJanelaAno" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Taxa de Conversão</span>
+                  <strong id="rmrFunilConv" class="kpi-value">—</strong>
+                  <span id="rmrFunilConvBruta" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card" id="rmrCardGanhosAction" style="cursor:pointer;" title="Clique para ver Principais Negócios Ganhos">
+                  <span class="kpi-label">Negócios Ganhos <i class="ph ph-arrow-down-right"></i></span>
                   <strong id="rmrFunilGanhosVal" class="kpi-value">—</strong>
                   <span id="rmrFunilGanhosQtd" class="kpi-note">—</span>
                 </article>
+                <article class="kpi-card" id="rmrCardPerdidosAction" style="cursor:pointer;" title="Clique para abrir a aba Negócios Perdidos">
+                  <span class="kpi-label">Negócios Perdidos <i class="ph ph-arrow-right"></i></span>
+                  <strong id="rmrFunilCardPerdidosVal" class="kpi-value">—</strong>
+                  <span id="rmrFunilCardPerdidosQtd" class="kpi-note">—</span>
+                </article>
+              </div>
+              <div class="reports-grid">
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Funil de Vendas por Etapa</h3>
+                    <span class="report-panel-tag">Pipeline Funil de Vendas (Bitrix C4)</span>
+                  </div>
+                  <div id="rmrFunilAbertoEtapas" class="ranking-list"></div>
+                </article>
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Funil de Vendas por Unidade</h3>
+                    <span class="report-panel-tag">Pipeline Funil de Vendas (Bitrix C4)</span>
+                  </div>
+                  <div id="rmrFunilAbertoUnidades" class="ranking-list"></div>
+                </article>
+                <article id="rmrSecaoUltimosGanhos" class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Principais Negócios Ganhos no Período</h3>
+                    <span class="report-panel-tag">Bitrix Funil de Vendas (C4) · Top 15</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead><tr><th>Negócio</th><th>Cliente</th><th>Unidade</th><th>Executivo</th><th>Data</th><th class="num">Valor</th></tr></thead>
+                      <tbody id="tbodyRmrUltimosGanhos"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <!-- Aba Executivos (Contratos Protheus x Funil CRM x Equipamentos) -->
+            <div id="rmrPanelExecutivos" class="rmr-panel-section">
+              <div class="report-status-banner is-info" style="margin-bottom:14px;">
+                <i class="ph ph-info"></i>
+                <div>
+                  <strong>Visão por Executivo (Protheus × Bitrix24):</strong>
+                  Exibe o saldo em <strong>Contratos Vigentes (Protheus)</strong> e em <strong>Funil de Vendas (CRM)</strong>. Clique no <strong>+</strong> de cada executivo para detalhar os <strong>Equipamentos / Produtos</strong>.
+                </div>
+              </div>
+              <div class="reports-kpis">
+                <article class="kpi-card highlight">
+                  <span class="kpi-label">Em Contratos (Protheus)</span>
+                  <strong id="rmrExecTotContratos" class="kpi-value">—</strong>
+                  <span id="rmrExecTotContratosPct" class="kpi-note">—</span>
+                </article>
                 <article class="kpi-card">
-                  <span class="kpi-label">Perdas Competitivas / Operacionais</span>
+                  <span class="kpi-label">Em Funil (CRM Bitrix)</span>
+                  <strong id="rmrExecTotFunil" class="kpi-value">—</strong>
+                  <span id="rmrExecTotFunilPct" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Total Sob Gestão</span>
+                  <strong id="rmrExecTotGeral" class="kpi-value">—</strong>
+                  <span class="kpi-note">Contratos Vigentes + Funil Aberto</span>
+                </article>
+              </div>
+              <div class="reports-grid">
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Executivos: Contratos (Protheus) × Funil (CRM) × Equipamentos</h3>
+                    <span class="report-panel-tag">Clique no + para detalhar equipamentos</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Executivo</th>
+                          <th class="num">Contratos (Protheus R$)</th>
+                          <th class="num">% Contratos</th>
+                          <th class="num">Funil (CRM R$)</th>
+                          <th class="num">% Funil</th>
+                          <th class="num">Total Sob Gestão</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrExecutivosFunil"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+            <!-- Aba Negócios Perdidos (Slide 8) -->
+            <div id="rmrPanelPerdidos" class="rmr-panel-section">
+              <div class="report-status-banner is-info" style="margin-bottom:14px;">
+                <i class="ph ph-funnel-x"></i>
+                <div>
+                  <strong>Regra Oficial RMR (Apenas Perdas Reais):</strong>
+                  Exibindo exclusivamente perdas competitivas/operacionais (preço, prazo, concorrência, frota). Cancelamentos pelo cliente, orçamentos orientativos e licitações são ignorados.
+                </div>
+              </div>
+              <div class="reports-kpis">
+                <article class="kpi-card highlight">
+                  <span class="kpi-label">Perdas Reais</span>
+                  <strong id="rmrFunilPerdasVal" class="kpi-value">—</strong>
+                  <span id="rmrFunilPerdasQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Ticket Médio da Perda</span>
+                  <strong id="rmrPerdidosTicketMedio" class="kpi-value">—</strong>
+                  <span id="rmrPerdidosTicketSub" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Maior Ofensor Real</span>
+                  <strong id="rmrPerdidosTopMotivo" class="kpi-value" style="font-size:15px;">—</strong>
+                  <span id="rmrPerdidosTopMotivoSub" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Taxa de Conversão (Líquida)</span>
+                  <strong id="rmrPerdidosConvLimpa" class="kpi-value">—</strong>
+                  <span id="rmrPerdidosConvLimpaSub" class="kpi-note">—</span>
+                </article>
+              </div>
+              <div style="display:none;"><span id="rmrFunilCancelVal"></span><span id="rmrFunilCancelQtd"></span><span id="rmrPerdidosTotalBruto"></span><span id="rmrPerdidosTotalQtd"></span><div id="rmrMotivosCancel"></div></div>
+              <div class="reports-grid">
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Distribuição dos Motivos de Perda Real</h3>
+                    <span class="report-panel-tag">Participação por Valor (R$) e Quantidade</span>
+                  </div>
+                  <div id="rmrPerdidosDistribuicao"></div>
+                </article>
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Detalhamento por Motivo de Perda Real</h3>
+                    <span class="report-panel-tag">Competitivas &amp; Operacionais</span>
+                  </div>
+                  <div id="rmrMotivosReais" class="ranking-list"></div>
+                </article>
+              </div>
+            </div>
+            <!-- Aba 4: Contratos & Resultados por Cliente -->
+            <div id="rmrPanelClientes" class="rmr-panel-section">
+              <div class="reports-grid">
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Top 30 Clientes por Faturamento YTD (Protheus)</h3>
+                    <span class="report-panel-tag">Com participação % e Pareto acumulado</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Cliente</th>
+                          <th>Unidade Princ.</th>
+                          <th>Executivo Princ.</th>
+                          <th class="num">Faturado Mês Ref.</th>
+                          <th class="num">Faturado YTD</th>
+                          <th class="num">Share %</th>
+                          <th class="num">Pareto %</th>
+                          <th class="num">NFs / Ctrs</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrClientes"></tbody>
+                    </table>
+                  </div>
+                </article>
+
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Top 25 Contratos Faturados no Protheus (YTD)</h3>
+                    <span class="report-panel-tag">Agrupado por numero_contrato</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Nº Contrato</th>
+                          <th>Cliente</th>
+                          <th>Unidade</th>
+                          <th>Executivo</th>
+                          <th class="num">Mês Ref.</th>
+                          <th class="num">Acumulado YTD</th>
+                          <th class="num">Qtd. NFs</th>
+                          <th>Última Emissão</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrContratosProtheus"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <!-- Aba 5: Projeções Comerciais -->
+            <div id="rmrPanelProjecoes" class="rmr-panel-section">
+              <div class="reports-kpis">
+                <article class="kpi-card">
+                  <span class="kpi-label">Run-Rate Mensal (Meses Fechados)</span>
+                  <strong id="rmrProjRunRate" class="kpi-value">—</strong>
+                  <span id="rmrProjMeses" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Gap Inicial vs Meta Anual</span>
+                  <strong id="rmrProjGapInicial" class="kpi-value">—</strong>
+                  <span id="rmrProjMetaRestante" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card highlight">
+                  <span class="kpi-label">Pipeline Janela do Ano (Bruto)</span>
+                  <strong id="rmrProjPipeAnoBruto" class="kpi-value">—</strong>
+                  <span id="rmrProjPipeAnoPond" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Pipeline Total Aberto (Bruto)</span>
+                  <strong id="rmrProjPipeTotalBruto" class="kpi-value">—</strong>
+                  <span id="rmrProjPipeTotalPond" class="kpi-note">—</span>
+                </article>
+              </div>
+
+              <div class="reports-grid">
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Matriz de Cenários de Fechamento Anual</h3>
+                    <span class="report-panel-tag">Metodologia Run-Rate + Funil Ponderado</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Cenário</th>
+                          <th>Premissa Metodológica</th>
+                          <th class="num">Projeção Anual</th>
+                          <th class="num">Atingimento vs Meta Anual</th>
+                          <th class="num">Gap Residual</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrCenarios"></tbody>
+
+                    </table>
+
+                  </div>
+
+                </article>
+
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Cenário Consolidado: Realizado + Backlog Contratado</h3>
+                    <span id="rmrBacklogCenarioTag" class="report-panel-tag">Protheus + Apropriação CRM</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead id="theadRmrBacklogCenario"></thead>
+                      <tbody id="tbodyRmrBacklogCenario"></tbody>
+                      <tfoot id="tfootRmrBacklogCenario"></tfoot>
+                    </table>
+                  </div>
+                </article>
+
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Funil de Vendas (Meses Restantes) + Diferença Meta</h3>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                      <select id="rmrFunilCenarioModo" class="filter-select" style="min-width:150px;padding:4px 8px;font-size:12px;">
+                        <option value="bruto">Funil Cheio (100%)</option>
+                        <option value="ponderado">Funil Ponderado</option>
+                      </select>
+                      <span id="rmrFunilCenarioTag" class="report-panel-tag">Bitrix24 · Previsão de fechamento</span>
+                    </div>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead id="theadRmrFunilCenario"></thead>
+                      <tbody id="tbodyRmrFunilCenario"></tbody>
+                      <tfoot id="tfootRmrFunilCenario"></tfoot>
+                    </table>
+                  </div>
+                </article>
+
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Ponderação do Pipeline Aberto por Etapa</h3>
+                    <span class="report-panel-tag">Exclui Orçamento Orientativo</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Etapa</th>
+                          <th class="num">Peso</th>
+                          <th class="num">Qtd.</th>
+                          <th class="num">Bruto</th>
+                          <th class="num">Ponderado</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyRmrProjEtapas"></tbody>
+                    </table>
+                  </div>
+                </article>
+
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Pipeline Ponderado por Unidade</h3>
+                    <span class="report-panel-tag">Top 12 Unidades</span>
+                  </div>
+                  <div id="rmrProjUnidades" class="ranking-list"></div>
+                </article>
+              </div>
+            </div>
+
+            <!-- Aba Funil de Vendas (Slide 7) -->
+            <div id="rmrPanelFunil" class="rmr-panel-section">
+              <div class="reports-kpis">
+                <article class="kpi-card highlight">
+                  <span class="kpi-label">Funil de Vendas</span>
+                  <strong id="rmrFunilAbertoBruto" class="kpi-value">—</strong>
+                  <span id="rmrFunilAbertoQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Negócios Quentes</span>
+                  <strong id="rmrFunilAbertoPond" class="kpi-value">—</strong>
+                  <span id="rmrFunilJanelaAno" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Taxa de Conversão</span>
+                  <strong id="rmrFunilConv" class="kpi-value">—</strong>
+                  <span id="rmrFunilConvBruta" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card" id="rmrCardGanhosAction" style="cursor:pointer;" title="Clique para ver Principais Negócios Ganhos">
+                  <span class="kpi-label">Negócios Ganhos <i class="ph ph-arrow-down-right"></i></span>
+                  <strong id="rmrFunilGanhosVal" class="kpi-value">—</strong>
+                  <span id="rmrFunilGanhosQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card" id="rmrCardPerdidosAction" style="cursor:pointer;" title="Clique para abrir a aba Negócios Perdidos">
+                  <span class="kpi-label">Negócios Perdidos <i class="ph ph-arrow-right"></i></span>
+                  <strong id="rmrFunilCardPerdidosVal" class="kpi-value">—</strong>
+                  <span id="rmrFunilCardPerdidosQtd" class="kpi-note">—</span>
+                </article>
+              </div>
+              <div class="reports-grid">
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Funil de Vendas por Etapa</h3>
+                    <span class="report-panel-tag">Pipeline Funil de Vendas (Bitrix C4)</span>
+                  </div>
+                  <div id="rmrFunilAbertoEtapas" class="ranking-list"></div>
+                </article>
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <h3>Funil de Vendas por Unidade</h3>
+                    <span class="report-panel-tag">Pipeline Funil de Vendas (Bitrix C4)</span>
+                  </div>
+                  <div id="rmrFunilAbertoUnidades" class="ranking-list"></div>
+                </article>
+                <article id="rmrSecaoUltimosGanhos" class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Principais Negócios Ganhos no Período</h3>
+                    <span class="report-panel-tag">Bitrix Funil de Vendas (C4) · Top 15</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead><tr><th>Negócio</th><th>Cliente</th><th>Unidade</th><th>Executivo</th><th>Data</th><th class="num">Valor</th></tr></thead>
+                      <tbody id="tbodyRmrUltimosGanhos"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <!-- Aba Negócios Perdidos (Slide 8) -->
+            <div id="rmrPanelPerdidos" class="rmr-panel-section">
+              <div class="report-status-banner is-info" style="margin-bottom:14px;">
+                <i class="ph ph-scales"></i>
+                <div>
+                  <strong>Regra Oficial RMR (Perda Real vs Cancelado pelo Cliente):</strong>
+                  <strong>Perdas Reais</strong> (preço, prazo, concorrência, indisponibilidade de frota) ofendem a taxa de conversão. 
+                  <strong>Cancelados pelo Cliente</strong> (desistência, primarização, orçamento orientativo, licitação de terceiro e inadimplência) são separados e <strong>não ofendem</strong> o indicador comercial.
+                </div>
+              </div>
+              <div class="reports-kpis">
+                <article class="kpi-card highlight">
+                  <span class="kpi-label">Perdas Reais (Ofendem Conversão)</span>
                   <strong id="rmrFunilPerdasVal" class="kpi-value">—</strong>
                   <span id="rmrFunilPerdasQtd" class="kpi-note">—</span>
                 </article>
@@ -1039,13 +1642,24 @@
                   <span id="rmrFunilCancelQtd" class="kpi-note">—</span>
                 </article>
                 <article class="kpi-card">
-                  <span class="kpi-label">Taxa de Conversão Competitiva</span>
-                  <strong id="rmrFunilConv" class="kpi-value">—</strong>
-                  <span id="rmrFunilConvBruta" class="kpi-note">—</span>
+                  <span class="kpi-label">Total Perdido + Cancelado (Bruto)</span>
+                  <strong id="rmrPerdidosTotalBruto" class="kpi-value">—</strong>
+                  <span id="rmrPerdidosTotalQtd" class="kpi-note">—</span>
+                </article>
+                <article class="kpi-card">
+                  <span class="kpi-label">Maior Ofensor Real</span>
+                  <strong id="rmrPerdidosTopMotivo" class="kpi-value" style="font-size:15px;">—</strong>
+                  <span id="rmrPerdidosTopMotivoSub" class="kpi-note">—</span>
                 </article>
               </div>
-
               <div class="reports-grid">
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <h3>Distribuição Visual: Perdas Reais vs Cancelados pelo Cliente</h3>
+                    <span class="report-panel-tag">Proporção por Valor (R$) e Quantidade</span>
+                  </div>
+                  <div id="rmrPerdidosDistribuicao"></div>
+                </article>
                 <article class="report-panel">
                   <div class="report-panel-header">
                     <h3>Motivos de Perda Reais (Competitivas &amp; Operacionais)</h3>
@@ -1053,35 +1667,12 @@
                   </div>
                   <div id="rmrMotivosReais" class="ranking-list"></div>
                 </article>
-
                 <article class="report-panel">
                   <div class="report-panel-header">
                     <h3>Cancelamentos pelo Cliente / Orientativos / Licitações</h3>
                     <span class="report-panel-tag">Separação oficial RMR</span>
                   </div>
                   <div id="rmrMotivosCancel" class="ranking-list"></div>
-                </article>
-
-                <article class="report-panel wide">
-                  <div class="report-panel-header">
-                    <h3>Principais Negócios Ganhos no Período</h3>
-                    <span class="report-panel-tag">Bitrix C4 &amp; C19 · Top 15</span>
-                  </div>
-                  <div class="table-responsive">
-                    <table class="contracts-table">
-                      <thead>
-                        <tr>
-                          <th>Negócio</th>
-                          <th>Cliente</th>
-                          <th>Unidade</th>
-                          <th>Executivo</th>
-                          <th>Data</th>
-                          <th class="num">Valor</th>
-                        </tr>
-                      </thead>
-                      <tbody id="tbodyRmrUltimosGanhos"></tbody>
-                    </table>
-                  </div>
                 </article>
               </div>
             </div>
@@ -1297,14 +1888,6 @@
                 <span class="kpi-label">Faturamento Comercial (prévia)</span>
                 <strong id="fatSd2KpiComercial" class="kpi-value">—</strong>
                 <span id="fatSd2KpiTicket" class="kpi-note">—</span>
-              </article>
-              <article class="kpi-card">
-                <span class="kpi-label">Faturamento SD2 bruto</span>
-                <strong id="fatSd2KpiBruto" class="kpi-value">—</strong>
-                <span class="kpi-note">
-                  <span id="fatSd2KpiReceitaTexto">—</span>
-                  <span class="kpi-help" role="note" tabindex="0" aria-label="O que é TES e CFOP" title="TES (Tipo de Saída) classifica o movimento de estoque, com 3 dígitos. CFOP (Código Fiscal de Operações e Prestações) classifica a operação fiscal, com 4 dígitos. Juntos separam venda/receita de transferência, remessa ou devolução. Em outubro, sem esse filtro a SD2 somaria R$ 28,0 mi em vez de R$ 9,5 mi de receita." style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:rgba(127,127,127,.25);font-size:11px;font-weight:700;cursor:help;margin-left:6px;">?</span>
-                </span>
               </article>
               <article class="kpi-card">
                 <span class="kpi-label">Expurgos aplicados</span>
