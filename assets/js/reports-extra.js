@@ -205,10 +205,13 @@
         const mapPanel = {
           executivo: 'rmrPanelExecutivo',
           metas: 'rmrPanelMetas',
+          medicoes: 'rmrPanelMedicoes',
           backlog: 'rmrPanelBacklog',
-          clientes: 'rmrPanelClientes',
           projecoes: 'rmrPanelProjecoes',
-          funil: 'rmrPanelFunil'
+          funil: 'rmrPanelFunil',
+          executivos: 'rmrPanelExecutivos',
+          perdidos: 'rmrPanelPerdidos',
+          clientes: 'rmrPanelClientes'
         };
         const target = document.getElementById(mapPanel[btn.dataset.rmrTab]);
         if (target) target.classList.add('is-active');
@@ -302,6 +305,57 @@
     document.getElementById('rmrKpiYtdMeta').textContent =
       `Meta YTD: ${fmtMoeda(ytdObj.metaYtd)} (${fmtPct(ytdObj.atingimentoYtdPct)}) · YoY: ${fmtPct(ytdObj.variacaoYoYPct, true)}`;
 
+    const inad = d.inadimplencia || {};
+    const inadRes = inad.resumo || {};
+    const elExecInad = document.getElementById('rmrKpiExecInad');
+    if (elExecInad) {
+      elExecInad.textContent = inad.disponivel ? fmtMoeda(inadRes.total365DiasValor) : '—';
+      document.getElementById('rmrKpiExecInadSub').textContent = inad.disponivel
+        ? `Atraso ≤30d: ${fmtMoeda(inadRes.ate30DiasValor)} · 31-365d: ${fmtMoeda(inadRes.de31a365DiasValor)} · ${fmtInt(inadRes.clientes365)} clientes`
+        : 'Acesso SE1010 indisponível';
+    }
+
+    const blReal = d.backlogMedicoes?.backlogProtheusReal || {};
+    const blRealRes = blReal.resumo || {};
+    const elExecBl = document.getElementById('rmrKpiExecBacklog');
+    if (elExecBl) {
+      elExecBl.textContent = blReal.disponivel ? fmtMoeda(blRealRes.backlogReal) : '—';
+      document.getElementById('rmrKpiExecBacklogSub').textContent = blReal.disponivel
+        ? `${fmtInt(blRealRes.qtdVigentes)} contratos vigentes · Global: ${fmtMoeda(blRealRes.valorGlobal)}`
+        : 'Dados Protheus indisponíveis';
+    }
+
+    const pipeExec = d.projecoes?.pipelineAberto || {};
+    const elExecFn = document.getElementById('rmrKpiExecFunil');
+    if (elExecFn) {
+      elExecFn.textContent = fmtMoeda(pipeExec.brutoTotal);
+      document.getElementById('rmrKpiExecFunilSub').textContent =
+        `Ponderado: ${fmtMoeda(pipeExec.ponderadoTotal)} · ${fmtInt(pipeExec.qtdNegocios)} deals abertos`;
+    }
+
+    const elInadFaixas = document.getElementById('rmrExecInadFaixas');
+    if (elInadFaixas) {
+      renderRankingList('rmrExecInadFaixas', inad.porFaixa || [], {
+        labelKey: 'faixa',
+        valueKey: 'valor',
+        detailFn: f => `${fmtInt(f.qtd)} títulos em aberto`,
+        emptyMsg: 'Sem títulos vencidos no recorte.'
+      });
+    }
+    const elInadClientes = document.getElementById('tbodyRmrExecInadClientes');
+    if (elInadClientes) {
+      const topInad = inad.topClientes || [];
+      elInadClientes.innerHTML = topInad.length
+        ? topInad.map(c => `
+            <tr>
+              <td><strong>${esc(c.cliente)}</strong></td>
+              <td class="num">${fmtInt(c.qtdTitulos)}</td>
+              <td class="num">${fmtInt(c.maxDiasAtraso)}d</td>
+              <td class="num"><strong>${fmtMoedaExata(c.valor)}</strong></td>
+            </tr>`).join('')
+        : '<tr><td colspan="4" class="contracts-empty">Sem títulos vencidos ≤ 365 dias.</td></tr>';
+    }
+
     document.getElementById('rmrKpiYtdBruto').textContent = fmtMoeda(ytdObj.faturamentoBruto);
     document.getElementById('rmrKpiYtdExpurgos').textContent =
       `Expurgos YTD: ${fmtMoeda(ytdObj.expurgos)} · Meta Anual: ${fmtMoeda(ytdObj.metaAnual)}`;
@@ -361,10 +415,42 @@
 
     // Aba 2: Metas vs Realizado
     const unidades = d.metasVsRealizado?.unidades || [];
+    const btnExpandUnidStyle = 'display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-right:6px;border:1px solid #cbd5e1;border-radius:4px;background:#f8fafc;color:#0f2942;font-weight:700;cursor:pointer;font-size:13px;line-height:1;';
+    const renderUnidItensHtml = itens => {
+      if (!itens || !itens.length) return '<div class="contracts-empty" style="padding:6px;">Sem itens detalhados nas NFs.</div>';
+      return `
+        <table class="contracts-table" style="margin:4px 0;background:#fff;border:1px solid #e2e8f0;">
+          <thead>
+            <tr>
+              <th>Cód. Produto</th>
+              <th>Item / Produto / Equipamento</th>
+              <th class="num">Qtd.</th>
+              <th class="num">NFs</th>
+              <th class="num">Faturado YTD</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itens.map(it => `
+              <tr>
+                <td><code>${esc(it.codProduto)}</code></td>
+                <td>${esc(it.produto)}</td>
+                <td class="num">${Number(it.quantidade || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</td>
+                <td class="num">${fmtInt(it.qtdNfsYtd)}</td>
+                <td class="num"><strong>${fmtMoedaExata(it.valorYtd)}</strong></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    };
+
     document.getElementById('tbodyRmrMetasUnidades').innerHTML = unidades.length
-      ? unidades.map(u => `
+      ? unidades.map((u, uIdx) => {
+          const clis = u.clientes || [];
+          return `
           <tr>
-            <td><strong>${esc(u.unidade)}</strong> ${u.isExpurgoUnidade ? '<span class="metric-pill is-neutral">Expurgo</span>' : ''}</td>
+            <td>
+              ${clis.length ? `<button type="button" class="rmr-expand-btn" data-expand-target="rmr-unid-clis-${uIdx}" style="${btnExpandUnidStyle}" title="Expandir clientes da unidade">+</button>` : ''}
+              <strong>${esc(u.unidade)}</strong> ${u.isExpurgoUnidade ? '<span class="metric-pill is-neutral">Expurgo</span>' : ''}
+            </td>
             <td class="num">${fmtMoedaExata(u.realizadoMes)}</td>
             <td class="num">${fmtMoedaExata(u.metaMes)}</td>
             <td class="num">${badgePct(u.atingimentoMesPct)}</td>
@@ -373,8 +459,92 @@
             <td class="num">${badgePct(u.atingimentoYtdPct)}</td>
             <td class="num">${fmtMoedaExata(u.metaAnual)}</td>
             <td class="num">${fmtMoedaExata(u.runRateAnual)}</td>
-          </tr>`).join('')
+          </tr>
+          ${clis.length ? `
+          <tr id="rmr-unid-clis-${uIdx}" style="display:none;background:#f8fafc;">
+            <td colspan="9" style="padding:10px 14px 10px 28px;">
+              <div style="font-size:11.5px;font-weight:700;color:#475569;margin-bottom:6px;">Clientes de ${esc(u.unidade)} (${fmtInt(clis.length)}):</div>
+              <table class="contracts-table" style="background:#fff;border:1px solid #cbd5e1;">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th class="num">Faturado Mês Ref.</th>
+                    <th class="num">Faturado YTD</th>
+                    <th class="num">NFs YTD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${clis.map((cl, cIdx) => {
+                    const ctrs = cl.contratos || [];
+                    return `
+                    <tr>
+                      <td>
+                        ${ctrs.length ? `<button type="button" class="rmr-expand-btn" data-expand-target="rmr-unid-cli-ctrs-${uIdx}-${cIdx}" style="${btnExpandUnidStyle}" title="Expandir contratos do cliente">+</button>` : ''}
+                        <strong>${esc(cl.cliente)}</strong>
+                      </td>
+                      <td class="num">${fmtMoedaExata(cl.valorMes)}</td>
+                      <td class="num"><strong>${fmtMoedaExata(cl.valorYtd)}</strong></td>
+                      <td class="num">${fmtInt(cl.qtdNfsYtd)}</td>
+                    </tr>
+                    ${ctrs.length ? `
+                    <tr id="rmr-unid-cli-ctrs-${uIdx}-${cIdx}" style="display:none;background:#f1f5f9;">
+                      <td colspan="4" style="padding:8px 12px 8px 28px;">
+                        <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:4px;">Contratos de ${esc(cl.cliente)} (${fmtInt(ctrs.length)}):</div>
+                        <table class="contracts-table" style="background:#fff;border:1px solid #cbd5e1;">
+                          <thead>
+                            <tr>
+                              <th>Contrato</th>
+                              <th class="num">Faturado Mês Ref.</th>
+                              <th class="num">Faturado YTD</th>
+                              <th class="num">NFs YTD</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${ctrs.map((cc, kIdx) => {
+                              const itens = cc.itens || [];
+                              const labelCtr = cc.numeroContrato === 'SEM_CONTRATO' ? 'Sem contrato vinculado' : cc.numeroContrato;
+                              return `
+                              <tr>
+                                <td>
+                                  ${itens.length ? `<button type="button" class="rmr-expand-btn" data-expand-target="rmr-unid-ctr-itens-${uIdx}-${cIdx}-${kIdx}" style="${btnExpandUnidStyle}" title="Expandir itens/equipamentos">+</button>` : ''}
+                                  <strong>${esc(labelCtr)}</strong>
+                                </td>
+                                <td class="num">${fmtMoedaExata(cc.valorMes)}</td>
+                                <td class="num"><strong>${fmtMoedaExata(cc.valorYtd)}</strong></td>
+                                <td class="num">${fmtInt(cc.qtdNfsYtd)}</td>
+                              </tr>
+                              ${itens.length ? `
+                              <tr id="rmr-unid-ctr-itens-${uIdx}-${cIdx}-${kIdx}" style="display:none;background:#e2e8f0;">
+                                <td colspan="4" style="padding:6px 10px 6px 24px;">
+                                  ${renderUnidItensHtml(itens)}
+                                </td>
+                              </tr>` : ''}`;
+                            }).join('')}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>` : ''}`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </td>
+          </tr>` : ''}`;
+        }).join('')
       : '<tr><td colspan="9" class="contracts-empty">Sem dados de unidades no período.</td></tr>';
+
+    document.querySelectorAll('#tbodyRmrMetasUnidades .rmr-expand-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-expand-target');
+        const row = targetId ? document.getElementById(targetId) : null;
+        if (!row) return;
+        const isOpen = row.style.display !== 'none';
+        row.style.display = isOpen ? 'none' : 'table-row';
+        btn.textContent = isOpen ? '+' : '−';
+        btn.classList.toggle('is-open', !isOpen);
+        btn.closest('tr')?.classList.toggle('rmr-row-expanded', !isOpen);
+        row.classList.toggle('rmr-subrow-open', !isOpen);
+      });
+    });
 
     const tfootUnidades = document.getElementById('tfootRmrMetasUnidades');
     if (tfootUnidades) {
@@ -409,22 +579,421 @@
 
     const execs = d.metasVsRealizado?.executivos || [];
     document.getElementById('tbodyRmrMetasExecutivos').innerHTML = execs.length
-      ? execs.map(e => `
+      ? execs.map((e, eIdx) => {
+          const clis = e.clientes || [];
+          return `
           <tr>
-            <td><strong>${esc(e.executivo)}</strong> <small class="text-muted">(${esc(e.codVendedor)})</small></td>
+            <td>
+              ${clis.length ? `<button type="button" class="rmr-expand-btn" data-expand-target="rmr-exec-clis-${eIdx}" style="${btnExpandUnidStyle}" title="Expandir clientes do executivo">+</button>` : ''}
+              <strong>${esc(e.executivo)}</strong> <small class="text-muted">(${esc(e.codVendedor)})</small>
+            </td>
             <td>${esc(e.unidadeMeta)}</td>
             <td class="num">${fmtMoedaExata(e.realizadoMes)}</td>
+            <td class="num">${e.metaMes > 0 ? fmtMoedaExata(e.metaMes) : '—'} ${e.metaFonte === 'Planilha RMR' ? '<span class="metric-pill is-info" title="Meta mensal vinda da planilha RMR_Base_Oficial_Editavel.xlsx">Plan.</span>' : ''}</td>
+            <td class="num">${badgePct(e.atingimentoMesPct)}</td>
             <td class="num"><strong>${fmtMoedaExata(e.realizadoYtd)}</strong></td>
             <td class="num">${e.metaProportionalYtd > 0 ? fmtMoedaExata(e.metaProportionalYtd) : '—'}</td>
             <td class="num">${badgePct(e.atingimentoYtdPct)}</td>
             <td class="num">${e.metaAnualAlvo > 0 ? fmtMoedaExata(e.metaAnualAlvo) : '—'}</td>
             <td class="num ${e.gapAnual !== null && e.gapAnual < 0 ? 'text-neg' : 'text-pos'}">${e.gapAnual !== null ? fmtMoedaExata(e.gapAnual) : '—'}</td>
             <td class="num">${fmtInt(e.qtdNfsYtd)} / ${fmtInt(e.qtdClientesYtd)}</td>
-          </tr>`).join('')
-      : '<tr><td colspan="9" class="contracts-empty">Sem executivos com movimento ou meta no período.</td></tr>';
+          </tr>
+          ${clis.length ? `
+          <tr id="rmr-exec-clis-${eIdx}" style="display:none;background:#f8fafc;">
+            <td colspan="11" style="padding:10px 14px 10px 28px;text-align:left;">
+              <div style="font-size:11.5px;font-weight:700;color:#475569;margin-bottom:6px;">Clientes de ${esc(e.executivo)} (${fmtInt(clis.length)}):</div>
+              <table class="contracts-table" style="background:#fff;border:1px solid #cbd5e1;">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th class="num">Faturado Mês Ref.</th>
+                    <th class="num">Faturado YTD</th>
+                    <th class="num">NFs YTD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${clis.map((cl, cIdx) => {
+                    const ctrs = cl.contratos || [];
+                    return `
+                    <tr>
+                      <td style="text-align:left;">
+                        ${ctrs.length ? `<button type="button" class="rmr-expand-btn" data-expand-target="rmr-exec-cli-ctrs-${eIdx}-${cIdx}" style="${btnExpandUnidStyle}" title="Expandir contratos do cliente">+</button>` : ''}
+                        <strong>${esc(cl.cliente)}</strong>
+                      </td>
+                      <td class="num">${fmtMoedaExata(cl.valorMes)}</td>
+                      <td class="num"><strong>${fmtMoedaExata(cl.valorYtd)}</strong></td>
+                      <td class="num">${fmtInt(cl.qtdNfsYtd)}</td>
+                    </tr>
+                    ${ctrs.length ? `
+                    <tr id="rmr-exec-cli-ctrs-${eIdx}-${cIdx}" style="display:none;background:#f1f5f9;">
+                      <td colspan="4" style="padding:8px 12px 8px 28px;text-align:left;">
+                        <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:4px;">Contratos de ${esc(cl.cliente)} (${fmtInt(ctrs.length)}):</div>
+                        <table class="contracts-table" style="background:#fff;border:1px solid #cbd5e1;">
+                          <thead>
+                            <tr>
+                              <th>Contrato</th>
+                              <th>Unidade</th>
+                              <th class="num">Faturado Mês Ref.</th>
+                              <th class="num">Faturado YTD</th>
+                              <th class="num">NFs YTD</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${ctrs.map(cc => {
+                              const labelCtr = cc.numeroContrato === 'SEM_CONTRATO' ? 'Sem contrato vinculado' : cc.numeroContrato;
+                              return `
+                              <tr>
+                                <td style="text-align:left;"><strong>${esc(labelCtr)}</strong></td>
+                                <td>${esc(cc.unidade)}</td>
+                                <td class="num">${fmtMoedaExata(cc.valorMes)}</td>
+                                <td class="num"><strong>${fmtMoedaExata(cc.valorYtd)}</strong></td>
+                                <td class="num">${fmtInt(cc.qtdNfsYtd)}</td>
+                              </tr>`;
+                            }).join('')}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>` : ''}`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </td>
+          </tr>` : ''}`;
+        }).join('')
+      : '<tr><td colspan="11" class="contracts-empty">Sem executivos com movimento ou meta no período.</td></tr>';
 
-    // Aba 3: Backlog & Medições Pendentes
+    document.querySelectorAll('#tbodyRmrMetasExecutivos .rmr-expand-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-expand-target');
+        const row = targetId ? document.getElementById(targetId) : null;
+        if (!row) return;
+        const isOpen = row.style.display !== 'none';
+        row.style.display = isOpen ? 'none' : 'table-row';
+        btn.textContent = isOpen ? '+' : '−';
+        btn.classList.toggle('is-open', !isOpen);
+        btn.closest('tr')?.classList.toggle('rmr-row-expanded', !isOpen);
+        row.classList.toggle('rmr-subrow-open', !isOpen);
+      });
+    });
+
+    // Aba Medições Pendentes (Slide 3)
     const bm = d.backlogMedicoes || {};
+    const medPlanTab = bm.medicoesPlanilha || {};
+    const medItensTab = medPlanTab.itens || [];
+    const elMedBanner = document.getElementById('rmrMedicoesStatusBanner');
+    if (elMedBanner) {
+      const compDiff = medPlanTab.competencia && medPlanTab.mesSolicitado && medPlanTab.competencia !== medPlanTab.mesSolicitado;
+      elMedBanner.className = `report-status-banner ${compDiff ? 'is-warning' : 'is-info'}`;
+      elMedBanner.innerHTML = `
+        <i class="ph ${compDiff ? 'ph-warning' : 'ph-info'}"></i>
+        <div>
+          <strong>Competência exibida: ${esc(medPlanTab.competencia || '—')}</strong>
+          ${compDiff ? ` (Mês selecionado: ${esc(medPlanTab.mesSolicitado)} ainda sem carga de Medições Pendentes — exibindo última competência disponível).` : ' · Fonte: Planilha Editável RMR / SharePoint CONTROLE DE MEDICAO.'}
+        </div>`;
+      const sumMod = mod => medItensTab.filter(x => String(x.modalidade || '').toLowerCase() === mod);
+      const valContrato = sumMod('contrato').reduce((s, x) => s + Number(x.valor || 0), 0);
+      const valSpot = sumMod('spot').reduce((s, x) => s + Number(x.valor || 0), 0);
+      const aguard = medItensTab.filter(x => x.aguardandoPedido);
+      const valAguard = aguard.reduce((s, x) => s + Number(x.valor || 0), 0);
+      document.getElementById('rmrMedTotalVal').textContent = fmtMoeda(medPlanTab.valorTotal);
+      document.getElementById('rmrMedTotalQtd').textContent = `${fmtInt(medPlanTab.qtd)} medições pendentes`;
+      document.getElementById('rmrMedContratoVal').textContent = fmtMoeda(valContrato);
+      document.getElementById('rmrMedContratoQtd').textContent = `${fmtInt(sumMod('contrato').length)} itens de contrato`;
+      document.getElementById('rmrMedSpotVal').textContent = fmtMoeda(valSpot);
+      document.getElementById('rmrMedSpotQtd').textContent = `${fmtInt(sumMod('spot').length)} itens spot`;
+      document.getElementById('rmrMedAguardVal').textContent = fmtMoeda(valAguard);
+      document.getElementById('rmrMedAguardQtd').textContent = `${fmtInt(aguard.length)} itens aguardando pedido`;
+      document.getElementById('rmrMedicoesTabTag').textContent = `Comp. ${medPlanTab.competencia || '—'} · ${fmtInt(medPlanTab.qtd)} itens`;
+      document.getElementById('tbodyRmrMedicoesTab').innerHTML = medItensTab.length
+        ? medItensTab.map(m => `
+            <tr>
+              <td><span class="metric-pill is-info">${esc(m.modalidade)}</span></td>
+              <td><strong>${esc(m.cliente)}</strong></td>
+              <td>${esc(m.unidade)}</td>
+              <td>${m.aguardandoPedido ? '<span class="metric-pill is-warn">* Aguardando pedido</span>' : 'Em faturamento'}</td>
+              <td class="num"><strong>${fmtMoedaExata(m.valor)}</strong></td>
+            </tr>`).join('')
+        : '<tr><td colspan="5" class="contracts-empty">Sem medições pendentes cadastradas.</td></tr>';
+    }
+
+    // Aba Backlog (Protheus Real: Timeline + Tabela)
+    const blProth = bm.backlogProtheusReal || {};
+    const blProthRes = blProth.resumo || {};
+    if (document.getElementById('rmrBlRealTotal')) {
+      document.getElementById('rmrBlRealTotal').textContent = fmtMoeda(blProthRes.backlogReal);
+      document.getElementById('rmrBlRealQtd').textContent = `${fmtInt(blProthRes.qtdVigentes)} contratos vigentes (sem duplicidade)`;
+      document.getElementById('rmrBlRealGlobal').textContent = fmtMoeda(blProthRes.valorGlobal);
+      document.getElementById('rmrBlRealFat').textContent = fmtMoeda(blProthRes.faturadoReal);
+      const pctFatGeral = blProthRes.valorGlobal > 0 ? (blProthRes.faturadoReal / blProthRes.valorGlobal) * 100 : 0;
+      document.getElementById('rmrBlRealPct').textContent = `${pctFatGeral.toFixed(1)}% do valor global faturado`;
+      const venc60Val = Number(blProthRes.vencendo30dValor || 0) + Number(blProthRes.vencendo60dValor || 0);
+      const venc60Qtd = Number(blProthRes.vencendo30dQtd || 0) + Number(blProthRes.vencendo60dQtd || 0);
+      document.getElementById('rmrBlRealVenc60').textContent = fmtMoeda(venc60Val);
+      document.getElementById('rmrBlRealVenc60Qtd').textContent = `${fmtInt(venc60Qtd)} contratos vencem em até 60d`;
+
+      const UNIDS_OFICIAIS_BL = ['Complexo', 'Engenharia', 'Norte', 'Pecém', 'Transportes', 'Wind'];
+      const EXECS_OFICIAIS_BL = ['CRISTIANO', 'BRUNO', 'FERNANDO', 'CORDEIRO', 'CRISTIANE', 'MARCIO', 'FABRICIO'];
+      const isExecOficialBl = nome => {
+        const n = String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+        return EXECS_OFICIAIS_BL.some(ex => n.includes(ex));
+      };
+      const fmtTitleCase = s => String(s || '')
+        .toLowerCase()
+        .replace(/\b\w/g, ch => ch.toUpperCase());
+
+      const allBlContracts = blProth.contratos || [];
+      const selBlUnid = document.getElementById('rmrBlUnidadeFilter');
+      if (selBlUnid) {
+        const curU = selBlUnid.value || 'ALL';
+        const unids = [...new Set(allBlContracts.map(c => c.unidade).filter(u => UNIDS_OFICIAIS_BL.includes(u)))].sort();
+        selBlUnid.innerHTML = '<option value="ALL">Todas as unidades</option>' +
+          unids.map(u => `<option value="${esc(u)}"${u === curU ? ' selected' : ''}>${esc(u)}</option>`).join('');
+      }
+      const selBlExec = document.getElementById('rmrBlExecutivoFilter');
+      if (selBlExec) {
+        const curE = selBlExec.value || 'ALL';
+        const execs = [...new Set(allBlContracts.map(c => c.responsavel).filter(isExecOficialBl))].sort();
+        selBlExec.innerHTML = '<option value="ALL">Todos os executivos</option>' +
+          execs.map(e => `<option value="${esc(e)}"${e === curE ? ' selected' : ''}>${esc(fmtTitleCase(e))}</option>`).join('');
+      }
+
+      const initCustomDd = (selectEl, iconCls) => {
+        if (!selectEl) return;
+        const fieldWrap = selectEl.closest('.rmr-bl-field');
+        if (!fieldWrap) return;
+        let dd = fieldWrap.nextElementSibling;
+        if (!dd || !dd.classList.contains('rmr-dd')) {
+          fieldWrap.style.display = 'none';
+          dd = document.createElement('div');
+          dd.className = 'rmr-dd';
+          fieldWrap.insertAdjacentElement('afterend', dd);
+        }
+        if (!Array.isArray(selectEl._multiVals)) {
+          selectEl._multiVals = selectEl.value && selectEl.value !== 'ALL' ? [selectEl.value] : [];
+        }
+        const multi = selectEl._multiVals;
+        const isFiltered = multi.length > 0;
+        let triggerLabel = selectEl.options[0]?.textContent || '';
+        if (multi.length === 1) {
+          const optMatch = Array.from(selectEl.options).find(o => o.value === multi[0]);
+          triggerLabel = optMatch ? optMatch.textContent : multi[0];
+        } else if (multi.length > 1) {
+          const labels = multi.map(v => {
+            const optMatch = Array.from(selectEl.options).find(o => o.value === v);
+            return optMatch ? optMatch.textContent : v;
+          });
+          triggerLabel = `${multi.length} selecionados (${labels.join(', ')})`;
+        }
+
+        const wasOpenBefore = dd.classList.contains('is-open');
+        dd.innerHTML = `
+          <button type="button" class="rmr-dd-trigger ${isFiltered ? 'is-filtered' : ''}" title="${esc(triggerLabel)} · Segure Ctrl para selecionar mais de uma">
+            <i class="ph ${iconCls}"></i>
+            <span style="max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(triggerLabel)}</span>
+            <i class="ph ph-caret-down" style="font-size:12px;opacity:.7;"></i>
+          </button>
+          <div class="rmr-dd-menu">
+            ${Array.from(selectEl.options).map(opt => {
+              const selected = opt.value === 'ALL' ? multi.length === 0 : multi.includes(opt.value);
+              return `
+              <button type="button" class="rmr-dd-item ${selected ? 'is-selected' : ''}" data-val="${esc(opt.value)}">
+                <span>${esc(opt.textContent)}</span>
+                ${selected ? '<i class="ph ph-check" style="font-size:13px;"></i>' : ''}
+              </button>`;
+            }).join('')}
+            <div style="font-size:10px;color:#64748b;padding:5px 8px 2px;border-top:1px solid #f1f5f9;margin-top:4px;">
+              Dica: segure <strong>Ctrl</strong> para marcar vários
+            </div>
+          </div>`;
+        if (wasOpenBefore) dd.classList.add('is-open');
+
+        const trig = dd.querySelector('.rmr-dd-trigger');
+        trig.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const wasOpen = dd.classList.contains('is-open');
+          document.querySelectorAll('.rmr-dd.is-open').forEach(x => x.classList.remove('is-open'));
+          if (!wasOpen) dd.classList.add('is-open');
+        });
+        dd.querySelectorAll('.rmr-dd-item').forEach(item => {
+          item.addEventListener('click', ev => {
+            ev.stopPropagation();
+            const val = item.getAttribute('data-val');
+            const isCtrl = ev.ctrlKey || ev.metaKey;
+            if (val === 'ALL') {
+              selectEl._multiVals = [];
+              selectEl.value = 'ALL';
+              dd.classList.remove('is-open');
+            } else if (isCtrl) {
+              const cur = [...(selectEl._multiVals || [])];
+              const idx = cur.indexOf(val);
+              if (idx >= 0) cur.splice(idx, 1);
+              else cur.push(val);
+              selectEl._multiVals = cur;
+              selectEl.value = cur.length === 1 ? cur[0] : (cur.length === 0 ? 'ALL' : cur[0]);
+            } else {
+              selectEl._multiVals = [val];
+              selectEl.value = val;
+              dd.classList.remove('is-open');
+            }
+            selectEl.dispatchEvent(new Event('change'));
+          });
+        });
+        if (!document._rmrDdOutsideBound) {
+          document._rmrDdOutsideBound = true;
+          document.addEventListener('click', () => {
+            document.querySelectorAll('.rmr-dd.is-open').forEach(x => x.classList.remove('is-open'));
+          });
+        }
+      };
+
+      initCustomDd(selBlUnid, 'ph-buildings');
+      initCustomDd(selBlExec, 'ph-user');
+
+      const renderBacklogProtheusView = () => {
+        const uMulti = selBlUnid?._multiVals || [];
+        const eMulti = selBlExec?._multiVals || [];
+        const clearBtn = document.getElementById('rmrBlClearBtn');
+        if (clearBtn) {
+          clearBtn.style.display = (uMulti.length > 0 || eMulti.length > 0) ? 'inline-flex' : 'none';
+        }
+        const viewBtn = document.querySelector('.rmr-bl-view-btn.is-active');
+        const viewMode = viewBtn?.dataset.blView || 'ambos';
+        const list = allBlContracts.filter(c =>
+          (uMulti.length === 0 || uMulti.includes(c.unidade)) &&
+          (eMulti.length === 0 || eMulti.includes(c.responsavel))
+        );
+
+        const tlWrap = document.getElementById('rmrBlTimelineContainer');
+        const tbWrap = document.getElementById('rmrBlTableContainer');
+        if (tlWrap) tlWrap.style.display = (viewMode === 'ambos' || viewMode === 'timeline') ? 'block' : 'none';
+        if (tbWrap) tbWrap.style.display = (viewMode === 'ambos' || viewMode === 'tabela') ? 'block' : 'none';
+
+        if (tlWrap && (viewMode === 'ambos' || viewMode === 'timeline')) {
+          const dated = list.filter(c => c.dataInicio && c.dataFim && c.valorGlobal > 0).slice(0, 20);
+          if (!dated.length) {
+            tlWrap.innerHTML = '<div class="contracts-empty">Sem contratos vigentes com vigência para exibir na timeline.</div>';
+          } else {
+            const minTs = Math.min(...dated.map(c => new Date(c.dataInicio).getTime()));
+            const maxTs = Math.max(...dated.map(c => new Date(c.dataFim).getTime()));
+            const span = Math.max(1, maxTs - minTs);
+            const nowTs = Date.now();
+            const todayPct = Math.max(0, Math.min(100, ((nowTs - minTs) / span) * 100));
+
+            tlWrap.innerHTML = `
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-bottom:8px;padding:0 4px;">
+                <span>Início janela: <strong>${core().formatarDataBr(new Date(minTs).toISOString().slice(0, 10))}</strong></span>
+                <span>Linha vermelha = <strong>Hoje (${core().formatarDataBr(new Date(nowTs).toISOString().slice(0, 10))})</strong> · Top 20 contratos</span>
+                <span>Fim janela: <strong>${core().formatarDataBr(new Date(maxTs).toISOString().slice(0, 10))}</strong></span>
+              </div>
+              <div style="position:relative;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#f8fafc;">
+                <div class="rmr-tl-today" style="position:absolute;top:0;bottom:0;left:calc(352px + (100% - 366px) * ${todayPct / 100});width:2px;background:#ef4444;opacity:0.7;z-index:2;pointer-events:none;"></div>
+                ${dated.map(c => {
+                  const sTs = new Date(c.dataInicio).getTime();
+                  const eTs = new Date(c.dataFim).getTime();
+                  const leftPct = Math.max(0, ((sTs - minTs) / span) * 100);
+                  const widthPct = Math.max(6, ((eTs - sTs) / span) * 100);
+                  const execPct = Math.max(0, Math.min(100, c.pctConsumido || 0));
+                  const dtIniBr = core().formatarDataBr(c.dataInicio);
+                  const dtFimBr = core().formatarDataBr(c.dataFim);
+                  const diasDec = c.diasDecorridos !== null ? `${c.diasDecorridos}d` : '—';
+                  const diasFalt = c.diasRestantes !== null ? `${c.diasRestantes}d` : '—';
+                  const corFalt = c.diasRestantes !== null && c.diasRestantes <= 30 ? '#dc2626' : (c.diasRestantes !== null && c.diasRestantes <= 60 ? '#d97706' : '#0f766e');
+                  return `
+                    <div class="rmr-tl-row">
+                      <div class="rmr-tl-label" title="${esc(c.cliente)} · #${esc(c.nrContrato)}">
+                        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><strong>#${esc(c.nrContrato)}</strong> ${esc(c.cliente)}</div>
+                        <div style="color:#475569;font-size:10.5px;">${esc(c.unidade)} · ${esc(c.responsavel)}</div>
+                        <div style="color:#64748b;font-size:10.5px;">Início: <strong>${dtIniBr}</strong> · Hoje: <strong>${diasDec}</strong> · Fim: <strong>${dtFimBr}</strong> <span style="color:${corFalt};font-weight:700;">(faltam ${diasFalt})</span></div>
+                      </div>
+                      <div class="rmr-tl-bar-col">
+                        <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#334155;padding:0 2px;">
+                          <span><span style="display:inline-block;width:8px;height:8px;background:#0f2942;border-radius:2px;margin-right:4px;"></span>Faturado: <strong>${fmtMoeda(c.faturadoReal)}</strong> (${execPct.toFixed(0)}%)</span>
+                          <span><span style="display:inline-block;width:8px;height:8px;background:#0ea5e9;border-radius:2px;margin-right:4px;"></span>A Faturar: <strong>${fmtMoeda(c.backlogReal)}</strong></span>
+                        </div>
+                        <div style="position:relative;height:14px;background:#e2e8f0;border-radius:7px;overflow:hidden;">
+                          <div style="position:absolute;left:${leftPct}%;width:${widthPct}%;height:100%;background:#0ea5e9;border-radius:7px;display:flex;align-items:center;overflow:hidden;" title="Global: ${fmtMoedaExata(c.valorGlobal)} | Faturado: ${fmtMoedaExata(c.faturadoReal)} | A Faturar: ${fmtMoedaExata(c.backlogReal)}">
+                            <div style="width:${execPct}%;height:100%;background:#0f2942;"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>`;
+                }).join('')}
+                <div style="display:flex;gap:16px;font-size:11px;color:#475569;margin-top:6px;">
+                  <span><span style="display:inline-block;width:10px;height:10px;background:#0f2942;border-radius:2px;margin-right:4px;"></span>Faturado (SD2010)</span>
+                  <span><span style="display:inline-block;width:10px;height:10px;background:#0ea5e9;border-radius:2px;margin-right:4px;"></span>A Faturar (Backlog)</span>
+                  <span><span style="display:inline-block;width:2px;height:10px;background:#ef4444;margin-right:4px;vertical-align:middle;"></span>Data Atual (Hoje)</span>
+                </div>
+              </div>`;
+          }
+        }
+
+        const tbodyBl = document.getElementById('tbodyRmrBlReal');
+        if (tbodyBl) {
+          tbodyBl.innerHTML = list.length
+            ? list.map(c => {
+                const iniStr = c.dataInicio ? core().formatarDataBr(c.dataInicio) : '—';
+                const fimStr = c.dataFim ? core().formatarDataBr(c.dataFim) : '—';
+                const hojeBadge = c.diasDecorridos !== null ? `<span class="metric-pill is-neutral">Hoje: ${c.diasDecorridos}d</span>` : '';
+                const faltamBadge = c.diasRestantes !== null
+                  ? `<span class="metric-pill ${c.diasRestantes <= 60 ? 'is-warn' : 'is-info'}">Faltam ${c.diasRestantes}d</span>`
+                  : '';
+                return `
+                <tr>
+                  <td><strong>${esc(c.nrContrato)}</strong></td>
+                  <td>${esc(c.cliente)}</td>
+                  <td>${esc(c.unidade)}</td>
+                  <td>${esc(c.responsavel)}</td>
+                  <td><span class="metric-pill is-info">${esc(c.modalidade)}</span></td>
+                  <td>${iniStr} → ${fimStr}<br/>${hojeBadge} ${faltamBadge}</td>
+                  <td class="num">${fmtMoedaExata(c.valorGlobal)}</td>
+                  <td class="num">${fmtMoedaExata(c.faturadoReal)}</td>
+                  <td class="num"><strong>${fmtMoedaExata(c.backlogReal)}</strong></td>
+                  <td class="num">${Number(c.pctConsumido || 0).toFixed(1)}%</td>
+                </tr>`;
+              }).join('')
+            : '<tr><td colspan="10" class="contracts-empty">Sem contratos vigentes no recorte.</td></tr>';
+        }
+      };
+
+      renderBacklogProtheusView();
+      if (selBlUnid && !selBlUnid._bound) {
+        selBlUnid._bound = true;
+        selBlUnid.addEventListener('change', () => {
+          initCustomDd(selBlUnid, 'ph-buildings');
+          renderBacklogProtheusView();
+        });
+      }
+      if (selBlExec && !selBlExec._bound) {
+        selBlExec._bound = true;
+        selBlExec.addEventListener('change', () => {
+          initCustomDd(selBlExec, 'ph-user');
+          renderBacklogProtheusView();
+        });
+      }
+      const btnBlClear = document.getElementById('rmrBlClearBtn');
+      if (btnBlClear && !btnBlClear._bound) {
+        btnBlClear._bound = true;
+        btnBlClear.addEventListener('click', () => {
+          if (selBlUnid) { selBlUnid.value = 'ALL'; selBlUnid._multiVals = []; }
+          if (selBlExec) { selBlExec.value = 'ALL'; selBlExec._multiVals = []; }
+          initCustomDd(selBlUnid, 'ph-buildings');
+          initCustomDd(selBlExec, 'ph-user');
+          renderBacklogProtheusView();
+        });
+      }
+      document.querySelectorAll('.rmr-bl-view-btn').forEach(btn => {
+        if (!btn._bound) {
+          btn._bound = true;
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('.rmr-bl-view-btn').forEach(b => b.classList.remove('is-active'));
+            btn.classList.add('is-active');
+            renderBacklogProtheusView();
+          });
+        }
+      });
+    }
+
+    // Aba 3 (legado compatibilidade): Backlog & Medições Pendentes
     const stMed = bm.statusMedicoesProtheus || {};
     const stCtr = bm.statusContratosProtheus || {};
     const ctrOp = bm.contratosProtheusOperacional || {};
@@ -464,6 +1033,29 @@
         </div>`);
     }
     document.getElementById('rmrBacklogPendencias').innerHTML = pendHtml.join('');
+
+    const panelMedPlan = document.getElementById('rmrPanelMedicoesPlanilha');
+    if (panelMedPlan) {
+      const medPlan = bm.medicoesPlanilha || {};
+      const medItens = medPlan.itens || [];
+      if (medItens.length) {
+        panelMedPlan.style.display = 'block';
+        const tagMed = document.getElementById('rmrMedicoesPlanilhaTag');
+        if (tagMed) {
+          tagMed.textContent = `Comp. ${medPlan.competencia || '—'} · ${fmtInt(medPlan.qtd)} itens · Total ${fmtMoedaExata(medPlan.valorTotal)}`;
+        }
+        document.getElementById('tbodyRmrMedicoesPlanilha').innerHTML = medItens.map(m => `
+          <tr>
+            <td><span class="metric-pill is-info">${esc(m.modalidade)}</span></td>
+            <td><strong>${esc(m.cliente)}</strong></td>
+            <td>${esc(m.unidade)}</td>
+            <td>${m.aguardandoPedido ? '<span class="metric-pill is-warn">* Aguardando pedido</span>' : 'Em faturamento'}</td>
+            <td class="num"><strong>${fmtMoedaExata(m.valor)}</strong></td>
+          </tr>`).join('');
+      } else {
+        panelMedPlan.style.display = 'none';
+      }
+    }
 
     const panelCtrOp = document.getElementById('rmrPanelCtrOpProtheus');
     if (panelCtrOp) {
@@ -542,12 +1134,51 @@
         </div>`;
     }
 
+    const renderItensTableHtml = itens => {
+      if (!itens || !itens.length) {
+        return '<div class="contracts-empty" style="padding:8px;">Sem itens/produtos detalhados nas NFs deste contrato.</div>';
+      }
+      return `
+        <table class="contracts-table" style="margin:6px 0;background:#fff;border:1px solid #e2e8f0;border-radius:6px;">
+          <thead>
+            <tr>
+              <th>Cód. Produto</th>
+              <th>Item / Produto / Equipamento</th>
+              <th class="num">Qtd.</th>
+              <th class="num">NFs</th>
+              <th class="num">Faturado YTD</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itens.map(it => `
+              <tr>
+                <td><code>${esc(it.codProduto)}</code></td>
+                <td>${esc(it.produto)}</td>
+                <td class="num">${Number(it.quantidade || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</td>
+                <td class="num">${fmtInt(it.qtdNfsYtd)}</td>
+                <td class="num"><strong>${fmtMoedaExata(it.valorYtd)}</strong></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    };
+
+    const toggleBtnStyle = 'display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-right:6px;border:1px solid #cbd5e1;border-radius:4px;background:#f8fafc;color:#0f2942;font-weight:700;cursor:pointer;font-size:13px;line-height:1;';
+
     const cliRows = d.contratosClientes?.clientes || [];
-    document.getElementById('tbodyRmrClientes').innerHTML = cliRows.length
-      ? cliRows.map(c => `
+    const tbodyCliEl = document.getElementById('tbodyRmrClientes');
+    tbodyCliEl.innerHTML = cliRows.length
+      ? cliRows.map((c, idx) => {
+          const ctrs = c.contratos || [];
+          const hasCtrs = ctrs.length > 0;
+          return `
           <tr>
             <td>${String(c.posicao).padStart(2, '0')}</td>
-            <td><strong>${esc(c.cliente)}</strong></td>
+            <td>
+              <div class="rmr-cell-expand">
+                ${hasCtrs ? `<button type="button" class="rmr-expand-btn" data-expand-target="rmr-cli-sub-${idx}" style="${toggleBtnStyle}" title="Expandir contratos do cliente">+</button>` : '<span style="display:inline-block;width:20px;flex-shrink:0;"></span>'}
+                <span class="rmr-cell-expand-text"><strong>${esc(c.cliente)}</strong></span>
+              </div>
+            </td>
             <td>${esc(c.unidadePrincipal)}</td>
             <td>${esc(c.executivoPrincipal)}</td>
             <td class="num">${fmtMoedaExata(c.valorMes)}</td>
@@ -555,14 +1186,61 @@
             <td class="num">${fmtPct(c.participacaoPct)}</td>
             <td class="num">${fmtPct(c.paretoAcumuladoPct)}</td>
             <td class="num">${fmtInt(c.qtdNfsYtd)} / ${fmtInt(c.qtdContratosYtd)}</td>
-          </tr>`).join('')
+          </tr>
+          ${hasCtrs ? `
+          <tr id="rmr-cli-sub-${idx}" style="display:none;background:#f8fafc;">
+            <td colspan="9" style="padding:10px 14px 10px 32px;">
+              <div style="font-size:11.5px;font-weight:700;color:#475569;margin-bottom:6px;">Contratos de ${esc(c.cliente)} (${fmtInt(ctrs.length)}):</div>
+              <table class="contracts-table" style="background:#fff;border:1px solid #cbd5e1;">
+                <thead>
+                  <tr>
+                    <th>Contrato</th>
+                    <th>Unidade</th>
+                    <th class="num">Faturado Mês Ref.</th>
+                    <th class="num">Faturado YTD</th>
+                    <th class="num">NFs YTD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${ctrs.map((cc, cIdx) => {
+                    const itens = cc.itens || [];
+                    const labelCtr = cc.numeroContrato === 'SEM_CONTRATO' ? 'Sem contrato vinculado' : cc.numeroContrato;
+                    return `
+                    <tr>
+                      <td>
+                        ${itens.length ? `<button type="button" class="rmr-expand-btn" data-expand-target="rmr-cli-ctr-items-${idx}-${cIdx}" style="${toggleBtnStyle}" title="Expandir itens/equipamentos">+</button>` : ''}
+                        <strong>${esc(labelCtr)}</strong>
+                      </td>
+                      <td>${esc(cc.unidade)}</td>
+                      <td class="num">${fmtMoedaExata(cc.valorMes)}</td>
+                      <td class="num"><strong>${fmtMoedaExata(cc.valorYtd)}</strong></td>
+                      <td class="num">${fmtInt(cc.qtdNfsYtd)}</td>
+                    </tr>
+                    ${itens.length ? `
+                    <tr id="rmr-cli-ctr-items-${idx}-${cIdx}" style="display:none;background:#f1f5f9;">
+                      <td colspan="5" style="padding:8px 12px 8px 28px;">
+                        ${renderItensTableHtml(itens)}
+                      </td>
+                    </tr>` : ''}`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </td>
+          </tr>` : ''}`;
+        }).join('')
       : '<tr><td colspan="9" class="contracts-empty">Nenhum cliente com faturamento no período.</td></tr>';
 
     const ctrProtheus = d.contratosClientes?.contratosProtheus || [];
-    document.getElementById('tbodyRmrContratosProtheus').innerHTML = ctrProtheus.length
-      ? ctrProtheus.map(c => `
+    const tbodyCtrEl = document.getElementById('tbodyRmrContratosProtheus');
+    tbodyCtrEl.innerHTML = ctrProtheus.length
+      ? ctrProtheus.map((c, idx) => {
+          const itens = c.itens || [];
+          return `
           <tr>
-            <td><strong>${esc(c.numeroContrato)}</strong></td>
+            <td>
+              ${itens.length ? `<button type="button" class="rmr-expand-btn" data-expand-target="rmr-ctr-items-${idx}" style="${toggleBtnStyle}" title="Expandir itens/equipamentos">+</button>` : ''}
+              <strong>${esc(c.numeroContrato)}</strong>
+            </td>
             <td>${esc(c.cliente)}</td>
             <td>${esc(c.unidade)}</td>
             <td>${esc(c.executivo)}</td>
@@ -570,8 +1248,30 @@
             <td class="num"><strong>${fmtMoedaExata(c.valorYtd)}</strong></td>
             <td class="num">${fmtInt(c.qtdNfsYtd)}</td>
             <td>${c.ultimaEmissao ? core().formatarDataBr(c.ultimaEmissao) : '—'}</td>
-          </tr>`).join('')
+          </tr>
+          ${itens.length ? `
+          <tr id="rmr-ctr-items-${idx}" style="display:none;background:#f8fafc;">
+            <td colspan="8" style="padding:8px 14px 8px 32px;">
+              <div style="font-size:11.5px;font-weight:700;color:#475569;margin-bottom:4px;">Itens / Produtos / Equipamentos do Contrato ${esc(c.numeroContrato)}:</div>
+              ${renderItensTableHtml(itens)}
+            </td>
+          </tr>` : ''}`;
+        }).join('')
       : '<tr><td colspan="8" class="contracts-empty">Sem contratos identificados nas NFs do período.</td></tr>';
+
+    document.querySelectorAll('#rmrPanelClientes .rmr-expand-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-expand-target');
+        const row = targetId ? document.getElementById(targetId) : null;
+        if (!row) return;
+        const isOpen = row.style.display !== 'none';
+        row.style.display = isOpen ? 'none' : 'table-row';
+        btn.textContent = isOpen ? '+' : '−';
+        btn.classList.toggle('is-open', !isOpen);
+        btn.closest('tr')?.classList.toggle('rmr-row-expanded', !isOpen);
+        row.classList.toggle('rmr-subrow-open', !isOpen);
+      });
+    });
 
     // Aba 5: Projeções Comerciais
     const proj = d.projecoes || {};
@@ -595,6 +1295,172 @@
         <td class="num ${c.gapVsMetaAnual !== null && c.gapVsMetaAnual < 0 ? 'text-neg' : 'text-pos'}">${c.gapVsMetaAnual !== null ? fmtMoedaExata(c.gapVsMetaAnual) : '—'}</td>
       </tr>`).join('');
 
+    const renderCenarioBacklogFunil = () => {
+      const cbf = proj.cenarioBacklogFunil;
+      const theadBl = document.getElementById('theadRmrBacklogCenario');
+      const tbodyBl = document.getElementById('tbodyRmrBacklogCenario');
+      const tfootBl = document.getElementById('tfootRmrBacklogCenario');
+      const theadFn = document.getElementById('theadRmrFunilCenario');
+      const tbodyFn = document.getElementById('tbodyRmrFunilCenario');
+      const tfootFn = document.getElementById('tfootRmrFunilCenario');
+      if (!cbf || !theadBl || !tbodyBl || !theadFn || !tbodyFn) return;
+
+      const NOMES_MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      const NOMES_MESES_COMP = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+      const mesRefNome = NOMES_MESES_COMP[(cbf.mesRef || 1) - 1] || 'Mês Ref';
+      const mesRefAbrev = NOMES_MESES[(cbf.mesRef || 1) - 1] || 'Mês';
+      const mesesRest = cbf.mesesRestantes || [];
+      const unidadesCbf = cbf.unidades || [];
+      const modoEl = document.getElementById('rmrFunilCenarioModo');
+      const modo = modoEl?.value === 'ponderado' ? 'ponderado' : 'bruto';
+
+      const tagBl = document.getElementById('rmrBacklogCenarioTag');
+      if (tagBl) tagBl.textContent = `${mesRefNome}/${cbf.ano} + ${mesesRest.length ? mesesRest.map(m => NOMES_MESES[m.mes - 1]).join(', ') : 'Ano fechado'}`;
+
+      const tagFn = document.getElementById('rmrFunilCenarioTag');
+      if (tagFn) tagFn.textContent = modo === 'ponderado' ? 'Bitrix24 · Ponderado por estágio' : 'Bitrix24 · Valor cheio (100%)';
+
+      const blColsHtml = mesesRest.map(m => `<th class="num">${NOMES_MESES_COMP[m.mes - 1]}</th>`).join('');
+      const blColsCount = Math.max(1, mesesRest.length);
+      theadBl.innerHTML = `
+        <tr>
+          <th rowspan="2">Unidades</th>
+          <th colspan="2" class="num" style="text-align:center;">${esc(mesRefNome)} / ${cbf.ano}</th>
+          <th colspan="${blColsCount}" class="num" style="text-align:center;">Backlog Contratado</th>
+          <th class="num" style="text-align:center;">Total ${esc(mesRefAbrev)} + BL</th>
+          <th class="num" style="text-align:center;">2º Semestre</th>
+          <th colspan="3" class="num" style="text-align:center;">Consolidado ${cbf.ano}</th>
+        </tr>
+        <tr>
+          <th class="num">Meta</th>
+          <th class="num">Realizado</th>
+          ${mesesRest.length ? blColsHtml : '<th class="num">Restante</th>'}
+          <th class="num">${esc(mesRefAbrev)} + Backlog</th>
+          <th class="num">Jul - Dez (c/ BL)</th>
+          <th class="num">Total ${cbf.ano}</th>
+          <th class="num">Meta Anual</th>
+          <th class="num">Ating.</th>
+        </tr>`;
+
+      const totBl = {
+        metaMes: 0, realizadoMes: 0, backlogPorMes: {}, totalMesMaisBacklog: 0,
+        semestre2ComBacklog: 0, totalAnoComBacklog: 0, metaAnual: 0
+      };
+      for (const mr of mesesRest) totBl.backlogPorMes[mr.mes] = 0;
+
+      tbodyBl.innerHTML = unidadesCbf.map(u => {
+        totBl.metaMes += Number(u.metaMes || 0);
+        totBl.realizadoMes += Number(u.realizadoMes || 0);
+        totBl.totalMesMaisBacklog += Number(u.totalMesMaisBacklog || 0);
+        totBl.semestre2ComBacklog += Number(u.semestre2ComBacklog || 0);
+        totBl.totalAnoComBacklog += Number(u.totalAnoComBacklog || 0);
+        totBl.metaAnual += Number(u.metaAnual || 0);
+        const cellsMes = mesesRest.length
+          ? mesesRest.map(mr => {
+              const v = Number(u.backlogPorMes?.[mr.mes] || 0);
+              totBl.backlogPorMes[mr.mes] += v;
+              return `<td class="num">${v > 0 ? fmtMoedaExata(v) : '—'}</td>`;
+            }).join('')
+          : '<td class="num">—</td>';
+        return `
+          <tr>
+            <td><strong>${esc(u.unidade)}</strong></td>
+            <td class="num">${u.metaMes > 0 ? fmtMoedaExata(u.metaMes) : '—'}</td>
+            <td class="num">${u.realizadoMes > 0 ? fmtMoedaExata(u.realizadoMes) : '—'}</td>
+            ${cellsMes}
+            <td class="num"><strong>${fmtMoedaExata(u.totalMesMaisBacklog)}</strong></td>
+            <td class="num">${fmtMoedaExata(u.semestre2ComBacklog)}</td>
+            <td class="num"><strong>${fmtMoedaExata(u.totalAnoComBacklog)}</strong></td>
+            <td class="num">${u.metaAnual > 0 ? fmtMoedaExata(u.metaAnual) : '—'}</td>
+            <td class="num">${badgePct(u.atingimentoPct)}</td>
+          </tr>`;
+      }).join('');
+
+      if (tfootBl) {
+        const atingTot = totBl.metaAnual > 0 ? (totBl.totalAnoComBacklog / totBl.metaAnual) * 100 : null;
+        const totCellsMes = mesesRest.length
+          ? mesesRest.map(mr => `<td class="num"><strong>${fmtMoedaExata(totBl.backlogPorMes[mr.mes] || 0)}</strong></td>`).join('')
+          : '<td class="num">—</td>';
+        tfootBl.innerHTML = `
+          <tr class="table-total-row">
+            <td><strong>Total Geral</strong></td>
+            <td class="num"><strong>${fmtMoedaExata(totBl.metaMes)}</strong></td>
+            <td class="num"><strong>${fmtMoedaExata(totBl.realizadoMes)}</strong></td>
+            ${totCellsMes}
+            <td class="num"><strong>${fmtMoedaExata(totBl.totalMesMaisBacklog)}</strong></td>
+            <td class="num"><strong>${fmtMoedaExata(totBl.semestre2ComBacklog)}</strong></td>
+            <td class="num"><strong>${fmtMoedaExata(totBl.totalAnoComBacklog)}</strong></td>
+            <td class="num"><strong>${fmtMoedaExata(totBl.metaAnual)}</strong></td>
+            <td class="num">${badgePct(atingTot)}</td>
+          </tr>`;
+      }
+
+      const fnLabelTotal = mesesRest.length ? mesesRest.map(m => NOMES_MESES[m.mes - 1]).join(' + ') : 'Restante';
+      theadFn.innerHTML = `
+        <tr>
+          <th rowspan="2">Unidades</th>
+          <th colspan="${blColsCount}" class="num" style="text-align:center;">Funil de Vendas</th>
+          <th class="num" style="text-align:center;">Total Funil</th>
+          <th class="num" style="text-align:center;">Diferença Meta</th>
+        </tr>
+        <tr>
+          ${mesesRest.length ? blColsHtml : '<th class="num">Restante</th>'}
+          <th class="num">${esc(fnLabelTotal)}</th>
+          <th class="num">Gap Residual</th>
+        </tr>`;
+
+      const totFn = { porMes: {}, totalFunil: 0, gapResidual: 0 };
+      for (const mr of mesesRest) totFn.porMes[mr.mes] = 0;
+
+      tbodyFn.innerHTML = unidadesCbf.map(u => {
+        const mapMes = modo === 'ponderado' ? u.funilPonderadoPorMes : u.funilBrutoPorMes;
+        const totalFunil = modo === 'ponderado' ? Number(u.funilTotalPonderado || 0) : Number(u.funilTotalBruto || 0);
+        const gapRes = modo === 'ponderado' ? u.gapResidualPonderado : u.gapResidualBruto;
+        totFn.totalFunil += totalFunil;
+        if (gapRes !== null && gapRes !== undefined) totFn.gapResidual += Number(gapRes);
+        const cellsFn = mesesRest.length
+          ? mesesRest.map(mr => {
+              const v = Number(mapMes?.[mr.mes] || 0);
+              totFn.porMes[mr.mes] += v;
+              return `<td class="num">${v > 0 ? fmtMoedaExata(v) : '—'}</td>`;
+            }).join('')
+          : '<td class="num">—</td>';
+        const gapCls = gapRes === null || gapRes === undefined ? '' : (gapRes <= 0 ? 'text-pos' : 'text-neg');
+        return `
+          <tr>
+            <td><strong>${esc(u.unidade)}</strong></td>
+            ${cellsFn}
+            <td class="num"><strong>${fmtMoedaExata(totalFunil)}</strong></td>
+            <td class="num ${gapCls}"><strong>${gapRes !== null && gapRes !== undefined ? fmtMoedaExata(gapRes) : '—'}</strong></td>
+          </tr>`;
+      }).join('');
+
+      if (tfootFn) {
+        const totGap = totBl.metaAnual > 0 ? totBl.metaAnual - (totBl.totalAnoComBacklog + totFn.totalFunil) : null;
+        const totGapCls = totGap === null ? '' : (totGap <= 0 ? 'text-pos' : 'text-neg');
+        const totCellsFn = mesesRest.length
+          ? mesesRest.map(mr => `<td class="num"><strong>${fmtMoedaExata(totFn.porMes[mr.mes] || 0)}</strong></td>`).join('')
+          : '<td class="num">—</td>';
+        tfootFn.innerHTML = `
+          <tr class="table-total-row">
+            <td><strong>Total Geral</strong></td>
+            ${totCellsFn}
+            <td class="num"><strong>${fmtMoedaExata(totFn.totalFunil)}</strong></td>
+            <td class="num ${totGapCls}"><strong>${totGap !== null ? fmtMoedaExata(totGap) : '—'}</strong></td>
+          </tr>`;
+      }
+    };
+
+    renderCenarioBacklogFunil();
+    const modoSel = document.getElementById('rmrFunilCenarioModo');
+    if (modoSel) {
+      modoSel._renderFn = renderCenarioBacklogFunil;
+      if (!modoSel.dataset.bound) {
+        modoSel.dataset.bound = '1';
+        modoSel.addEventListener('change', () => modoSel._renderFn?.());
+      }
+    }
+
     document.getElementById('tbodyRmrProjEtapas').innerHTML = (pipeAb.porEtapa || []).map(e => `
       <tr>
         <td><strong>${esc(e.etapa)}</strong></td>
@@ -610,18 +1476,364 @@
       detailFn: u => `Bruto: ${fmtMoeda(u.valorBruto)} · ${fmtInt(u.qtd)} deals`
     });
 
-    // Aba 6: Funil de Vendas & Motivos de Perda
+    // Aba Funil de Vendas (Slide 7) & Negócios Perdidos (Slide 8)
     const fp = d.funilPerdas || {};
     const fpRes = fp.resumo || {};
+    const elAbBruto = document.getElementById('rmrFunilAbertoBruto');
+    if (elAbBruto) {
+      elAbBruto.textContent = fmtMoeda(pipeAb.brutoTotal);
+      document.getElementById('rmrFunilAbertoQtd').textContent = `${fmtInt(pipeAb.qtdNegocios)} negócios abertos no Funil de Vendas`;
+      document.getElementById('rmrFunilAbertoPond').textContent = fmtMoeda(pipeAb.negociosQuentesBruto);
+      document.getElementById('rmrFunilJanelaAno').textContent = `${fmtInt(pipeAb.negociosQuentesQtd)} negócios em negociação / contratação`;
+      const elFunilEtapas = document.getElementById('rmrFunilAbertoEtapas');
+      if (elFunilEtapas) {
+        const etapasRaw = pipeAb.porEtapa || [];
+        const ordemFunil = [
+          'Prospecção / Avaliação Inicial',
+          'Avaliação Técnica / Crédito',
+          'Em Negociação / Mobilização',
+          'Contrato / Jurídico / Assinatura',
+          'Ganho / Em Atendimento'
+        ];
+        const etapasOrd = [...etapasRaw].sort((a, b) => {
+          const ia = ordemFunil.indexOf(a.etapa);
+          const ib = ordemFunil.indexOf(b.etapa);
+          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        });
+        const totalFunilEtapas = etapasOrd.reduce((s, e) => s + Number(e.valorBruto || 0), 0);
+        const widthsFunil = [100, 88, 76, 64, 54];
+        const colorsFunil = [
+          'linear-gradient(135deg, #38bdf8, #0284c7)',
+          'linear-gradient(135deg, #0ea5e9, #0369a1)',
+          'linear-gradient(135deg, #0284c7, #1d4ed8)',
+          'linear-gradient(135deg, #1e40af, #0f2942)',
+          'linear-gradient(135deg, #0f2942, #091a2c)'
+        ];
+        elFunilEtapas.innerHTML = etapasOrd.length
+          ? `<div class="rmr-funnel-wrap">
+              ${etapasOrd.map((e, idx) => {
+                const w = widthsFunil[idx] || Math.max(46, 100 - idx * 12);
+                const bg = colorsFunil[idx] || colorsFunil[colorsFunil.length - 1];
+                const pct = totalFunilEtapas > 0 ? (Number(e.valorBruto || 0) / totalFunilEtapas) * 100 : 0;
+                return `
+                <div class="rmr-funnel-stage" style="width:${w}%;background:${bg};" title="${esc(e.etapa)} · Peso ${e.pesoPct}% · Ponderado: ${fmtMoedaExata(e.valorPonderado)}">
+                  <div>
+                    <div class="rmr-funnel-stage-name">${esc(e.etapa)}</div>
+                    <div class="rmr-funnel-stage-sub">${fmtInt(e.qtd)} deals · Peso ${e.pesoPct}% · Pond.: ${fmtMoeda(e.valorPonderado)}</div>
+                  </div>
+                  <div class="rmr-funnel-stage-val">
+                    <strong>${fmtMoeda(e.valorBruto)}</strong>
+                    <span>${pct.toFixed(1)}% do funil</span>
+                  </div>
+                </div>`;
+              }).join('')}
+            </div>`
+          : '<div class="contracts-empty">Sem negócios abertos no funil.</div>';
+      }
+      const elFunilUnids = document.getElementById('rmrFunilAbertoUnidades');
+      if (elFunilUnids) {
+        const unidsFunil = [...(pipeAb.porUnidade || [])].sort((a, b) => Number(b.valorBruto || 0) - Number(a.valorBruto || 0));
+        const totFunilUnid = unidsFunil.reduce((s, u) => s + Number(u.valorBruto || 0), 0);
+        if (!unidsFunil.length || totFunilUnid <= 0) {
+          elFunilUnids.innerHTML = '<div class="contracts-empty">Sem negócios abertos por unidade.</div>';
+        } else {
+          const paletteDonut = ['#0f2942', '#0284c7', '#0ea5e9', '#10b981', '#f59e0b', '#6366f1', '#94a3b8'];
+          const r = 78;
+          const circ = 2 * Math.PI * r;
+          let offset = 0;
+          const segs = unidsFunil.map((u, idx) => {
+            const val = Number(u.valorBruto || 0);
+            const pct = (val / totFunilUnid) * 100;
+            const dash = (val / totFunilUnid) * circ;
+            const seg = {
+              idx,
+              unidade: u.unidade,
+              qtd: u.qtd,
+              valorBruto: val,
+              valorPonderado: u.valorPonderado,
+              pct,
+              color: paletteDonut[idx % paletteDonut.length],
+              dash: Math.max(0, dash - 1.5),
+              offset
+            };
+            offset += dash;
+            return seg;
+          });
+
+          elFunilUnids.innerHTML = `
+            <div class="rmr-donut-wrap">
+              <div class="rmr-donut-svg-box">
+                <svg viewBox="0 0 210 210" width="210" height="210" style="transform:rotate(-90deg);">
+                  <circle cx="105" cy="105" r="${r}" fill="none" stroke="#e2e8f0" stroke-width="28"></circle>
+                  ${segs.map(s => `
+                    <circle class="rmr-donut-seg" data-donut-idx="${s.idx}" cx="105" cy="105" r="${r}"
+                      fill="none" stroke="${s.color}" stroke-width="28"
+                      stroke-dasharray="${s.dash.toFixed(2)} ${(circ - s.dash).toFixed(2)}"
+                      stroke-dashoffset="${(-s.offset).toFixed(2)}"></circle>`).join('')}
+                </svg>
+                <div class="rmr-donut-center" id="rmrDonutCenter">
+                  <span>Total Funil</span>
+                  <strong>${fmtMoeda(totFunilUnid)}</strong>
+                  <small>${fmtInt(unidsFunil.reduce((a, b) => a + Number(b.qtd || 0), 0))} deals</small>
+                </div>
+              </div>
+              <div class="rmr-donut-legend">
+                ${segs.map(s => `
+                  <div class="rmr-donut-leg-item" data-donut-idx="${s.idx}">
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                      <span style="width:10px;height:10px;border-radius:3px;background:${s.color};flex-shrink:0;"></span>
+                      <div style="min-width:0;">
+                        <div style="font-size:12.5px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(s.unidade)}</div>
+                        <div style="font-size:10.5px;color:#64748b;">${fmtInt(s.qtd)} deals · Pond.: ${fmtMoeda(s.valorPonderado)}</div>
+                      </div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                      <div style="font-size:12.5px;font-weight:700;color:#0f172a;">${fmtMoeda(s.valorBruto)}</div>
+                      <div style="font-size:10.5px;font-weight:700;color:${s.color};">${s.pct.toFixed(1)}%</div>
+                    </div>
+                  </div>`).join('')}
+              </div>
+            </div>`;
+
+          const centerEl = document.getElementById('rmrDonutCenter');
+          const resetCenter = () => {
+            if (!centerEl) return;
+            centerEl.innerHTML = `<span>Total Funil</span><strong>${fmtMoeda(totFunilUnid)}</strong><small>${fmtInt(unidsFunil.reduce((a, b) => a + Number(b.qtd || 0), 0))} deals</small>`;
+            elFunilUnids.querySelectorAll('.is-active').forEach(el => el.classList.remove('is-active'));
+          };
+          const highlightSeg = idx => {
+            const s = segs[idx];
+            if (!s || !centerEl) return;
+            elFunilUnids.querySelectorAll('.is-active').forEach(el => el.classList.remove('is-active'));
+            elFunilUnids.querySelectorAll(`[data-donut-idx="${idx}"]`).forEach(el => el.classList.add('is-active'));
+            centerEl.innerHTML = `<span>${esc(s.unidade)}</span><strong>${fmtMoeda(s.valorBruto)}</strong><small>${s.pct.toFixed(1)}% · ${fmtInt(s.qtd)} deals</small>`;
+          };
+          elFunilUnids.querySelectorAll('[data-donut-idx]').forEach(el => {
+            el.addEventListener('mouseenter', () => highlightSeg(Number(el.getAttribute('data-donut-idx'))));
+            el.addEventListener('mouseleave', resetCenter);
+          });
+        }
+      }
+    }
+    const totalCompetitivos = Number(fpRes.ganhosQtd || 0) + Number(fpRes.perdasReaisQtd || 0);
+    const perdRealVal = Number(fpRes.perdasReaisValor || 0);
+    const perdRealQtd = Number(fpRes.perdasReaisQtd || 0);
+
     document.getElementById('rmrFunilGanhosVal').textContent = fmtMoeda(fpRes.ganhosValor);
-    document.getElementById('rmrFunilGanhosQtd').textContent = `${fmtInt(fpRes.ganhosQtd)} negócios ganhos no YTD`;
-    document.getElementById('rmrFunilPerdasVal').textContent = fmtMoeda(fpRes.perdasReaisValor);
-    document.getElementById('rmrFunilPerdasQtd').textContent = `${fmtInt(fpRes.perdasReaisQtd)} perdas reais (competitivas/operacionais)`;
+    document.getElementById('rmrFunilGanhosQtd').textContent = `${fmtInt(fpRes.ganhosQtd)} negócios ganhos (clique p/ detalhar)`;
+    const elCardPerdVal = document.getElementById('rmrFunilCardPerdidosVal');
+    if (elCardPerdVal) {
+      elCardPerdVal.textContent = fmtMoeda(perdRealVal);
+      document.getElementById('rmrFunilCardPerdidosQtd').textContent =
+        `${fmtInt(perdRealQtd)} perdas reais (clique p/ abrir)`;
+    }
+
+    document.getElementById('rmrFunilPerdasVal').textContent = fmtMoeda(perdRealVal);
+    document.getElementById('rmrFunilPerdasQtd').textContent = `${fmtInt(perdRealQtd)} perdas reais (competitivas/operacionais)`;
     document.getElementById('rmrFunilCancelVal').textContent = fmtMoeda(fpRes.canceladosClienteValor);
-    document.getElementById('rmrFunilCancelQtd').textContent = `${fmtInt(fpRes.canceladosClienteQtd)} cancelados pelo cliente / orientativos`;
+    document.getElementById('rmrFunilCancelQtd').textContent = `${fmtInt(fpRes.canceladosClienteQtd)} cancelados`;
     document.getElementById('rmrFunilConv').textContent = fmtPct(fpRes.taxaConversaoCompetitivaPct);
     document.getElementById('rmrFunilConvBruta').textContent =
-      `Conversão bruta (c/ cancelamentos): ${fmtPct(fpRes.taxaConversaoBrutaPct)}`;
+      `${fmtInt(fpRes.ganhosQtd)} ganhos de ${fmtInt(totalCompetitivos)} negócios (sem cancelados)`;
+
+    const elTicketPerda = document.getElementById('rmrPerdidosTicketMedio');
+    if (elTicketPerda) {
+      const ticketMed = perdRealQtd > 0 ? perdRealVal / perdRealQtd : 0;
+      elTicketPerda.textContent = fmtMoeda(ticketMed);
+      document.getElementById('rmrPerdidosTicketSub').textContent = `Média por proposta perdida`;
+      const topMot = (fp.motivosPerdaReais || [])[0];
+      document.getElementById('rmrPerdidosTopMotivo').textContent = topMot ? esc(topMot.motivo) : '—';
+      document.getElementById('rmrPerdidosTopMotivoSub').textContent = topMot
+        ? `${fmtMoeda(topMot.valor)} · ${fmtInt(topMot.qtd)} negócios`
+        : 'Sem perdas reais';
+      document.getElementById('rmrPerdidosConvLimpa').textContent = fmtPct(fpRes.taxaConversaoCompetitivaPct);
+      document.getElementById('rmrPerdidosConvLimpaSub').textContent = `${fmtInt(fpRes.ganhosQtd)} ganhos vs ${fmtInt(perdRealQtd)} perdas`;
+
+      const elDist = document.getElementById('rmrPerdidosDistribuicao');
+      const motivos = fp.motivosPerdaReais || [];
+      if (elDist) {
+        if (!motivos.length) {
+          elDist.innerHTML = '<div class="contracts-empty">Sem perdas reais registradas no período.</div>';
+        } else {
+          const palette = ['#dc2626', '#ea580c', '#d97706', '#0284c7', '#475569', '#94a3b8'];
+          const top5 = motivos.slice(0, 5);
+          const resto = motivos.slice(5);
+          const grupos = resto.length
+            ? [...top5, {
+                motivo: 'Outros motivos',
+                valor: resto.reduce((s, x) => s + Number(x.valor || 0), 0),
+                qtd: resto.reduce((s, x) => s + Number(x.qtd || 0), 0)
+              }]
+            : top5;
+          elDist.innerHTML = `
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
+              <div style="padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:8px;">
+                  <span>Participação por Valor (R$)</span>
+                  <span>Total: ${fmtMoeda(perdRealVal)}</span>
+                </div>
+                <div style="height:22px;border-radius:8px;overflow:hidden;display:flex;background:#e2e8f0;">
+                  ${grupos.map((g, i) => {
+                    const pct = perdRealVal > 0 ? (Number(g.valor || 0) / perdRealVal) * 100 : 0;
+                    return `<div style="width:${pct.toFixed(1)}%;background:${palette[i % palette.length]};" title="${esc(g.motivo)}: ${pct.toFixed(1)}% (${fmtMoeda(g.valor)})"></div>`;
+                  }).join('')}
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:11px;margin-top:10px;color:#334155;">
+                  ${grupos.map((g, i) => {
+                    const pct = perdRealVal > 0 ? (Number(g.valor || 0) / perdRealVal) * 100 : 0;
+                    return `<span><span style="display:inline-block;width:9px;height:9px;background:${palette[i % palette.length]};border-radius:2px;margin-right:4px;"></span>${esc(g.motivo)}: <strong>${pct.toFixed(1)}%</strong></span>`;
+                  }).join('')}
+                </div>
+              </div>
+              <div style="padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:8px;">
+                  <span>Participação por Quantidade</span>
+                  <span>Total: ${fmtInt(perdRealQtd)}</span>
+                </div>
+                <div style="height:22px;border-radius:8px;overflow:hidden;display:flex;background:#e2e8f0;">
+                  ${grupos.map((g, i) => {
+                    const pct = perdRealQtd > 0 ? (Number(g.qtd || 0) / perdRealQtd) * 100 : 0;
+                    return `<div style="width:${pct.toFixed(1)}%;background:${palette[i % palette.length]};" title="${esc(g.motivo)}: ${pct.toFixed(1)}% (${fmtInt(g.qtd)})"></div>`;
+                  }).join('')}
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:11px;margin-top:10px;color:#334155;">
+                  ${grupos.map((g, i) => {
+                    const pct = perdRealQtd > 0 ? (Number(g.qtd || 0) / perdRealQtd) * 100 : 0;
+                    return `<span><span style="display:inline-block;width:9px;height:9px;background:${palette[i % palette.length]};border-radius:2px;margin-right:4px;"></span>${esc(g.motivo)}: <strong>${pct.toFixed(1)}%</strong> (${fmtInt(g.qtd)})</span>`;
+                  }).join('')}
+                </div>
+              </div>
+            </div>`;
+        }
+      }
+    }
+
+    const cardGanhos = document.getElementById('rmrCardGanhosAction');
+    if (cardGanhos && !cardGanhos._bound) {
+      cardGanhos._bound = true;
+      cardGanhos.addEventListener('click', () => {
+        document.getElementById('rmrSecaoUltimosGanhos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+    const cardPerdidos = document.getElementById('rmrCardPerdidosAction');
+    if (cardPerdidos && !cardPerdidos._bound) {
+      cardPerdidos._bound = true;
+      cardPerdidos.addEventListener('click', () => {
+        document.querySelector('[data-rmr-tab="perdidos"]')?.click();
+      });
+    }
+
+    // Aba Executivos (Contratos Protheus x Funil CRM x Equipamentos)
+    const exDet = d.executivosFunilDetalhe || {};
+    const exRes = exDet.resumo || {};
+    const elExTotCtr = document.getElementById('rmrExecTotContratos');
+    if (elExTotCtr) {
+      const totGeral = Number(exRes.totalSobGestao || 0);
+      const totCtr = Number(exRes.totalContratos || 0);
+      const totFn = Number(exRes.totalFunil || 0);
+      elExTotCtr.textContent = fmtMoeda(totCtr);
+      document.getElementById('rmrExecTotContratosPct').textContent = totGeral > 0 ? `${((totCtr / totGeral) * 100).toFixed(1)}% do total sob gestão` : '—';
+      document.getElementById('rmrExecTotFunil').textContent = fmtMoeda(totFn);
+      document.getElementById('rmrExecTotFunilPct').textContent = totGeral > 0 ? `${((totFn / totGeral) * 100).toFixed(1)}% do total sob gestão` : '—';
+      document.getElementById('rmrExecTotGeral').textContent = fmtMoeda(totGeral);
+      const elOciNote = document.getElementById('rmrExecOciosidadeNote');
+      if (elOciNote && exRes.ociosidadeObs) elOciNote.textContent = ` · ${exRes.ociosidadeObs}`;
+
+      const exList = exDet.executivos || [];
+      const btnExStyle = 'display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-right:6px;border:1px solid #cbd5e1;border-radius:4px;background:#f8fafc;color:#0f2942;font-weight:700;cursor:pointer;font-size:13px;line-height:1;';
+      document.getElementById('tbodyRmrExecutivosFunil').innerHTML = exList.length
+        ? exList.map((ex, idx) => {
+            const ctrs = ex.contratos || [];
+            return `
+            <tr>
+              <td>
+                ${ctrs.length ? `<button type="button" class="rmr-expand-btn" data-expand-target="rmr-ex-ctr-${idx}" style="${btnExStyle}" title="Detalhar contratos e negócios no funil">+</button>` : ''}
+                <strong>${esc(ex.executivo)}</strong>
+              </td>
+              <td class="num">${fmtMoedaExata(ex.contratosValor)} <small class="text-muted">(${fmtInt(ex.contratosQtd)})</small></td>
+              <td class="num">${Number(ex.contratosPct || 0).toFixed(1)}%</td>
+              <td class="num">${fmtMoedaExata(ex.funilValor)} <small class="text-muted">(${fmtInt(ex.funilQtd)})</small></td>
+              <td class="num">${Number(ex.funilPct || 0).toFixed(1)}%</td>
+              <td class="num"><strong>${fmtMoedaExata(ex.totalSobGestao)}</strong></td>
+            </tr>
+            ${ctrs.length ? `
+            <tr id="rmr-ex-ctr-${idx}" style="display:none;background:#f8fafc;">
+              <td colspan="6" style="padding:10px 14px 10px 28px;">
+                <div style="font-size:11.5px;font-weight:700;color:#475569;margin-bottom:6px;">Contratos &amp; Funil de ${esc(ex.executivo)} (${fmtInt(ctrs.length)}):</div>
+                <table class="contracts-table" style="background:#fff;border:1px solid #cbd5e1;">
+                  <thead>
+                    <tr>
+                      <th>Contrato / Negócio</th>
+                      <th>Origem</th>
+                      <th>Unidade</th>
+                      <th class="num">% Exec.</th>
+                      <th class="num">Valor (R$)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${ctrs.map((ct, cIdx) => {
+                      const itens = ct.itens || [];
+                      const isCtr = ct.origem === 'Contrato Protheus';
+                      return `
+                      <tr>
+                        <td>
+                          <div class="rmr-cell-expand">
+                            ${itens.length ? `<button type="button" class="rmr-expand-btn" data-expand-target="rmr-ex-ctr-itens-${idx}-${cIdx}" style="${btnExStyle}" title="Detalhar itens/produtos/equipamentos">+</button>` : '<span style="display:inline-block;width:20px;flex-shrink:0;"></span>'}
+                            <span class="rmr-cell-expand-text"><strong>${esc(ct.codigo)}</strong> · ${esc(ct.titulo)}</span>
+                          </div>
+                        </td>
+                        <td><span class="metric-pill ${isCtr ? 'is-good' : 'is-info'}">${esc(ct.origem)}</span></td>
+                        <td>${esc(ct.unidade)}</td>
+                        <td class="num">${Number(ct.pctExec || 0).toFixed(1)}%</td>
+                        <td class="num"><strong>${fmtMoedaExata(ct.valor)}</strong></td>
+                      </tr>
+                      ${itens.length ? `
+                      <tr id="rmr-ex-ctr-itens-${idx}-${cIdx}" style="display:none;background:#f1f5f9;">
+                        <td colspan="5" style="padding:8px 12px 8px 28px;">
+                          <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:4px;">Itens / Produtos / Equipamentos (${fmtInt(itens.length)}):</div>
+                          <table class="contracts-table" style="background:#fff;border:1px solid #cbd5e1;">
+                            <thead>
+                              <tr>
+                                <th>Cód.</th>
+                                <th>Item / Produto / Equipamento</th>
+                                <th class="num">Qtd.</th>
+                                <th class="num">Valor (R$)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              ${itens.map(it => `
+                                <tr>
+                                  <td><code>${esc(it.codProduto)}</code></td>
+                                  <td><strong>${esc(it.produto)}</strong></td>
+                                  <td class="num">${Number(it.quantidade || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</td>
+                                  <td class="num"><strong>${fmtMoedaExata(it.valor)}</strong></td>
+                                </tr>`).join('')}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>` : ''}`;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </td>
+            </tr>` : ''}`;
+          }).join('')
+        : '<tr><td colspan="7" class="contracts-empty">Sem dados de executivos no período.</td></tr>';
+
+      document.querySelectorAll('#tbodyRmrExecutivosFunil .rmr-expand-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const targetId = btn.getAttribute('data-expand-target');
+          const row = targetId ? document.getElementById(targetId) : null;
+          if (!row) return;
+          const isOpen = row.style.display !== 'none';
+          row.style.display = isOpen ? 'none' : 'table-row';
+          btn.textContent = isOpen ? '+' : '−';
+          btn.classList.toggle('is-open', !isOpen);
+          btn.closest('tr')?.classList.toggle('rmr-row-expanded', !isOpen);
+          row.classList.toggle('rmr-subrow-open', !isOpen);
+        });
+      });
+    }
 
     renderRankingList('rmrMotivosReais', fp.motivosPerdaReais || [], {
       labelKey: 'motivo',
@@ -2010,8 +3222,6 @@
 
     document.getElementById('fatSd2KpiComercial').textContent = fmtMoeda(res.comercial);
     document.getElementById('fatSd2KpiTicket').textContent = `Ticket médio/NF: ${fmtMoeda(res.ticketMedioNf)}`;
-    document.getElementById('fatSd2KpiBruto').textContent = fmtMoeda(res.bruto);
-    document.getElementById('fatSd2KpiReceitaTexto').textContent = `Receita após TES/CFOP: ${fmtMoeda(res.receita)}`;
     document.getElementById('fatSd2KpiExpurgos').textContent = fmtMoeda(res.expurgos);
     document.getElementById('fatSd2KpiExpurgosNota').textContent = `Fora do escopo de receita: ${fmtMoeda(res.foraEscopo)}`;
     document.getElementById('fatSd2KpiVolume').textContent = `${fmtInt(res.qtdNfs)} NFs`;
