@@ -1241,8 +1241,8 @@
                   <strong id="rmrFunilAbertoBruto" class="kpi-value">—</strong>
                   <span id="rmrFunilAbertoQtd" class="kpi-note">—</span>
                 </article>
-                <article class="kpi-card">
-                  <span class="kpi-label">Negócios Quentes</span>
+                <article class="kpi-card" id="rmrCardQuentesAction" style="cursor:pointer;" title="Clique para filtrar Negócios Quentes no gráfico e na tabela">
+                  <span class="kpi-label">Negócios Quentes <i class="ph ph-funnel"></i></span>
                   <strong id="rmrFunilAbertoPond" class="kpi-value">—</strong>
                   <span id="rmrFunilJanelaAno" class="kpi-note">—</span>
                 </article>
@@ -1265,26 +1265,29 @@
               <div class="reports-grid">
                 <article class="report-panel">
                   <div class="report-panel-header">
-                    <h3>Funil de Vendas por Etapa</h3>
-                    <span class="report-panel-tag">Pipeline Funil de Vendas (Bitrix C4)</span>
+                    <h3>Funil de Vendas por Temperatura</h3>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <button type="button" id="rmrBtnLimparTemp" class="btn-secondary btn-sm" style="display:none;padding:3px 9px;font-size:11px;">Limpar filtro</button>
+                      <span class="report-panel-tag">Pipeline Funil de Vendas (Bitrix C4)</span>
+                    </div>
                   </div>
                   <div id="rmrFunilAbertoEtapas" class="ranking-list"></div>
                 </article>
                 <article class="report-panel">
                   <div class="report-panel-header">
                     <h3>Funil de Vendas por Unidade</h3>
-                    <span class="report-panel-tag">Pipeline Funil de Vendas (Bitrix C4)</span>
+                    <span id="rmrFunilUnidadeTag" class="report-panel-tag">Pipeline Funil de Vendas (Bitrix C4)</span>
                   </div>
                   <div id="rmrFunilAbertoUnidades" class="ranking-list"></div>
                 </article>
                 <article id="rmrSecaoUltimosGanhos" class="report-panel wide">
                   <div class="report-panel-header">
-                    <h3>Principais Negócios Ganhos no Período</h3>
-                    <span class="report-panel-tag">Bitrix Funil de Vendas (C4) · Top 15</span>
+                    <h3 id="rmrSecaoUltimosGanhosTitle">Principais Negócios Ganhos no Período</h3>
+                    <span id="rmrSecaoUltimosGanhosTag" class="report-panel-tag">Bitrix Funil de Vendas (C4) · Top 15</span>
                   </div>
                   <div class="table-responsive">
                     <table class="contracts-table">
-                      <thead><tr><th>Negócio</th><th>Cliente</th><th>Unidade</th><th>Executivo</th><th>Data</th><th class="num">Valor</th></tr></thead>
+                      <thead id="theadRmrFunilTabela"><tr><th>Negócio</th><th>Cliente</th><th>Unidade</th><th>Executivo</th><th>Data</th><th class="num">Valor</th></tr></thead>
                       <tbody id="tbodyRmrUltimosGanhos"></tbody>
                     </table>
                   </div>
@@ -1568,8 +1571,8 @@
                   <strong id="rmrFunilAbertoBruto" class="kpi-value">—</strong>
                   <span id="rmrFunilAbertoQtd" class="kpi-note">—</span>
                 </article>
-                <article class="kpi-card">
-                  <span class="kpi-label">Negócios Quentes</span>
+                <article class="kpi-card" id="rmrCardQuentesAction" style="cursor:pointer;" title="Clique para filtrar Negócios Quentes no gráfico e na tabela">
+                  <span class="kpi-label">Negócios Quentes <i class="ph ph-funnel"></i></span>
                   <strong id="rmrFunilAbertoPond" class="kpi-value">—</strong>
                   <span id="rmrFunilJanelaAno" class="kpi-note">—</span>
                 </article>
@@ -1592,26 +1595,29 @@
               <div class="reports-grid">
                 <article class="report-panel">
                   <div class="report-panel-header">
-                    <h3>Funil de Vendas por Etapa</h3>
-                    <span class="report-panel-tag">Pipeline Funil de Vendas (Bitrix C4)</span>
+                    <h3>Funil de Vendas por Temperatura</h3>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <button type="button" id="rmrBtnLimparTemp" class="btn-secondary btn-sm" style="display:none;padding:3px 9px;font-size:11px;">Limpar filtro</button>
+                      <span class="report-panel-tag">Pipeline Funil de Vendas (Bitrix C4)</span>
+                    </div>
                   </div>
                   <div id="rmrFunilAbertoEtapas" class="ranking-list"></div>
                 </article>
                 <article class="report-panel">
                   <div class="report-panel-header">
                     <h3>Funil de Vendas por Unidade</h3>
-                    <span class="report-panel-tag">Pipeline Funil de Vendas (Bitrix C4)</span>
+                    <span id="rmrFunilUnidadeTag" class="report-panel-tag">Pipeline Funil de Vendas (Bitrix C4)</span>
                   </div>
                   <div id="rmrFunilAbertoUnidades" class="ranking-list"></div>
                 </article>
                 <article id="rmrSecaoUltimosGanhos" class="report-panel wide">
                   <div class="report-panel-header">
-                    <h3>Principais Negócios Ganhos no Período</h3>
-                    <span class="report-panel-tag">Bitrix Funil de Vendas (C4) · Top 15</span>
+                    <h3 id="rmrSecaoUltimosGanhosTitle">Principais Negócios Ganhos no Período</h3>
+                    <span id="rmrSecaoUltimosGanhosTag" class="report-panel-tag">Bitrix Funil de Vendas (C4) · Top 15</span>
                   </div>
                   <div class="table-responsive">
                     <table class="contracts-table">
-                      <thead><tr><th>Negócio</th><th>Cliente</th><th>Unidade</th><th>Executivo</th><th>Data</th><th class="num">Valor</th></tr></thead>
+                      <thead id="theadRmrFunilTabela"><tr><th>Negócio</th><th>Cliente</th><th>Unidade</th><th>Executivo</th><th>Data</th><th class="num">Valor</th></tr></thead>
                       <tbody id="tbodyRmrUltimosGanhos"></tbody>
                     </table>
                   </div>

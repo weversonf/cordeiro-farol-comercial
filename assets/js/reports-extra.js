@@ -9,6 +9,7 @@
   let rmrPayload = null;
   let rmrCarregadoKey = '';
   let rmrControlsReady = false;
+  let rmrFunilTempFiltro = null;
 
   let fatPayload = null;
   let fatCarregado = false;
@@ -1479,63 +1480,94 @@
     // Aba Funil de Vendas (Slide 7) & Negócios Perdidos (Slide 8)
     const fp = d.funilPerdas || {};
     const fpRes = fp.resumo || {};
-    const elAbBruto = document.getElementById('rmrFunilAbertoBruto');
-    if (elAbBruto) {
+    const TEMP_META = {
+      quente: { label: 'Quente', plural: 'Quentes', bg: 'linear-gradient(135deg, #ef4444, #dc2626)' },
+      morno: { label: 'Morno', plural: 'Mornos', bg: 'linear-gradient(135deg, #f59e0b, #d97706)' },
+      frio: { label: 'Frio', plural: 'Frios', bg: 'linear-gradient(135deg, #38bdf8, #0284c7)' },
+      sem_temperatura: { label: 'Não informado', plural: 'Sem temperatura', bg: 'linear-gradient(135deg, #94a3b8, #64748b)' }
+    };
+
+    const renderFunilTemperaturaEUnidades = () => {
+      const elAbBruto = document.getElementById('rmrFunilAbertoBruto');
+      if (!elAbBruto) return;
+
       elAbBruto.textContent = fmtMoeda(pipeAb.brutoTotal);
       document.getElementById('rmrFunilAbertoQtd').textContent = `${fmtInt(pipeAb.qtdNegocios)} negócios abertos no Funil de Vendas`;
       document.getElementById('rmrFunilAbertoPond').textContent = fmtMoeda(pipeAb.negociosQuentesBruto);
-      document.getElementById('rmrFunilJanelaAno').textContent = `${fmtInt(pipeAb.negociosQuentesQtd)} negócios em negociação / contratação`;
+      document.getElementById('rmrFunilJanelaAno').textContent = `${fmtInt(pipeAb.negociosQuentesQtd)} negócios quentes (clique p/ filtrar)`;
+
+      const cardQuentes = document.getElementById('rmrCardQuentesAction');
+      if (cardQuentes) {
+        const isQuenteAtivo = rmrFunilTempFiltro === 'quente';
+        cardQuentes.style.outline = isQuenteAtivo ? '2px solid #dc2626' : '';
+        cardQuentes.style.background = isQuenteAtivo ? '#fef2f2' : '';
+      }
+
+      const btnLimparTemp = document.getElementById('rmrBtnLimparTemp');
+      if (btnLimparTemp) {
+        btnLimparTemp.style.display = rmrFunilTempFiltro ? 'inline-flex' : 'none';
+      }
+
       const elFunilEtapas = document.getElementById('rmrFunilAbertoEtapas');
       if (elFunilEtapas) {
-        const etapasRaw = pipeAb.porEtapa || [];
-        const ordemFunil = [
-          'Prospecção / Avaliação Inicial',
-          'Avaliação Técnica / Crédito',
-          'Em Negociação / Mobilização',
-          'Contrato / Jurídico / Assinatura',
-          'Ganho / Em Atendimento'
-        ];
-        const etapasOrd = [...etapasRaw].sort((a, b) => {
-          const ia = ordemFunil.indexOf(a.etapa);
-          const ib = ordemFunil.indexOf(b.etapa);
-          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-        });
-        const totalFunilEtapas = etapasOrd.reduce((s, e) => s + Number(e.valorBruto || 0), 0);
-        const widthsFunil = [100, 88, 76, 64, 54];
-        const colorsFunil = [
-          'linear-gradient(135deg, #38bdf8, #0284c7)',
-          'linear-gradient(135deg, #0ea5e9, #0369a1)',
-          'linear-gradient(135deg, #0284c7, #1d4ed8)',
-          'linear-gradient(135deg, #1e40af, #0f2942)',
-          'linear-gradient(135deg, #0f2942, #091a2c)'
-        ];
-        elFunilEtapas.innerHTML = etapasOrd.length
+        const tempsRaw = pipeAb.porTemperatura || [];
+        const totalFunilTemp = tempsRaw.reduce((s, t) => s + Number(t.valorBruto || 0), 0);
+        const widthsTemp = [100, 86, 72, 60];
+        elFunilEtapas.innerHTML = tempsRaw.length
           ? `<div class="rmr-funnel-wrap">
-              ${etapasOrd.map((e, idx) => {
-                const w = widthsFunil[idx] || Math.max(46, 100 - idx * 12);
-                const bg = colorsFunil[idx] || colorsFunil[colorsFunil.length - 1];
-                const pct = totalFunilEtapas > 0 ? (Number(e.valorBruto || 0) / totalFunilEtapas) * 100 : 0;
+              ${tempsRaw.map((t, idx) => {
+                const key = t.temperatura;
+                const meta = TEMP_META[key] || { label: t.label || key, bg: 'linear-gradient(135deg, #0ea5e9, #0369a1)' };
+                const w = widthsTemp[idx] || 60;
+                const pct = totalFunilTemp > 0 ? (Number(t.valorBruto || 0) / totalFunilTemp) * 100 : 0;
+                const ativo = rmrFunilTempFiltro === key;
+                const dimmed = rmrFunilTempFiltro && !ativo;
                 return `
-                <div class="rmr-funnel-stage" style="width:${w}%;background:${bg};" title="${esc(e.etapa)} · Peso ${e.pesoPct}% · Ponderado: ${fmtMoedaExata(e.valorPonderado)}">
+                <div class="rmr-funnel-stage" data-temp-key="${esc(key)}"
+                  style="width:${w}%;background:${meta.bg};cursor:pointer;transition:opacity .15s,transform .15s;${dimmed ? 'opacity:0.42;' : ''}${ativo ? 'outline:3px solid #0f172a;transform:translateX(3px);' : ''}"
+                  title="Clique para filtrar ${esc(meta.label)} no gráfico por unidade e na tabela">
                   <div>
-                    <div class="rmr-funnel-stage-name">${esc(e.etapa)}</div>
-                    <div class="rmr-funnel-stage-sub">${fmtInt(e.qtd)} deals · Peso ${e.pesoPct}% · Pond.: ${fmtMoeda(e.valorPonderado)}</div>
+                    <div class="rmr-funnel-stage-name">${esc(meta.label)}</div>
+                    <div class="rmr-funnel-stage-sub">${fmtInt(t.qtd)} negócios · Pond.: ${fmtMoeda(t.valorPonderado)}</div>
                   </div>
                   <div class="rmr-funnel-stage-val">
-                    <strong>${fmtMoeda(e.valorBruto)}</strong>
+                    <strong>${fmtMoeda(t.valorBruto)}</strong>
                     <span>${pct.toFixed(1)}% do funil</span>
                   </div>
                 </div>`;
               }).join('')}
             </div>`
           : '<div class="contracts-empty">Sem negócios abertos no funil.</div>';
+
+        elFunilEtapas.querySelectorAll('[data-temp-key]').forEach(el => {
+          el.addEventListener('click', () => {
+            const k = el.getAttribute('data-temp-key');
+            rmrFunilTempFiltro = rmrFunilTempFiltro === k ? null : k;
+            renderFunilTemperaturaEUnidades();
+          });
+        });
       }
+
       const elFunilUnids = document.getElementById('rmrFunilAbertoUnidades');
+      const elUnidTag = document.getElementById('rmrFunilUnidadeTag');
+      if (elUnidTag) {
+        elUnidTag.textContent = rmrFunilTempFiltro
+          ? `Pipeline Funil de Vendas (Bitrix C4) · ${TEMP_META[rmrFunilTempFiltro]?.label || rmrFunilTempFiltro}`
+          : 'Pipeline Funil de Vendas (Bitrix C4)';
+      }
+
       if (elFunilUnids) {
-        const unidsFunil = [...(pipeAb.porUnidade || [])].sort((a, b) => Number(b.valorBruto || 0) - Number(a.valorBruto || 0));
+        const fonteUnids = rmrFunilTempFiltro
+          ? (pipeAb.porUnidadePorTemperatura?.[rmrFunilTempFiltro] || [])
+          : (pipeAb.porUnidadePorTemperatura?.todas || pipeAb.porUnidade || []);
+        const unidsFunil = [...fonteUnids].sort((a, b) => Number(b.valorBruto || 0) - Number(a.valorBruto || 0));
         const totFunilUnid = unidsFunil.reduce((s, u) => s + Number(u.valorBruto || 0), 0);
+        const centerLabel = rmrFunilTempFiltro
+          ? `Funil · ${TEMP_META[rmrFunilTempFiltro]?.label || rmrFunilTempFiltro}`
+          : 'Total Funil';
+
         if (!unidsFunil.length || totFunilUnid <= 0) {
-          elFunilUnids.innerHTML = '<div class="contracts-empty">Sem negócios abertos por unidade.</div>';
+          elFunilUnids.innerHTML = '<div class="contracts-empty">Sem negócios abertos por unidade neste filtro.</div>';
         } else {
           const paletteDonut = ['#0f2942', '#0284c7', '#0ea5e9', '#10b981', '#f59e0b', '#6366f1', '#94a3b8'];
           const r = 78;
@@ -1572,7 +1604,7 @@
                       stroke-dashoffset="${(-s.offset).toFixed(2)}"></circle>`).join('')}
                 </svg>
                 <div class="rmr-donut-center" id="rmrDonutCenter">
-                  <span>Total Funil</span>
+                  <span>${esc(centerLabel)}</span>
                   <strong>${fmtMoeda(totFunilUnid)}</strong>
                   <small>${fmtInt(unidsFunil.reduce((a, b) => a + Number(b.qtd || 0), 0))} deals</small>
                 </div>
@@ -1598,7 +1630,7 @@
           const centerEl = document.getElementById('rmrDonutCenter');
           const resetCenter = () => {
             if (!centerEl) return;
-            centerEl.innerHTML = `<span>Total Funil</span><strong>${fmtMoeda(totFunilUnid)}</strong><small>${fmtInt(unidsFunil.reduce((a, b) => a + Number(b.qtd || 0), 0))} deals</small>`;
+            centerEl.innerHTML = `<span>${esc(centerLabel)}</span><strong>${fmtMoeda(totFunilUnid)}</strong><small>${fmtInt(unidsFunil.reduce((a, b) => a + Number(b.qtd || 0), 0))} deals</small>`;
             elFunilUnids.querySelectorAll('.is-active').forEach(el => el.classList.remove('is-active'));
           };
           const highlightSeg = idx => {
@@ -1614,7 +1646,70 @@
           });
         }
       }
+
+      const elTabTitle = document.getElementById('rmrSecaoUltimosGanhosTitle');
+      const elTabTag = document.getElementById('rmrSecaoUltimosGanhosTag');
+      const elThead = document.getElementById('theadRmrFunilTabela');
+      const elTbody = document.getElementById('tbodyRmrUltimosGanhos');
+      if (elTbody) {
+        if (rmrFunilTempFiltro) {
+          const meta = TEMP_META[rmrFunilTempFiltro] || { label: rmrFunilTempFiltro, plural: rmrFunilTempFiltro };
+          const filtrados = (pipeAb.negociosAbertos || []).filter(n => n.temperatura === rmrFunilTempFiltro);
+          if (elTabTitle) elTabTitle.textContent = `Negócios ${meta.plural} no Funil`;
+          if (elTabTag) elTabTag.textContent = `Bitrix Funil de Vendas (C4) · ${fmtInt(filtrados.length)} negócios`;
+          if (elThead) {
+            elThead.innerHTML = '<tr><th>Negócio</th><th>Cliente</th><th>Unidade</th><th>Executivo</th><th>Etapa</th><th class="num">Valor</th></tr>';
+          }
+          elTbody.innerHTML = filtrados.length
+            ? filtrados.map(n => `
+                <tr>
+                  <td><strong>#${esc(n.id)}</strong> ${esc(n.negocio)}</td>
+                  <td>${esc(n.cliente)}</td>
+                  <td>${esc(n.unidade)}</td>
+                  <td>${esc(n.executivo)}</td>
+                  <td>${esc(n.etapa || '—')}</td>
+                  <td class="num"><strong>${fmtMoedaExata(n.valor)}</strong></td>
+                </tr>`).join('')
+            : `<tr><td colspan="6" class="contracts-empty">Nenhum negócio ${esc(meta.label.toLowerCase())} aberto no Funil de Vendas.</td></tr>`;
+        } else {
+          if (elTabTitle) elTabTitle.textContent = 'Principais Negócios Ganhos no Período';
+          if (elTabTag) elTabTag.textContent = 'Bitrix Funil de Vendas (C4) · Top 15';
+          if (elThead) {
+            elThead.innerHTML = '<tr><th>Negócio</th><th>Cliente</th><th>Unidade</th><th>Executivo</th><th>Data</th><th class="num">Valor</th></tr>';
+          }
+          elTbody.innerHTML = (fp.ultimosGanhos || []).length
+            ? fp.ultimosGanhos.map(g => `
+                <tr>
+                  <td><strong>#${esc(g.id)}</strong> ${esc(g.negocio)}</td>
+                  <td>${esc(g.cliente)}</td>
+                  <td>${esc(g.unidade)}</td>
+                  <td>${esc(g.executivo)}</td>
+                  <td>${g.data ? core().formatarDataBr(g.data) : '—'}</td>
+                  <td class="num"><strong>${fmtMoedaExata(g.valor)}</strong></td>
+                </tr>`).join('')
+            : '<tr><td colspan="6" class="contracts-empty">Nenhum negócio ganho no recorte.</td></tr>';
+        }
+      }
+    };
+
+    const cardQuentesBind = document.getElementById('rmrCardQuentesAction');
+    if (cardQuentesBind && !cardQuentesBind._bound) {
+      cardQuentesBind._bound = true;
+      cardQuentesBind.addEventListener('click', () => {
+        rmrFunilTempFiltro = rmrFunilTempFiltro === 'quente' ? null : 'quente';
+        if (rmrPayload) renderRmr(rmrPayload);
+      });
     }
+    const btnLimparTempBind = document.getElementById('rmrBtnLimparTemp');
+    if (btnLimparTempBind && !btnLimparTempBind._bound) {
+      btnLimparTempBind._bound = true;
+      btnLimparTempBind.addEventListener('click', () => {
+        rmrFunilTempFiltro = null;
+        if (rmrPayload) renderRmr(rmrPayload);
+      });
+    }
+
+    renderFunilTemperaturaEUnidades();
     const totalCompetitivos = Number(fpRes.ganhosQtd || 0) + Number(fpRes.perdasReaisQtd || 0);
     const perdRealVal = Number(fpRes.perdasReaisValor || 0);
     const perdRealQtd = Number(fpRes.perdasReaisQtd || 0);
@@ -1712,6 +1807,10 @@
     if (cardGanhos && !cardGanhos._bound) {
       cardGanhos._bound = true;
       cardGanhos.addEventListener('click', () => {
+        if (rmrFunilTempFiltro) {
+          rmrFunilTempFiltro = null;
+          if (rmrPayload) renderRmr(rmrPayload);
+        }
         document.getElementById('rmrSecaoUltimosGanhos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     }
@@ -1847,18 +1946,6 @@
       detailFn: m => `${fmtInt(m.qtd)} deals cancelados/declinados pelo cliente`,
       emptyMsg: 'Sem cancelamentos pelo cliente no período.'
     });
-
-    document.getElementById('tbodyRmrUltimosGanhos').innerHTML = (fp.ultimosGanhos || []).length
-      ? fp.ultimosGanhos.map(g => `
-          <tr>
-            <td><strong>#${esc(g.id)}</strong> ${esc(g.negocio)}</td>
-            <td>${esc(g.cliente)}</td>
-            <td>${esc(g.unidade)}</td>
-            <td>${esc(g.executivo)}</td>
-            <td>${g.data ? core().formatarDataBr(g.data) : '—'}</td>
-            <td class="num"><strong>${fmtMoedaExata(g.valor)}</strong></td>
-          </tr>`).join('')
-      : '<tr><td colspan="6" class="contracts-empty">Nenhum negócio ganho no recorte.</td></tr>';
   }
 
   function exportarRmrCsv() {

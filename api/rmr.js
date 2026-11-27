@@ -27,6 +27,40 @@ function loadRmrBaseOficial() {
 
 const EXPURGO_UNIDADES_SET = new Set(['CM Máquinas', 'Central ADM', 'Metalmecânica', 'Outras / Controladoria']);
 
+let cacheBitrixTempC4 = { ts: 0, map: {} };
+async function getBitrixTemperaturasC4() {
+  const agora = Date.now();
+  if (agora - cacheBitrixTempC4.ts < 90 * 1000 && Object.keys(cacheBitrixTempC4.map).length > 0) {
+    return cacheBitrixTempC4.map;
+  }
+  const webhook = process.env.BITRIX_WEBHOOK_URL || 'https://grupocordeiro.bitrix24.com.br/rest/15605/83aqgne7c875cvkz';
+  const map = {};
+  try {
+    let start = 0;
+    while (true) {
+      const url = `${webhook.replace(/\/$/, '')}/crm.deal.list.json?filter[CATEGORY_ID]=4&filter[STAGE_SEMANTIC_ID]=P&select[]=ID&select[]=UF_CRM_1793185794697&start=${start}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) break;
+      const data = await res.json();
+      if (!data.result || !Array.isArray(data.result) || !data.result.length) break;
+      for (const d of data.result) {
+        const raw = String(d.UF_CRM_1793185794697 || '').trim();
+        if (raw === '14580' || raw.toLowerCase().includes('quente')) map[String(d.ID)] = 'quente';
+        else if (raw === '14582' || raw.toLowerCase().includes('morno')) map[String(d.ID)] = 'morno';
+        else if (raw === '14584' || raw.toLowerCase().includes('frio')) map[String(d.ID)] = 'frio';
+      }
+      if (!data.next) break;
+      start = data.next;
+    }
+    if (Object.keys(map).length > 0) {
+      cacheBitrixTempC4 = { ts: agora, map };
+    }
+  } catch (err) {
+    console.warn('Falha ao buscar temperaturas Bitrix C4:', err.message);
+  }
+  return Object.keys(map).length > 0 ? map : cacheBitrixTempC4.map;
+}
+
 function isCanceladoOuDeclinado(motivoRaw) {
   if (!motivoRaw) return false;
   const m = String(motivoRaw)
@@ -919,12 +953,13 @@ export default async function handler(req, res) {
     let closedDealsRows = [];
     let stageAvgRows = [];
     let funilProdRows = [];
+    let bitrixTempMap = {};
 
     if (permBitrixDeal.canSelect) {
       const unitSql = normalizeDealUnitSql('d', 'uf');
       const oppSql = safeNumericDealSql('d."OPPORTUNITY"');
 
-      const [pipeRes, activeCtrRes, closedRes, tempoRes, funilProdRes] = await Promise.all([
+      const [pipeRes, activeCtrRes, closedRes, tempoRes, funilProdRes, tempRes] = await Promise.all([
         pool.query(`
           SELECT
             d."ID"::text AS id,
@@ -1038,7 +1073,8 @@ export default async function handler(req, res) {
           GROUP BY 1, 2, 3
           HAVING COALESCE(SUM(COALESCE(pr."PRICE_ACCOUNT"::numeric, pr."PRICE"::numeric, 0) * COALESCE(NULLIF(pr."QUANTITY"::numeric, 0), 1)), 0) > 0
           ORDER BY valor_total DESC
-        `).catch(() => ({ rows: [] }))
+        `).catch(() => ({ rows: [] })),
+        getBitrixTemperaturasC4().catch(() => ({}))
       ]);
 
       pipelineRows = pipeRes.rows;
@@ -1046,6 +1082,7 @@ export default async function handler(req, res) {
       closedDealsRows = closedRes.rows;
       stageAvgRows = tempoRes.rows;
       funilProdRows = funilProdRes?.rows || [];
+      bitrixTempMap = tempRes || {};
     }
 
     // --- Montagem 1: Metas de Unidades & Série Mensal Consolidada ---
@@ -1584,6 +1621,26 @@ function isExecutivoComercialOficial(nome) {
     let negociosQuentesBruto = 0;
     const pipelinePorEtapaMap = {};
     const pipelinePorUnidadeMap = {};
+    const tempLabels = {
+      quente: 'Quente',
+      morno: 'Morno',
+      frio: 'Frio',
+      sem_temperatura: 'Não informado'
+    };
+    const pipelinePorTempMap = {
+      quente: { temperatura: 'quente', label: 'Quente', qtd: 0, valorBruto: 0, valorPonderado: 0 },
+      morno: { temperatura: 'morno', label: 'Morno', qtd: 0, valorBruto: 0, valorPonderado: 0 },
+      frio: { temperatura: 'frio', label: 'Frio', qtd: 0, valorBruto: 0, valorPonderado: 0 },
+      sem_temperatura: { temperatura: 'sem_temperatura', label: 'Não informado', qtd: 0, valorBruto: 0, valorPonderado: 0 }
+    };
+    const pipelineUnidadesPorTempMap = {
+      todas: {},
+      quente: {},
+      morno: {},
+      frio: {},
+      sem_temperatura: {}
+    };
+    const negociosAbertosLista = [];
 
     for (const deal of pipelineRows) {
       const val = toNumber(deal.valor);
@@ -1592,10 +1649,11 @@ function isExecutivoComercialOficial(nome) {
       const valPonderado = val * peso;
       const dtClose = String(deal.data_fechamento || '').slice(0, 10);
       const dentroDoAno = !dtClose || dtClose <= cutoffYearEnd;
+      const tempKey = bitrixTempMap[String(deal.id)] || 'sem_temperatura';
 
       pipelineBrutoTotal += val;
       pipelinePonderadoTotal += valPonderado;
-      if (peso >= 0.55) {
+      if (tempKey === 'quente') {
         negociosQuentesQtd += 1;
         negociosQuentesBruto += val;
       }
@@ -1618,6 +1676,10 @@ function isExecutivoComercialOficial(nome) {
       pipelinePorEtapaMap[etapaLabel].valorBruto += val;
       pipelinePorEtapaMap[etapaLabel].valorPonderado += valPonderado;
 
+      pipelinePorTempMap[tempKey].qtd += 1;
+      pipelinePorTempMap[tempKey].valorBruto += val;
+      pipelinePorTempMap[tempKey].valorPonderado += valPonderado;
+
       const un = deal.unidade || 'Não informado';
       if (!pipelinePorUnidadeMap[un]) {
         pipelinePorUnidadeMap[un] = { unidade: un, qtd: 0, valorBruto: 0, valorPonderado: 0 };
@@ -1625,6 +1687,27 @@ function isExecutivoComercialOficial(nome) {
       pipelinePorUnidadeMap[un].qtd += 1;
       pipelinePorUnidadeMap[un].valorBruto += val;
       pipelinePorUnidadeMap[un].valorPonderado += valPonderado;
+
+      for (const bucketKey of ['todas', tempKey]) {
+        const uMap = pipelineUnidadesPorTempMap[bucketKey];
+        if (!uMap[un]) uMap[un] = { unidade: un, qtd: 0, valorBruto: 0, valorPonderado: 0 };
+        uMap[un].qtd += 1;
+        uMap[un].valorBruto += val;
+        uMap[un].valorPonderado += valPonderado;
+      }
+
+      negociosAbertosLista.push({
+        id: deal.id,
+        negocio: deal.negocio,
+        cliente: deal.cliente,
+        executivo: deal.executivo,
+        unidade: un,
+        etapa: deal.stage_name || etapaLabel,
+        dataFechamento: dtClose || null,
+        valor: val,
+        temperatura: tempKey,
+        temperaturaLabel: tempLabels[tempKey] || 'Não informado'
+      });
     }
 
     const metaRestanteAno = Math.max(0, metaAnualTotal - ytdPrincipal);
@@ -1785,7 +1868,17 @@ function isExecutivoComercialOficial(nome) {
         janelaAnoBruto: pipelineCurtoAnoBruto,
         janelaAnoPonderado: pipelineCurtoAnoPonderado,
         porEtapa: Object.values(pipelinePorEtapaMap).sort((a, b) => b.valorPonderado - a.valorPonderado),
-        porUnidade: Object.values(pipelinePorUnidadeMap).sort((a, b) => b.valorPonderado - a.valorPonderado).slice(0, 12)
+        porTemperatura: ['quente', 'morno', 'frio', 'sem_temperatura']
+          .map(k => pipelinePorTempMap[k])
+          .filter(t => t.temperatura !== 'sem_temperatura' || t.qtd > 0),
+        porUnidade: Object.values(pipelinePorUnidadeMap).sort((a, b) => b.valorPonderado - a.valorPonderado).slice(0, 12),
+        porUnidadePorTemperatura: Object.fromEntries(
+          Object.entries(pipelineUnidadesPorTempMap).map(([k, uMap]) => [
+            k,
+            Object.values(uMap).sort((a, b) => b.valorBruto - a.valorBruto).slice(0, 12)
+          ])
+        ),
+        negociosAbertos: negociosAbertosLista.sort((a, b) => b.valor - a.valor)
       },
       cenarios,
       cenarioBacklogFunil: {
