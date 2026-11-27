@@ -945,7 +945,7 @@ export default async function handler(req, res) {
           LEFT JOIN stage_bitrix.b_crm_company c ON c."ID"::text = d."COMPANY_ID"::text
           LEFT JOIN stage_bitrix.b_crm_status st
             ON st."STATUS_ID"::text = d."STAGE_ID"::text
-           AND st."ENTITY_ID" IN ('DEAL_STAGE_4', 'DEAL_STAGE_19')
+           AND st."ENTITY_ID" = 'DEAL_STAGE_4'
           WHERE d."CATEGORY_ID" = '4'
             AND d."STAGE_SEMANTIC_ID" = 'P'
             AND COALESCE(d."TITLE", '') NOT ILIKE '%ORÇAMENTO ORIENTATIVO%'
@@ -970,9 +970,9 @@ export default async function handler(req, res) {
           LEFT JOIN stage_bitrix.b_crm_company c ON c."ID"::text = d."COMPANY_ID"::text
           LEFT JOIN stage_bitrix.b_crm_status st
             ON st."STATUS_ID"::text = d."STAGE_ID"::text
-           AND st."ENTITY_ID" IN ('DEAL_STAGE_4', 'DEAL_STAGE_19')
+           AND st."ENTITY_ID" = 'DEAL_STAGE_4'
           WHERE (
-            d."STAGE_ID" IN ('C4:UC_2ZQLVL', 'C4:UC_RPFFJU', 'C4:UC_JDNYZT', 'C4:UC_FOYMHF', 'C4:UC_VHKW1X', 'C19:WON')
+            d."STAGE_ID" IN ('C4:UC_2ZQLVL', 'C4:UC_RPFFJU', 'C4:UC_JDNYZT', 'C4:UC_FOYMHF', 'C4:UC_VHKW1X')
           )
           ORDER BY valor DESC
           LIMIT 60
@@ -1014,7 +1014,7 @@ export default async function handler(req, res) {
                 ROUND(AVG(COALESCE(dias_na_etapa, 0))::numeric, 1) AS media_dias
               FROM comercial.fato_tempo_etapa_negocio
               WHERE EXTRACT(YEAR FROM data_entrada)::int = $1
-                AND id_categoria_funil IN (4, 19)
+                AND id_categoria_funil = 4
               GROUP BY 1, 2
               ORDER BY passagens DESC
               LIMIT 12
