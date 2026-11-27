@@ -172,8 +172,8 @@
     const nowBr = new Date(Date.now() - 3 * 60 * 60 * 1000);
     const curYear = nowBr.getUTCFullYear();
     const curMonth = nowBr.getUTCMonth() + 1;
-    const defMonth = curMonth > 1 ? curMonth - 1 : 12;
-    const defYear = curMonth > 1 ? curYear : curYear - 1;
+    const defMonth = curMonth;
+    const defYear = curYear;
 
     const selAno = document.getElementById('rmrAnoSelect');
     const selMes = document.getElementById('rmrMesSelect');
@@ -233,8 +233,9 @@
     setupRmrControls();
     if (!core().podeAcessarRelatorios()) return;
 
-    const year = document.getElementById('rmrAnoSelect')?.value || '2026';
-    const month = document.getElementById('rmrMesSelect')?.value || '10';
+    const nowD = new Date();
+    const year = document.getElementById('rmrAnoSelect')?.value || String(nowD.getFullYear());
+    const month = document.getElementById('rmrMesSelect')?.value || String(nowD.getMonth() + 1);
     const escopo = 'pbix';
     const incluirExpurgos = document.getElementById('rmrIncluirExpurgos')?.checked ? '1' : '0';
     const reqKey = `${year}-${month}-${escopo}-${incluirExpurgos}`;

@@ -126,8 +126,8 @@ export default async function handler(req, res) {
   const nowBr = new Date(Date.now() - 3 * 60 * 60 * 1000);
   const currentYear = nowBr.getUTCFullYear();
   const currentMonth = nowBr.getUTCMonth() + 1;
-  const defaultRefMonth = currentMonth > 1 ? currentMonth - 1 : 12;
-  const defaultRefYear = currentMonth > 1 ? currentYear : currentYear - 1;
+  const defaultRefMonth = currentMonth;
+  const defaultRefYear = currentYear;
 
   const reqYear = Number(req.query?.year);
   const reqMonth = Number(req.query?.month);
@@ -2133,15 +2133,16 @@ function isExecutivoComercialOficial(nome) {
 
     const fresh = freshnessRes.rows[0] || {};
 
-    // --- Montagem 8: Margem de Contribuição (Protheus SD2 · d2_ymargct Margens A e B) ---
+    // --- Montagem 8: Margem de Contribuição (Protheus SD2 · d2_ymargct Margens A e B no Mês Filtrado) ---
     let margemContribuicao = {
       resumo: { totalContratos: 0, contratosA: 0, valorA: 0, contratosB: 0, valorB: 0, valorTotal: 0 },
       contratos: []
     };
     try {
+      const { start: mesRefStart, endExclusive: mesRefEndExcl } = monthRangeDates(year, month, month);
       const unitFromSd2Cc3Sql = UNIT_FROM_CC3_SQL.replace(/f\.cod_centro_custo/g, 'sd.d2_ccusto');
-      const sdStart = String(ytdRange.start || '').replace(/-/g, '');
-      const sdEnd = String(ytdRange.endExclusive || '').replace(/-/g, '');
+      const sdStart = String(mesRefStart || '').replace(/-/g, '');
+      const sdEnd = String(mesRefEndExcl || '').replace(/-/g, '');
       const margemRes = await pool.query(`
         WITH fiv_vend_nf AS (
           SELECT DISTINCT ON (
@@ -2154,8 +2155,8 @@ function isExecutivoComercialOficial(nome) {
             TRIM(COALESCE(serie::text, '')) AS serie,
             TRIM(COALESCE(cod_vendedor::text, '')) AS cod_vendedor
           FROM comercial.fato_itens_vendas
-          WHERE emissao >= $1::date
-            AND emissao < $2::date
+          WHERE emissao >= ($1::date - INTERVAL '14 days')
+            AND emissao < ($2::date + INTERVAL '14 days')
           ORDER BY
             TRIM(COALESCE(cod_filial::text, '')),
             TRIM(COALESCE(numero_documento::text, '')),
@@ -2221,8 +2222,8 @@ function isExecutivoComercialOficial(nome) {
         HAVING COALESCE(SUM(COALESCE(sd.d2_total::numeric, 0)), 0) > 0
         ORDER BY valor_contrato DESC
       `, [
-        ytdRange.start,
-        ytdRange.endExclusive,
+        mesRefStart,
+        mesRefEndExcl,
         sdStart,
         sdEnd,
         COMMERCIAL_TES,
