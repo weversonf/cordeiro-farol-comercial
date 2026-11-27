@@ -332,8 +332,12 @@
       render();
       return;
     }
-    const core = window.FarolPortalCore;
-    if (!core?.fetchRelatorioAutenticado) return;
+    const core = window.FarolReportsCore;
+    if (!core?.fetchRelatorioAutenticado) {
+      const pista = document.getElementById('rkPista');
+      if (pista) pista.innerHTML = '<div class="rk-empty">Core de autenticação não disponível.</div>';
+      return;
+    }
     state.loading = true;
     const pista = document.getElementById('rkPista');
     if (pista && !state.data) {
