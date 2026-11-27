@@ -1035,7 +1035,7 @@ export default async function handler(req, res) {
           LEFT JOIN stage_bitrix.b_user u ON u."ID"::text = d."ASSIGNED_BY_ID"::text
           LEFT JOIN stage_bitrix.b_crm_company c ON c."ID"::text = d."COMPANY_ID"::text
           ${permNegocios.canSelect ? 'LEFT JOIN comercial.fato_negocios fn ON fn.id_negocio::text = d."ID"::text' : ''}
-          WHERE d."CATEGORY_ID" = '19'
+          WHERE d."CATEGORY_ID" IN ('4', '19')
             AND d."STAGE_SEMANTIC_ID" IN ('S', 'F')
             AND LEFT(COALESCE(d."CLOSEDATE"::text, d."MOVED_TIME"::text, ''), 7) = $1
         `, [mesRefIso]),
