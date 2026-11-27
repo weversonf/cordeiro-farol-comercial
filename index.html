@@ -21,7 +21,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   
   <!-- Estilos Principais -->
-  <link rel="stylesheet" href="/assets/css/portal.css?v=20261127c">
+  <link rel="stylesheet" href="/assets/css/portal.css?v=20261127e">
 </head>
 <body>
 
@@ -1167,41 +1167,53 @@
             <div id="rmrPanelMargem" class="rmr-panel-section">
               <div class="reports-kpis">
                 <article class="kpi-card highlight">
-                  <span class="kpi-label">Contratos Margem A + B</span>
+                  <span class="kpi-label">Faturado · Margem A + B</span>
                   <strong id="rmrMargemTotalVal" class="kpi-value">—</strong>
                   <span id="rmrMargemTotalQtd" class="kpi-note">—</span>
                 </article>
                 <article class="kpi-card" id="rmrCardMargemA" style="cursor:pointer;" title="Clique para filtrar Margem A">
-                  <span class="kpi-label">Margem A</span>
+                  <span class="kpi-label">Faturado · Margem A</span>
                   <strong id="rmrMargemAVal" class="kpi-value">—</strong>
                   <span id="rmrMargemAQtd" class="kpi-note">—</span>
                 </article>
                 <article class="kpi-card" id="rmrCardMargemB" style="cursor:pointer;" title="Clique para filtrar Margem B">
-                  <span class="kpi-label">Margem B</span>
+                  <span class="kpi-label">Faturado · Margem B</span>
                   <strong id="rmrMargemBVal" class="kpi-value">—</strong>
                   <span id="rmrMargemBQtd" class="kpi-note">—</span>
                 </article>
               </div>
               <div class="reports-grid">
                 <article class="report-panel wide">
-                  <div class="report-panel-header" style="flex-wrap:wrap;gap:10px;">
+                  <div class="report-panel-header" style="flex-wrap:wrap;gap:12px;">
                     <div>
                       <h3>Contratos por Margem de Contribuição (Margens A e B)</h3>
-                      <span id="rmrMargemTag" class="report-panel-tag">Protheus · YTD até competência</span>
+                      <span id="rmrMargemTag" class="report-panel-tag">Protheus SD2 (D2_YMARGCT) · Faturamento do Mês</span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                      <select id="rmrMargemFiltroTipo" class="filter-select" aria-label="Filtrar Margem">
-                        <option value="todas">Margens A e B</option>
-                        <option value="A">Somente Margem A</option>
-                        <option value="B">Somente Margem B</option>
-                      </select>
-                      <select id="rmrMargemFiltroUnidade" class="filter-select" aria-label="Filtrar Unidade">
-                        <option value="todas">Todas as unidades</option>
-                      </select>
-                      <select id="rmrMargemFiltroExec" class="filter-select" aria-label="Filtrar Executivo">
-                        <option value="todos">Todos os executivos</option>
-                      </select>
-                      <input type="search" id="rmrMargemBusca" class="filter-input" placeholder="Buscar contrato ou cliente..." style="min-width:200px;" />
+                    <div class="rmr-bl-toolbar">
+                      <div class="rmr-bl-filters">
+                        <label class="rmr-bl-field" title="Filtrar por Unidade">
+                          <i class="ph ph-buildings"></i>
+                          <select id="rmrMargemFiltroUnidade" aria-label="Filtrar Unidade">
+                            <option value="ALL">Todas as unidades</option>
+                          </select>
+                        </label>
+                        <label class="rmr-bl-field" title="Filtrar por Executivo">
+                          <i class="ph ph-user"></i>
+                          <select id="rmrMargemFiltroExec" aria-label="Filtrar Executivo">
+                            <option value="ALL">Todos os executivos</option>
+                          </select>
+                        </label>
+                        <label class="rmr-bl-field" title="Buscar contrato ou cliente">
+                          <i class="ph ph-magnifying-glass"></i>
+                          <input type="search" id="rmrMargemBusca" placeholder="Buscar contrato ou cliente..." />
+                        </label>
+                        <button type="button" id="rmrMargemClearBtn" class="rmr-bl-clear-btn" style="display:none;"><i class="ph ph-x"></i> Limpar</button>
+                      </div>
+                      <div class="rmr-view-toggle" role="group" aria-label="Filtrar por classe de margem">
+                        <button type="button" class="rmr-bl-view-btn is-active" data-mc-tipo="ALL">A + B</button>
+                        <button type="button" class="rmr-bl-view-btn" data-mc-tipo="A">Margem A</button>
+                        <button type="button" class="rmr-bl-view-btn" data-mc-tipo="B">Margem B</button>
+                      </div>
                     </div>
                   </div>
                   <div class="table-responsive">
@@ -1213,7 +1225,7 @@
                           <th>Unidade</th>
                           <th>Nome do Executivo</th>
                           <th style="text-align:center;">Margem</th>
-                          <th class="num">Valor do Contrato</th>
+                          <th class="num">Faturado no Mês</th>
                         </tr>
                       </thead>
                       <tbody id="tbodyRmrMargem"></tbody>
@@ -2745,7 +2757,7 @@
 
   <!-- Script Principal -->
   <script src="/assets/js/portal.js"></script>
-  <script src="/assets/js/reports-extra.js?v=20261127d"></script>
+  <script src="/assets/js/reports-extra.js?v=20261127e"></script>
   <script src="/assets/js/ranking.js?v=20261127d"></script>
 </body>
 </html>

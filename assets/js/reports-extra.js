@@ -761,97 +761,8 @@
           execs.map(e => `<option value="${esc(e)}"${e === curE ? ' selected' : ''}>${esc(fmtTitleCase(e))}</option>`).join('');
       }
 
-      const initCustomDd = (selectEl, iconCls) => {
-        if (!selectEl) return;
-        const fieldWrap = selectEl.closest('.rmr-bl-field');
-        if (!fieldWrap) return;
-        let dd = fieldWrap.nextElementSibling;
-        if (!dd || !dd.classList.contains('rmr-dd')) {
-          fieldWrap.style.display = 'none';
-          dd = document.createElement('div');
-          dd.className = 'rmr-dd';
-          fieldWrap.insertAdjacentElement('afterend', dd);
-        }
-        if (!Array.isArray(selectEl._multiVals)) {
-          selectEl._multiVals = selectEl.value && selectEl.value !== 'ALL' ? [selectEl.value] : [];
-        }
-        const multi = selectEl._multiVals;
-        const isFiltered = multi.length > 0;
-        let triggerLabel = selectEl.options[0]?.textContent || '';
-        if (multi.length === 1) {
-          const optMatch = Array.from(selectEl.options).find(o => o.value === multi[0]);
-          triggerLabel = optMatch ? optMatch.textContent : multi[0];
-        } else if (multi.length > 1) {
-          const labels = multi.map(v => {
-            const optMatch = Array.from(selectEl.options).find(o => o.value === v);
-            return optMatch ? optMatch.textContent : v;
-          });
-          triggerLabel = `${multi.length} selecionados (${labels.join(', ')})`;
-        }
-
-        const wasOpenBefore = dd.classList.contains('is-open');
-        dd.innerHTML = `
-          <button type="button" class="rmr-dd-trigger ${isFiltered ? 'is-filtered' : ''}" title="${esc(triggerLabel)} · Segure Ctrl para selecionar mais de uma">
-            <i class="ph ${iconCls}"></i>
-            <span style="max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(triggerLabel)}</span>
-            <i class="ph ph-caret-down" style="font-size:12px;opacity:.7;"></i>
-          </button>
-          <div class="rmr-dd-menu">
-            ${Array.from(selectEl.options).map(opt => {
-              const selected = opt.value === 'ALL' ? multi.length === 0 : multi.includes(opt.value);
-              return `
-              <button type="button" class="rmr-dd-item ${selected ? 'is-selected' : ''}" data-val="${esc(opt.value)}">
-                <span>${esc(opt.textContent)}</span>
-                ${selected ? '<i class="ph ph-check" style="font-size:13px;"></i>' : ''}
-              </button>`;
-            }).join('')}
-            <div style="font-size:10px;color:#64748b;padding:5px 8px 2px;border-top:1px solid #f1f5f9;margin-top:4px;">
-              Dica: segure <strong>Ctrl</strong> para marcar vários
-            </div>
-          </div>`;
-        if (wasOpenBefore) dd.classList.add('is-open');
-
-        const trig = dd.querySelector('.rmr-dd-trigger');
-        trig.addEventListener('click', ev => {
-          ev.stopPropagation();
-          const wasOpen = dd.classList.contains('is-open');
-          document.querySelectorAll('.rmr-dd.is-open').forEach(x => x.classList.remove('is-open'));
-          if (!wasOpen) dd.classList.add('is-open');
-        });
-        dd.querySelectorAll('.rmr-dd-item').forEach(item => {
-          item.addEventListener('click', ev => {
-            ev.stopPropagation();
-            const val = item.getAttribute('data-val');
-            const isCtrl = ev.ctrlKey || ev.metaKey;
-            if (val === 'ALL') {
-              selectEl._multiVals = [];
-              selectEl.value = 'ALL';
-              dd.classList.remove('is-open');
-            } else if (isCtrl) {
-              const cur = [...(selectEl._multiVals || [])];
-              const idx = cur.indexOf(val);
-              if (idx >= 0) cur.splice(idx, 1);
-              else cur.push(val);
-              selectEl._multiVals = cur;
-              selectEl.value = cur.length === 1 ? cur[0] : (cur.length === 0 ? 'ALL' : cur[0]);
-            } else {
-              selectEl._multiVals = [val];
-              selectEl.value = val;
-              dd.classList.remove('is-open');
-            }
-            selectEl.dispatchEvent(new Event('change'));
-          });
-        });
-        if (!document._rmrDdOutsideBound) {
-          document._rmrDdOutsideBound = true;
-          document.addEventListener('click', () => {
-            document.querySelectorAll('.rmr-dd.is-open').forEach(x => x.classList.remove('is-open'));
-          });
-        }
-      };
-
-      initCustomDd(selBlUnid, 'ph-buildings');
-      initCustomDd(selBlExec, 'ph-user');
+      initRmrCustomDd(selBlUnid, 'ph-buildings', esc);
+      initRmrCustomDd(selBlExec, 'ph-user', esc);
 
       const renderBacklogProtheusView = () => {
         const uMulti = selBlUnid?._multiVals || [];
@@ -2037,38 +1948,54 @@
     const mcContratos = mc.contratos || [];
     const elMcTotVal = document.getElementById('rmrMargemTotalVal');
     if (elMcTotVal) {
-      elMcTotVal.textContent = fmtMoeda(mcRes.valorTotal);
-      document.getElementById('rmrMargemTotalQtd').textContent = `${fmtInt(mcRes.totalContratos)} contratos (Margens A e B)`;
-      document.getElementById('rmrMargemAVal').textContent = fmtMoeda(mcRes.valorA);
-      document.getElementById('rmrMargemAQtd').textContent = `${fmtInt(mcRes.contratosA)} contratos Margem A`;
-      document.getElementById('rmrMargemBVal').textContent = fmtMoeda(mcRes.valorB);
-      document.getElementById('rmrMargemBQtd').textContent = `${fmtInt(mcRes.contratosB)} contratos Margem B`;
+      const mcTot = Number(mcRes.valorTotal || 0);
+      const mcAVal = Number(mcRes.valorA || 0);
+      const mcBVal = Number(mcRes.valorB || 0);
+      const pctA = mcTot > 0 ? ((mcAVal / mcTot) * 100).toFixed(1).replace('.', ',') : '0,0';
+      const pctB = mcTot > 0 ? ((mcBVal / mcTot) * 100).toFixed(1).replace('.', ',') : '0,0';
 
-      const selTipo = document.getElementById('rmrMargemFiltroTipo');
+      elMcTotVal.textContent = fmtMoeda(mcTot);
+      document.getElementById('rmrMargemTotalQtd').textContent = `${fmtInt(mcRes.totalContratos)} contratos no mês (Margens A e B)`;
+      document.getElementById('rmrMargemAVal').textContent = fmtMoeda(mcAVal);
+      document.getElementById('rmrMargemAQtd').textContent = `${fmtInt(mcRes.contratosA)} contratos · ${pctA}% do A+B`;
+      document.getElementById('rmrMargemBVal').textContent = fmtMoeda(mcBVal);
+      document.getElementById('rmrMargemBQtd').textContent = `${fmtInt(mcRes.contratosB)} contratos · ${pctB}% do A+B`;
+
       const selUnid = document.getElementById('rmrMargemFiltroUnidade');
       const selExec = document.getElementById('rmrMargemFiltroExec');
       const inpBusca = document.getElementById('rmrMargemBusca');
+      const btnClearMc = document.getElementById('rmrMargemClearBtn');
+      const btnsMcTipo = document.querySelectorAll('[data-mc-tipo]');
 
       if (selUnid) {
-        const prevU = selUnid.value || 'todas';
         const unids = [...new Set(mcContratos.map(c => c.unidade).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-        selUnid.innerHTML = '<option value="todas">Todas as unidades</option>' +
+        selUnid.innerHTML = '<option value="ALL">Todas as unidades</option>' +
           unids.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
-        selUnid.value = unids.includes(prevU) ? prevU : 'todas';
+        selUnid._multiVals = (selUnid._multiVals || []).filter(v => unids.includes(v));
+        initRmrCustomDd(selUnid, 'ph-buildings', esc);
       }
       if (selExec) {
-        const prevE = selExec.value || 'todos';
         const execs = [...new Set(mcContratos.map(c => c.executivo).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-        selExec.innerHTML = '<option value="todos">Todos os executivos</option>' +
+        selExec.innerHTML = '<option value="ALL">Todos os executivos</option>' +
           execs.map(e => `<option value="${esc(e)}">${esc(e)}</option>`).join('');
-        selExec.value = execs.includes(prevE) ? prevE : 'todos';
+        selExec._multiVals = (selExec._multiVals || []).filter(v => execs.includes(v));
+        initRmrCustomDd(selExec, 'ph-user', esc);
       }
 
+      const getMcTipo = () => document.querySelector('[data-mc-tipo].is-active')?.getAttribute('data-mc-tipo') || 'ALL';
+      const setMcTipo = tipo => {
+        btnsMcTipo.forEach(b => b.classList.toggle('is-active', b.getAttribute('data-mc-tipo') === tipo));
+      };
+
       const renderTabelaMargem = () => {
-        const tipo = selTipo ? selTipo.value : 'todas';
-        const unid = selUnid ? selUnid.value : 'todas';
-        const exec = selExec ? selExec.value : 'todos';
+        const tipo = getMcTipo();
+        const uMulti = selUnid?._multiVals || [];
+        const eMulti = selExec?._multiVals || [];
         const q = (inpBusca ? inpBusca.value : '').trim().toLowerCase();
+
+        if (btnClearMc) {
+          btnClearMc.style.display = (tipo !== 'ALL' || uMulti.length > 0 || eMulti.length > 0 || q.length > 0) ? 'inline-flex' : 'none';
+        }
 
         const cardA = document.getElementById('rmrCardMargemA');
         const cardB = document.getElementById('rmrCardMargemB');
@@ -2076,9 +2003,9 @@
         if (cardB) cardB.style.outline = tipo === 'B' ? '2px solid #0284c7' : '';
 
         const filtrados = mcContratos.filter(c => {
-          if (tipo !== 'todas' && c.margem !== tipo) return false;
-          if (unid !== 'todas' && c.unidade !== unid) return false;
-          if (exec !== 'todos' && c.executivo !== exec) return false;
+          if (tipo !== 'ALL' && c.margem !== tipo) return false;
+          if (uMulti.length > 0 && !uMulti.includes(c.unidade)) return false;
+          if (eMulti.length > 0 && !eMulti.includes(c.executivo)) return false;
           if (q) {
             const hay = `${c.numeroContrato} ${c.cliente} ${c.executivo} ${c.unidade}`.toLowerCase();
             if (!hay.includes(q)) return false;
@@ -2087,7 +2014,7 @@
         });
 
         const elTag = document.getElementById('rmrMargemTag');
-        if (elTag) elTag.textContent = `Protheus · ${fmtInt(filtrados.length)} contratos exibidos`;
+        if (elTag) elTag.textContent = `Protheus SD2 (D2_YMARGCT) · ${fmtInt(filtrados.length)} contratos exibidos`;
 
         const elTbody = document.getElementById('tbodyRmrMargem');
         if (elTbody) {
@@ -2110,34 +2037,57 @@
         }
       };
 
-      [selTipo, selUnid, selExec].forEach(el => {
-        if (el && !el._boundMargem) {
-          el._boundMargem = true;
-          el.addEventListener('change', renderTabelaMargem);
-        }
-      });
+      if (selUnid && !selUnid._boundMargem) {
+        selUnid._boundMargem = true;
+        selUnid.addEventListener('change', () => {
+          initRmrCustomDd(selUnid, 'ph-buildings', esc);
+          renderTabelaMargem();
+        });
+      }
+      if (selExec && !selExec._boundMargem) {
+        selExec._boundMargem = true;
+        selExec.addEventListener('change', () => {
+          initRmrCustomDd(selExec, 'ph-user', esc);
+          renderTabelaMargem();
+        });
+      }
       if (inpBusca && !inpBusca._boundMargem) {
         inpBusca._boundMargem = true;
         inpBusca.addEventListener('input', renderTabelaMargem);
+      }
+      btnsMcTipo.forEach(btn => {
+        if (!btn._boundMargem) {
+          btn._boundMargem = true;
+          btn.addEventListener('click', () => {
+            setMcTipo(btn.getAttribute('data-mc-tipo') || 'ALL');
+            renderTabelaMargem();
+          });
+        }
+      });
+      if (btnClearMc && !btnClearMc._boundMargem) {
+        btnClearMc._boundMargem = true;
+        btnClearMc.addEventListener('click', () => {
+          setMcTipo('ALL');
+          if (selUnid) { selUnid._multiVals = []; selUnid.value = 'ALL'; initRmrCustomDd(selUnid, 'ph-buildings', esc); }
+          if (selExec) { selExec._multiVals = []; selExec.value = 'ALL'; initRmrCustomDd(selExec, 'ph-user', esc); }
+          if (inpBusca) inpBusca.value = '';
+          renderTabelaMargem();
+        });
       }
       const cardA = document.getElementById('rmrCardMargemA');
       if (cardA && !cardA._boundMargem) {
         cardA._boundMargem = true;
         cardA.addEventListener('click', () => {
-          if (selTipo) {
-            selTipo.value = selTipo.value === 'A' ? 'todas' : 'A';
-            renderTabelaMargem();
-          }
+          setMcTipo(getMcTipo() === 'A' ? 'ALL' : 'A');
+          renderTabelaMargem();
         });
       }
       const cardB = document.getElementById('rmrCardMargemB');
       if (cardB && !cardB._boundMargem) {
         cardB._boundMargem = true;
         cardB.addEventListener('click', () => {
-          if (selTipo) {
-            selTipo.value = selTipo.value === 'B' ? 'todas' : 'B';
-            renderTabelaMargem();
-          }
+          setMcTipo(getMcTipo() === 'B' ? 'ALL' : 'B');
+          renderTabelaMargem();
         });
       }
 

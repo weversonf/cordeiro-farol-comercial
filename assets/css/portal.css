@@ -2298,7 +2298,8 @@ body {
 .rmr-bl-field:hover { border-color: #93b3cc; }
 .rmr-bl-field:focus-within { border-color: var(--navy); box-shadow: 0 0 0 2px rgba(15, 41, 66, 0.12); }
 .rmr-bl-field i { color: var(--ink-soft); font-size: 14px; }
-.rmr-bl-field select {
+.rmr-bl-field select,
+.rmr-bl-field input {
   border: 0;
   background: transparent;
   color: var(--ink);
@@ -2306,9 +2307,11 @@ body {
   font-size: 12.5px;
   font-weight: 600;
   outline: none;
-  cursor: pointer;
   padding-right: 4px;
 }
+.rmr-bl-field select { cursor: pointer; }
+.rmr-bl-field input { min-width: 190px; font-weight: 500; }
+.rmr-bl-field input::placeholder { color: #94a3b8; font-weight: 500; }
 .rmr-dd {
   position: relative;
   display: inline-block;
