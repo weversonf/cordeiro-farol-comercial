@@ -1804,35 +1804,32 @@
     if (elCardPerdVal) {
       elCardPerdVal.textContent = fmtMoeda(perdRealVal);
       document.getElementById('rmrFunilCardPerdidosQtd').textContent =
-        `${fmtInt(perdRealQtd)} perdas reais (clique p/ abrir)`;
+        `${fmtInt(perdRealQtd)} perdidos (clique p/ abrir)`;
     }
 
     document.getElementById('rmrFunilPerdasVal').textContent = fmtMoeda(perdRealVal);
-    document.getElementById('rmrFunilPerdasQtd').textContent = `${fmtInt(perdRealQtd)} perdas reais (competitivas/operacionais)`;
+    document.getElementById('rmrFunilPerdasQtd').textContent = `${fmtInt(perdRealQtd)} perdidos (competitivos/operacionais)`;
     document.getElementById('rmrFunilCancelVal').textContent = fmtMoeda(fpRes.canceladosClienteValor);
     document.getElementById('rmrFunilCancelQtd').textContent = `${fmtInt(fpRes.canceladosClienteQtd)} cancelados`;
     document.getElementById('rmrFunilConv').textContent = fmtPct(fpRes.taxaConversaoCompetitivaPct);
     document.getElementById('rmrFunilConvBruta').textContent =
       `${fmtInt(fpRes.ganhosQtd)} ganhos de ${fmtInt(totalCompetitivos)} negócios (sem cancelados)`;
 
-    const elTicketPerda = document.getElementById('rmrPerdidosTicketMedio');
-    if (elTicketPerda) {
-      const ticketMed = perdRealQtd > 0 ? perdRealVal / perdRealQtd : 0;
-      elTicketPerda.textContent = fmtMoeda(ticketMed);
-      document.getElementById('rmrPerdidosTicketSub').textContent = `Média por proposta perdida`;
+    const elTopMotivo = document.getElementById('rmrPerdidosTopMotivo');
+    if (elTopMotivo) {
       const topMot = (fp.motivosPerdaReais || [])[0];
-      document.getElementById('rmrPerdidosTopMotivo').textContent = topMot ? esc(topMot.motivo) : '—';
+      elTopMotivo.textContent = topMot ? esc(topMot.motivo) : '—';
       document.getElementById('rmrPerdidosTopMotivoSub').textContent = topMot
         ? `${fmtMoeda(topMot.valor)} · ${fmtInt(topMot.qtd)} negócios`
-        : 'Sem perdas reais';
+        : 'Sem negócios perdidos';
       document.getElementById('rmrPerdidosConvLimpa').textContent = fmtPct(fpRes.taxaConversaoCompetitivaPct);
-      document.getElementById('rmrPerdidosConvLimpaSub').textContent = `${fmtInt(fpRes.ganhosQtd)} ganhos vs ${fmtInt(perdRealQtd)} perdas`;
+      document.getElementById('rmrPerdidosConvLimpaSub').textContent = `${fmtInt(fpRes.ganhosQtd)} ganhos vs ${fmtInt(perdRealQtd)} perdidos`;
 
       const elDist = document.getElementById('rmrPerdidosDistribuicao');
       const motivos = fp.motivosPerdaReais || [];
       if (elDist) {
         if (!motivos.length) {
-          elDist.innerHTML = '<div class="contracts-empty">Sem perdas reais registradas no período.</div>';
+          elDist.innerHTML = '<div class="contracts-empty">Sem negócios perdidos registrados no período.</div>';
         } else {
           const palette = ['#dc2626', '#ea580c', '#d97706', '#0284c7', '#475569', '#94a3b8'];
           const top5 = motivos.slice(0, 5);
