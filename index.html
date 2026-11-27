@@ -21,7 +21,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   
   <!-- Estilos Principais -->
-  <link rel="stylesheet" href="/assets/css/portal.css?v=20261127h">
+  <link rel="stylesheet" href="/assets/css/portal.css?v=20261127i">
 </head>
 <body>
 
@@ -491,6 +491,15 @@
               <button type="button" id="btnExportarInadimplenciaXlsx" class="btn-secondary-reports"><i class="ph ph-microsoft-excel-logo"></i> Exportar Excel (.xlsx)</button>
               <button type="button" id="btnAtualizarInadimplencia" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
             </div>
+
+            <div id="acoesExecutivos" class="reports-actions" style="display: none;">
+              <label class="rmr-bl-field" style="height:38px;border-radius:6px;" title="Selecionar competência (Mês / Ano)">
+                <i class="ph ph-calendar-blank"></i>
+                <select id="execPeriodoSelect" aria-label="Competência Painel Executivos (Mês/Ano)"></select>
+              </label>
+              <button type="button" id="btnExportarExecutivosCsv" class="btn-secondary-reports"><i class="ph ph-download-simple"></i> Exportar CSV</button>
+              <button type="button" id="btnAtualizarExecutivos" class="btn-refresh-reports"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+            </div>
           </div>
         </div>
 
@@ -501,7 +510,7 @@
         <div id="relatoriosCatalogo">
           <div class="reports-toolbar">
             <div>
-              <div class="reports-count">4 painéis conectados ao vivo</div>
+              <div class="reports-count" id="relatoriosCatalogoCount">5 painéis conectados ao vivo</div>
               <p>Selecione o relatório que deseja consultar. Todos os indicadores usam consultas validadas diretamente no PostgreSQL corporativo.</p>
             </div>
             <span class="reports-private-tag"><i class="ph ph-shield-check"></i> Acesso Master</span>
@@ -572,6 +581,23 @@
               </ul>
               <button type="button" class="btn-open-report is-primary" data-report-trigger="faturamento">
                 <span>Abrir Prévia de Faturamento</span>
+                <i class="ph ph-arrow-right"></i>
+              </button>
+            </article>
+
+            <article class="report-option-card is-featured" data-report="executivos">
+              <div class="report-option-top">
+                <div class="report-option-icon icon-executivos"><i class="ph ph-user-focus"></i></div>
+                <span class="report-source-pill is-live">Protheus + Bitrix SPA 1100</span>
+              </div>
+              <h3>Painel Executivos</h3>
+              <p>Acompanhamento individual do executivo: Faturamento, Meta de Faturamento, Cobertura de Carteira (SPA 1100) e Medições Pendentes.</p>
+              <ul class="report-option-meta">
+                <li><i class="ph ph-check"></i> Visão travada por perfil do executivo logado</li>
+                <li><i class="ph ph-check"></i> Meta, Realizado, Cobertura A/B e Medições</li>
+              </ul>
+              <button type="button" class="btn-open-report is-primary" data-report-trigger="executivos">
+                <span>Abrir Painel Executivos</span>
                 <i class="ph ph-arrow-right"></i>
               </button>
             </article>
@@ -1169,17 +1195,17 @@
             <div id="rmrPanelMargem" class="rmr-panel-section">
               <div class="reports-kpis">
                 <article class="kpi-card highlight">
-                  <span class="kpi-label">Faturado · Margem A + B</span>
+                  <span class="kpi-label">Faturamento Total do Mês</span>
                   <strong id="rmrMargemTotalVal" class="kpi-value">—</strong>
                   <span id="rmrMargemTotalQtd" class="kpi-note">—</span>
                 </article>
-                <article class="kpi-card" id="rmrCardMargemA" style="cursor:pointer;" title="Clique para filtrar Margem A">
-                  <span class="kpi-label">Faturado · Margem A</span>
+                <article class="kpi-card" id="rmrCardMargemA" style="cursor:pointer;" title="Clique para filtrar Faixa A">
+                  <span class="kpi-label">Faturamento · Faixa A</span>
                   <strong id="rmrMargemAVal" class="kpi-value">—</strong>
                   <span id="rmrMargemAQtd" class="kpi-note">—</span>
                 </article>
-                <article class="kpi-card" id="rmrCardMargemB" style="cursor:pointer;" title="Clique para filtrar Margem B">
-                  <span class="kpi-label">Faturado · Margem B</span>
+                <article class="kpi-card" id="rmrCardMargemB" style="cursor:pointer;" title="Clique para filtrar Faixa B">
+                  <span class="kpi-label">Faturamento · Faixa B</span>
                   <strong id="rmrMargemBVal" class="kpi-value">—</strong>
                   <span id="rmrMargemBQtd" class="kpi-note">—</span>
                 </article>
@@ -2759,7 +2785,7 @@
 
   <!-- Script Principal -->
   <script src="/assets/js/portal.js?v=20261127h"></script>
-  <script src="/assets/js/reports-extra.js?v=20261127h"></script>
+  <script src="/assets/js/reports-extra.js?v=20261127i"></script>
   <script src="/assets/js/ranking.js?v=20261127d"></script>
 </body>
 </html>

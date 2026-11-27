@@ -2029,17 +2029,20 @@
     const elMcTotVal = document.getElementById('rmrMargemTotalVal');
     if (elMcTotVal) {
       const mcTot = Number(mcRes.valorTotal || 0);
+      const fatMesTot = Number(mcRes.faturamentoTotalMes || mcTot || 0);
       const mcAVal = Number(mcRes.valorA || 0);
       const mcBVal = Number(mcRes.valorB || 0);
-      const pctA = mcTot > 0 ? ((mcAVal / mcTot) * 100).toFixed(1).replace('.', ',') : '0,0';
-      const pctB = mcTot > 0 ? ((mcBVal / mcTot) * 100).toFixed(1).replace('.', ',') : '0,0';
+      const basePct = fatMesTot > 0 ? fatMesTot : mcTot;
+      const pctAB = basePct > 0 ? ((mcTot / basePct) * 100).toFixed(1).replace('.', ',') : '0,0';
+      const pctA = basePct > 0 ? ((mcAVal / basePct) * 100).toFixed(1).replace('.', ',') : '0,0';
+      const pctB = basePct > 0 ? ((mcBVal / basePct) * 100).toFixed(1).replace('.', ',') : '0,0';
 
-      elMcTotVal.textContent = fmtMoeda(mcTot);
-      document.getElementById('rmrMargemTotalQtd').textContent = `${fmtInt(mcRes.totalContratos)} contratos no mês (Margens A e B)`;
+      elMcTotVal.textContent = fmtMoeda(fatMesTot);
+      document.getElementById('rmrMargemTotalQtd').textContent = `${fmtInt(mcRes.totalContratos)} contratos A+B = ${fmtMoeda(mcTot)} (${pctAB}% do total)`;
       document.getElementById('rmrMargemAVal').textContent = fmtMoeda(mcAVal);
-      document.getElementById('rmrMargemAQtd').textContent = `${fmtInt(mcRes.contratosA)} contratos · ${pctA}% do A+B`;
+      document.getElementById('rmrMargemAQtd').textContent = `${fmtInt(mcRes.contratosA)} contratos · ${pctA}% do faturamento total`;
       document.getElementById('rmrMargemBVal').textContent = fmtMoeda(mcBVal);
-      document.getElementById('rmrMargemBQtd').textContent = `${fmtInt(mcRes.contratosB)} contratos · ${pctB}% do A+B`;
+      document.getElementById('rmrMargemBQtd').textContent = `${fmtInt(mcRes.contratosB)} contratos · ${pctB}% do faturamento total`;
 
       const selUnid = document.getElementById('rmrMargemFiltroUnidade');
       const selExec = document.getElementById('rmrMargemFiltroExec');

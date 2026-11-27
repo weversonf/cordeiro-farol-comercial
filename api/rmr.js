@@ -2247,8 +2247,10 @@ function isExecutivoComercialOficial(nome) {
       const listB = contratosMargem.filter(c => c.margem === 'B');
       const valorA = listA.reduce((s, c) => s + c.valorContrato, 0);
       const valorB = listB.reduce((s, c) => s + c.valorContrato, 0);
+      const faturamentoTotalMes = toNumber(executivoResumo?.mes?.valorPrincipal || 0);
       margemContribuicao = {
         resumo: {
+          faturamentoTotalMes,
           totalContratos: contratosMargem.length,
           contratosA: listA.length,
           valorA,
