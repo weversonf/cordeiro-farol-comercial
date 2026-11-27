@@ -8,6 +8,8 @@ import rmrHandler from './api/rmr.js';
 import faturamentoHandler from './api/faturamento.js';
 import faturamentoSd2Handler from './api/faturamento-sd2.js';
 import inadimplenciaHandler from './api/inadimplencia.js';
+import executivosHandler from './api/executivos.js';
+import rankingHandler from './api/ranking.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.join(root, '.env.local');
@@ -37,7 +39,9 @@ const server = http.createServer(async (req, res) => {
     '/api/rmr': rmrHandler,
     '/api/faturamento': faturamentoHandler,
     '/api/faturamento-sd2': faturamentoSd2Handler,
-    '/api/inadimplencia': inadimplenciaHandler
+    '/api/inadimplencia': inadimplenciaHandler,
+    '/api/executivos': executivosHandler,
+    '/api/ranking': rankingHandler
   };
   if (apiRoutes[url.pathname]) {
     const reqLike = { method: req.method, headers: req.headers, query: Object.fromEntries(url.searchParams) };

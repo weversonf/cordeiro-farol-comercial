@@ -21,7 +21,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   
   <!-- Estilos Principais -->
-  <link rel="stylesheet" href="/assets/css/portal.css?v=20261127i">
+  <link rel="stylesheet" href="/assets/css/portal.css?v=20261127j">
 </head>
 <body>
 
@@ -116,11 +116,6 @@
             <i class="ph ph-users-three"></i>
             <span>Gestão de Perfis & Acessos</span>
             <span class="badge-admin">Admin</span>
-          </button>
-          <button type="button" id="tabRelatoriosBtn" class="nav-tab-btn" style="display: none;">
-            <i class="ph ph-chart-bar"></i>
-            <span>Relatórios</span>
-            <span class="badge-private">Pessoal</span>
           </button>
           <button type="button" id="tabRankingBtn" class="nav-tab-btn" style="display: none;">
             <i class="ph ph-trophy"></i>
@@ -254,37 +249,7 @@
             </a>
           </div>
 
-          <!-- Card 4: Relatórios avulsos (exclusivo do Administrador Master) -->
-          <div id="cardRelatorios" class="app-card card-relatorios" style="display: none;">
-            <div>
-              <div class="app-card-top">
-                <div class="app-icon-box">
-                  <i class="ph ph-chart-bar"></i>
-                </div>
-                <span class="badge-status-app exclusivo">
-                  <i class="ph ph-lock-key"></i> Exclusivo
-                </span>
-              </div>
-
-              <div class="app-card-body">
-                <h3>Relatórios</h3>
-                <div class="app-subtitle">Análises avulsas</div>
-                <p>Um espaço reservado para consultas pontuais, análises executivas e novos relatórios que não pertencem aos painéis principais.</p>
-                <ul class="app-features-list">
-                  <li><i class="ph ph-check"></i> Acesso pessoal e centralizado</li>
-                  <li><i class="ph ph-check"></i> Relatórios novos sem alterar os painéis</li>
-                  <li><i class="ph ph-check"></i> Organização por assunto e período</li>
-                </ul>
-              </div>
-            </div>
-
-            <button type="button" id="btnOpenRelatorios" class="btn-launch-app btn-primary-launch">
-              <span>Abrir Relatórios</span>
-              <i class="ph ph-arrow-right"></i>
-            </button>
-          </div>
-
-          <!-- Card 5: Ranking de Executivos (exclusivo do Administrador Master) -->
+          <!-- Card 4: Ranking de Executivos (exclusivo do Administrador Master) -->
           <div id="cardRanking" class="app-card card-ranking" style="display: none;">
             <div>
               <div class="app-card-top">
@@ -314,6 +279,110 @@
             </button>
           </div>
 
+        </div>
+
+        <!-- Central de Relatórios integrada diretamente na tela inicial (/) -->
+        <div id="launcherRelatoriosSection" class="launcher-reports-section" style="display: none;">
+          <div class="section-header launcher-reports-header">
+            <div>
+              <span class="section-eyebrow"><i class="ph ph-chart-bar"></i> Central de Relatórios</span>
+              <h2 class="launcher-reports-title">Painéis &amp; Relatórios Comerciais</h2>
+              <p class="section-desc">Escolha um painel corporativo conectado em tempo real ao Bitrix e ao Protheus.</p>
+            </div>
+            <div class="launcher-reports-badges">
+              <div class="reports-count" id="relatoriosCatalogoCount">5 painéis conectados ao vivo</div>
+              <span class="reports-private-tag"><i class="ph ph-shield-check"></i> Acesso Controlado</span>
+            </div>
+          </div>
+
+          <div id="relatoriosCatalogo">
+            <div class="reports-catalog-grid">
+              <article class="report-option-card is-featured" data-report="contratos">
+                <div class="report-option-top">
+                  <div class="report-option-icon icon-contratos"><i class="ph ph-files"></i></div>
+                  <span class="report-source-pill is-live">Bitrix · Tempo real</span>
+                </div>
+                <h3>Gestão de Contratos Ativos (180 dias)</h3>
+                <p>Carteira ativa puxada da Planilha Gestão de Contratos (PGC-CONSOLIDADA), com semáforo de vencimento em 30, 90 e 180 dias e exportação.</p>
+                <ul class="report-option-meta">
+                  <li><i class="ph ph-check"></i> Semáforo de renovação (Crítico, Alerta, 180d)</li>
+                  <li><i class="ph ph-check"></i> Filtros por unidade, executivo, etapa e tipo</li>
+                </ul>
+                <button type="button" class="btn-open-report is-primary" data-report-trigger="contratos">
+                  <span>Abrir Gestão de Contratos</span>
+                  <i class="ph ph-arrow-right"></i>
+                </button>
+              </article>
+
+              <article class="report-option-card is-featured" data-report="rmr">
+                <div class="report-option-top">
+                  <div class="report-option-icon icon-rmr"><i class="ph ph-presentation-chart"></i></div>
+                  <span class="report-source-pill is-live">Protheus + Bitrix · RMR</span>
+                </div>
+                <h3>RMR Comercial</h3>
+                <p>Visão executiva, Metas vs Realizado (Unidades e Executivos), Backlog e Medições Pendentes, Contratos por Cliente, Projeções e Funil/Perdas.</p>
+                <ul class="report-option-meta">
+                  <li><i class="ph ph-check"></i> Regras reconciliadas com RMR OUT26 &amp; INBOX PBIX</li>
+                  <li><i class="ph ph-check"></i> Cenários de fechamento anual + Perdas reais vs Cliente</li>
+                </ul>
+                <button type="button" class="btn-open-report is-primary" data-report-trigger="rmr">
+                  <span>Abrir RMR Comercial</span>
+                  <i class="ph ph-arrow-right"></i>
+                </button>
+              </article>
+
+              <article class="report-option-card is-featured" data-report="inadimplencia">
+                <div class="report-option-top">
+                  <div class="report-option-icon icon-inadimplencia"><i class="ph ph-warning-octagon"></i></div>
+                  <span class="report-source-pill is-live">Protheus SE1 + SD2</span>
+                </div>
+                <h3>Inadimplência (Executivo &amp; Margem)</h3>
+                <p>Carteira inadimplente por Executivo, Margem (A, B, C) e Cliente, com gráficos interativos e exportação Excel fiel ao modelo RMR.</p>
+                <ul class="report-option-meta">
+                  <li><i class="ph ph-check"></i> Consolidado Executivo × Margem (A, B, C)</li>
+                  <li><i class="ph ph-check"></i> Exportação Excel (.xlsx) em 2 abas</li>
+                </ul>
+                <button type="button" class="btn-open-report is-primary" data-report-trigger="inadimplencia">
+                  <span>Abrir Inadimplência</span>
+                  <i class="ph ph-arrow-right"></i>
+                </button>
+              </article>
+
+              <article class="report-option-card is-featured" data-report="faturamento">
+                <div class="report-option-top">
+                  <div class="report-option-icon icon-faturamento"><i class="ph ph-receipt"></i></div>
+                  <span class="report-source-pill is-live">Protheus SD2 · Prévia</span>
+                </div>
+                <h3>Prévia de Faturamento (SD2)</h3>
+                <p>Faturamento comercial lido direto da SD2, com os expurgos da premiação (CM Máquinas, Central ADM e locação T&amp;A) e o impacto de cada regra.</p>
+                <ul class="report-option-meta">
+                  <li><i class="ph ph-check"></i> TES e CFOP de receita homologados</li>
+                  <li><i class="ph ph-check"></i> Por unidade, executivo e cliente</li>
+                </ul>
+                <button type="button" class="btn-open-report is-primary" data-report-trigger="faturamento">
+                  <span>Abrir Prévia de Faturamento</span>
+                  <i class="ph ph-arrow-right"></i>
+                </button>
+              </article>
+
+              <article class="report-option-card is-featured" data-report="executivos">
+                <div class="report-option-top">
+                  <div class="report-option-icon icon-executivos"><i class="ph ph-user-focus"></i></div>
+                  <span class="report-source-pill is-live">Protheus + Bitrix SPA 1100</span>
+                </div>
+                <h3>Painel Executivos</h3>
+                <p>Acompanhamento individual do executivo: Faturamento, Meta de Faturamento, Cobertura de Carteira (SPA 1100) e Medições Pendentes.</p>
+                <ul class="report-option-meta">
+                  <li><i class="ph ph-check"></i> Visão travada por perfil do executivo logado</li>
+                  <li><i class="ph ph-check"></i> Meta, Realizado, Cobertura A/B e Medições</li>
+                </ul>
+                <button type="button" class="btn-open-report is-primary" data-report-trigger="executivos">
+                  <span>Abrir Painel Executivos</span>
+                  <i class="ph ph-arrow-right"></i>
+                </button>
+              </article>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -433,10 +502,10 @@
       <section id="viewRelatorios" class="tab-view">
         <div id="relatoriosTopBar" class="reports-topbar" style="display: none;">
           <button type="button" id="btnTopoVoltarCatalogo" class="btn-reports-back-top">
-            <i class="ph ph-arrow-left"></i> Voltar para Central de Relatórios
+            <i class="ph ph-arrow-left"></i> Voltar para Painel Farol
           </button>
           <nav class="reports-breadcrumb" aria-label="Navegação de relatórios">
-            <button type="button" id="btnBreadcrumbCatalogo" class="reports-breadcrumb-link">Central de Relatórios</button>
+            <button type="button" id="btnBreadcrumbCatalogo" class="reports-breadcrumb-link">Painel Farol</button>
             <i class="ph ph-caret-right"></i>
             <span id="relatoriosBreadcrumbAtual" class="reports-breadcrumb-current">Painel</span>
           </nav>
@@ -504,105 +573,6 @@
         </div>
 
         <div id="relatoriosAuthBanner" class="report-status-banner is-warning" style="display: none; margin-bottom: 14px;"></div>
-
-        <!-- Catálogo / Gama de Relatórios -->
-
-        <div id="relatoriosCatalogo">
-          <div class="reports-toolbar">
-            <div>
-              <div class="reports-count" id="relatoriosCatalogoCount">5 painéis conectados ao vivo</div>
-              <p>Selecione o relatório que deseja consultar. Todos os indicadores usam consultas validadas diretamente no PostgreSQL corporativo.</p>
-            </div>
-            <span class="reports-private-tag"><i class="ph ph-shield-check"></i> Acesso Master</span>
-          </div>
-
-          <div class="reports-catalog-grid">
-            <article class="report-option-card is-featured" data-report="contratos">
-              <div class="report-option-top">
-                <div class="report-option-icon icon-contratos"><i class="ph ph-files"></i></div>
-                <span class="report-source-pill is-live">Bitrix · Tempo real</span>
-              </div>
-              <h3>Gestão de Contratos Ativos (180 dias)</h3>
-              <p>Carteira ativa puxada da Planilha Gestão de Contratos (PGC-CONSOLIDADA), com semáforo de vencimento em 30, 90 e 180 dias e exportação.</p>
-              <ul class="report-option-meta">
-                <li><i class="ph ph-check"></i> Semáforo de renovação (Crítico, Alerta, 180d)</li>
-                <li><i class="ph ph-check"></i> Filtros por unidade, executivo, etapa e tipo</li>
-              </ul>
-              <button type="button" class="btn-open-report is-primary" data-report-trigger="contratos">
-                <span>Abrir Gestão de Contratos</span>
-                <i class="ph ph-arrow-right"></i>
-              </button>
-            </article>
-
-            <article class="report-option-card is-featured" data-report="rmr">
-              <div class="report-option-top">
-                <div class="report-option-icon icon-rmr"><i class="ph ph-presentation-chart"></i></div>
-                <span class="report-source-pill is-live">Protheus + Bitrix · RMR</span>
-              </div>
-              <h3>RMR Comercial</h3>
-              <p>Visão executiva, Metas vs Realizado (Unidades e Executivos), Backlog e Medições Pendentes, Contratos por Cliente, Projeções e Funil/Perdas.</p>
-              <ul class="report-option-meta">
-                <li><i class="ph ph-check"></i> Regras reconciliadas com RMR OUT26 &amp; INBOX PBIX</li>
-                <li><i class="ph ph-check"></i> Cenários de fechamento anual + Perdas reais vs Cliente</li>
-              </ul>
-              <button type="button" class="btn-open-report is-primary" data-report-trigger="rmr">
-                <span>Abrir RMR Comercial</span>
-                <i class="ph ph-arrow-right"></i>
-              </button>
-            </article>
-
-            <article class="report-option-card is-featured" data-report="inadimplencia">
-              <div class="report-option-top">
-                <div class="report-option-icon icon-inadimplencia"><i class="ph ph-warning-octagon"></i></div>
-                <span class="report-source-pill is-live">Protheus SE1 + SD2</span>
-              </div>
-              <h3>Inadimplência (Executivo &amp; Margem)</h3>
-              <p>Carteira inadimplente por Executivo, Margem (A, B, C) e Cliente, com gráficos interativos e exportação Excel fiel ao modelo RMR.</p>
-              <ul class="report-option-meta">
-                <li><i class="ph ph-check"></i> Consolidado Executivo × Margem (A, B, C)</li>
-                <li><i class="ph ph-check"></i> Exportação Excel (.xlsx) em 2 abas</li>
-              </ul>
-              <button type="button" class="btn-open-report is-primary" data-report-trigger="inadimplencia">
-                <span>Abrir Inadimplência</span>
-                <i class="ph ph-arrow-right"></i>
-              </button>
-            </article>
-
-            <article class="report-option-card is-featured" data-report="faturamento">
-              <div class="report-option-top">
-                <div class="report-option-icon icon-faturamento"><i class="ph ph-receipt"></i></div>
-                <span class="report-source-pill is-live">Protheus SD2 · Prévia</span>
-              </div>
-              <h3>Prévia de Faturamento (SD2)</h3>
-              <p>Faturamento comercial lido direto da SD2, com os expurgos da premiação (CM Máquinas, Central ADM e locação T&amp;A) e o impacto de cada regra.</p>
-              <ul class="report-option-meta">
-                <li><i class="ph ph-check"></i> TES e CFOP de receita homologados</li>
-                <li><i class="ph ph-check"></i> Por unidade, executivo e cliente</li>
-              </ul>
-              <button type="button" class="btn-open-report is-primary" data-report-trigger="faturamento">
-                <span>Abrir Prévia de Faturamento</span>
-                <i class="ph ph-arrow-right"></i>
-              </button>
-            </article>
-
-            <article class="report-option-card is-featured" data-report="executivos">
-              <div class="report-option-top">
-                <div class="report-option-icon icon-executivos"><i class="ph ph-user-focus"></i></div>
-                <span class="report-source-pill is-live">Protheus + Bitrix SPA 1100</span>
-              </div>
-              <h3>Painel Executivos</h3>
-              <p>Acompanhamento individual do executivo: Faturamento, Meta de Faturamento, Cobertura de Carteira (SPA 1100) e Medições Pendentes.</p>
-              <ul class="report-option-meta">
-                <li><i class="ph ph-check"></i> Visão travada por perfil do executivo logado</li>
-                <li><i class="ph ph-check"></i> Meta, Realizado, Cobertura A/B e Medições</li>
-              </ul>
-              <button type="button" class="btn-open-report is-primary" data-report-trigger="executivos">
-                <span>Abrir Painel Executivos</span>
-                <i class="ph ph-arrow-right"></i>
-              </button>
-            </article>
-          </div>
-        </div>
 
         <!-- Relatório 1: Visão Geral (Protheus + Bitrix) -->
         <div id="relatorioVisaoGeral" style="display: none;">
@@ -3009,7 +2979,7 @@
   <div id="toastContainer" class="toast-container"></div>
 
   <!-- Script Principal -->
-  <script src="/assets/js/portal.js?v=20261127i"></script>
+  <script src="/assets/js/portal.js?v=20261127j"></script>
   <script src="/assets/js/reports-extra.js?v=20261127j"></script>
   <script src="/assets/js/executivos.js?v=20261127a"></script>
   <script src="/assets/js/ranking.js?v=20261127d"></script>

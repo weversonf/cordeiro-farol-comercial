@@ -32,6 +32,11 @@ function podeAcessarRelatorios(user) {
   return isAdminMaster(user.email) || Boolean(user.permissoes?.relatorios?.liberado);
 }
 
+function isRelatoriosPerfilExecutivo(user) {
+  if (!user || isAdminMaster(user.email)) return false;
+  return String(user.permissoes?.relatorios?.perfil || '').trim().toLowerCase() === 'executivo';
+}
+
 // Controle padrão de atualização das telas e auto-refresh leve (30 min apenas com aba ativa)
 const AUTO_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 const CATALOGO_STATUS_CACHE_MS = 5 * 60 * 1000;
@@ -131,6 +136,8 @@ async function atualizarTelaAtivaSilencioso() {
       await window.FarolReportsExtra?.refreshFaturamentoSd2?.();
     } else if (telaAtualKey === 'relatorios:inadimplencia') {
       await window.FarolReportsExtra?.refreshInadimplencia?.();
+    } else if (telaAtualKey === 'relatorios:executivos') {
+      await window.FarolExecutivos?.refresh?.();
     }
   } finally {
     autoRefreshEmCurso = false;
@@ -427,18 +434,25 @@ function showAppScreen() {
 
   // Apenas Weverson Feitosa tem acesso à aba de Gestão de Perfis & Acessos
   const tabGestaoBtn = document.getElementById('tabGestaoBtn');
-  const tabRelatoriosBtn = document.getElementById('tabRelatoriosBtn');
   const tabRankingBtn = document.getElementById('tabRankingBtn');
-  const cardRelatorios = document.getElementById('cardRelatorios');
   const cardRanking = document.getElementById('cardRanking');
+  const launcherRelatoriosSection = document.getElementById('launcherRelatoriosSection');
   const isMasterAdmin = isAdminMaster(currentUser.email);
   const podeRelatorios = podeAcessarRelatorios(currentUser);
 
   tabGestaoBtn.style.display = isMasterAdmin ? 'flex' : 'none';
-  tabRelatoriosBtn.style.display = podeRelatorios ? 'flex' : 'none';
-  cardRelatorios.style.display = podeRelatorios ? 'flex' : 'none';
+  if (launcherRelatoriosSection) launcherRelatoriosSection.style.display = podeRelatorios ? 'block' : 'none';
   if (tabRankingBtn) tabRankingBtn.style.display = isMasterAdmin ? 'flex' : 'none';
   if (cardRanking) cardRanking.style.display = isMasterAdmin ? 'flex' : 'none';
+
+  const somenteExecutivo = isRelatoriosPerfilExecutivo(currentUser);
+  document.querySelectorAll('#relatoriosCatalogo .report-option-card[data-report]').forEach(card => {
+    card.style.display = (!somenteExecutivo || card.dataset.report === 'executivos') ? 'flex' : 'none';
+  });
+  const catCountEl = document.getElementById('relatoriosCatalogoCount');
+  if (catCountEl) {
+    catCountEl.textContent = somenteExecutivo ? '1 painel liberado para o seu perfil' : '5 painéis conectados ao vivo';
+  }
 
   if (!isMasterAdmin && !podeRelatorios) {
     switchTab('launcher');
@@ -486,16 +500,6 @@ function setupEventListeners() {
   document.getElementById('tabGestaoBtn').addEventListener('click', () => {
     if (isAdminMaster(currentUser?.email)) {
       switchTab('gestao');
-    }
-  });
-  document.getElementById('tabRelatoriosBtn').addEventListener('click', () => {
-    if (podeAcessarRelatorios(currentUser)) {
-      switchTab('relatorios');
-    }
-  });
-  document.getElementById('btnOpenRelatorios').addEventListener('click', () => {
-    if (podeAcessarRelatorios(currentUser)) {
-      switchTab('relatorios');
     }
   });
   document.getElementById('tabRankingBtn')?.addEventListener('click', () => {
@@ -716,7 +720,8 @@ const RELATORIO_ROTAS = {
   contratos: '/relatorios/contratos',
   rmr: '/relatorios/rmr-comercial',
   inadimplencia: '/relatorios/inadimplencia',
-  faturamento: '/relatorios/faturamento'
+  faturamento: '/relatorios/faturamento',
+  executivos: '/relatorios/painel-executivos'
 };
 
 const ROTA_PARA_RELATORIO = {
@@ -725,7 +730,8 @@ const ROTA_PARA_RELATORIO = {
   '/relatorios/contratos': 'contratos',
   '/relatorios/rmr-comercial': 'rmr',
   '/relatorios/inadimplencia': 'inadimplencia',
-  '/relatorios/faturamento': 'faturamento'
+  '/relatorios/faturamento': 'faturamento',
+  '/relatorios/painel-executivos': 'executivos'
 };
 
 function sincronizarUrlNavegador(caminho, { skipHistory = false, replace = false } = {}) {
@@ -751,14 +757,16 @@ function aplicarRotaUrlAtual(options = {}) {
     return;
   }
   const relatorioDaRota = ROTA_PARA_RELATORIO[path];
-  if (relatorioDaRota && podeAcessarRelatorios(currentUser)) {
+  if (relatorioDaRota && relatorioDaRota !== 'catalogo' && podeAcessarRelatorios(currentUser)) {
     relatorioAtivo = relatorioDaRota;
     switchTab('relatorios', options);
     return;
   }
-  if (path.startsWith('/relatorios') && podeAcessarRelatorios(currentUser)) {
-    relatorioAtivo = 'catalogo';
-    switchTab('relatorios', { ...options, replace: true });
+  if (path.startsWith('/relatorios')) {
+    switchTab('launcher', { ...options, replace: true });
+    if (podeAcessarRelatorios(currentUser)) {
+      document.getElementById('launcherRelatoriosSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 }
 
@@ -780,9 +788,10 @@ function switchTab(tab, options = {}) {
     renderizarRodapeSync();
     sincronizarUrlNavegador('/gestao', options);
   } else if (tab === 'relatorios' && podeAcessarRelatorios(currentUser)) {
-    document.getElementById('tabRelatoriosBtn').classList.add('active');
+    document.getElementById('tabLauncherBtn')?.classList.add('active');
     document.getElementById('viewRelatorios').classList.add('active');
-    abrirRelatorio(relatorioAtivo, options);
+    const destino = isRelatoriosPerfilExecutivo(currentUser) ? 'executivos' : relatorioAtivo;
+    abrirRelatorio(destino, options);
   } else if (tab === 'ranking' && isAdminMaster(currentUser?.email)) {
     telaAtualKey = 'ranking';
     document.getElementById('tabRankingBtn')?.classList.add('active');
@@ -794,16 +803,22 @@ function switchTab(tab, options = {}) {
 }
 
 function abrirRelatorio(tipo = 'catalogo', options = {}) {
-  if (!RELATORIO_ROTAS[tipo]) tipo = 'catalogo';
+  if (!RELATORIO_ROTAS[tipo] || tipo === 'catalogo') {
+    switchTab('launcher', options);
+    return;
+  }
+  if (isRelatoriosPerfilExecutivo(currentUser) && tipo !== 'executivos') {
+    tipo = 'executivos';
+  }
   relatorioAtivo = tipo;
   telaAtualKey = `relatorios:${tipo}`;
-  const catalogo = document.getElementById('relatoriosCatalogo');
   const visaoGeral = document.getElementById('relatorioVisaoGeral');
   const contratos = document.getElementById('relatorioContratos');
   const rmr = document.getElementById('relatorioRmr');
   const faturamento = document.getElementById('relatorioFaturamento');
   const faturamentoSd2 = document.getElementById('relatorioFaturamentoSd2');
   const inadimplencia = document.getElementById('relatorioInadimplencia');
+  const executivos = document.getElementById('relatorioExecutivos');
   const topBar = document.getElementById('relatoriosTopBar');
   const breadcrumbAtual = document.getElementById('relatoriosBreadcrumbAtual');
   const btnVoltar = document.getElementById('btnVoltarCatalogoRelatorios');
@@ -813,18 +828,19 @@ function abrirRelatorio(tipo = 'catalogo', options = {}) {
   const acoesFaturamento = document.getElementById('acoesFaturamento');
   const acoesFaturamentoSd2 = document.getElementById('acoesFaturamentoSd2');
   const acoesInadimplencia = document.getElementById('acoesInadimplencia');
+  const acoesExecutivos = document.getElementById('acoesExecutivos');
   const titulo = document.getElementById('relatoriosTitulo');
   const desc = document.getElementById('relatoriosDesc');
 
-  catalogo.style.display = tipo === 'catalogo' ? 'block' : 'none';
   visaoGeral.style.display = tipo === 'visao-geral' ? 'block' : 'none';
   contratos.style.display = tipo === 'contratos' ? 'block' : 'none';
   if (rmr) rmr.style.display = tipo === 'rmr' ? 'block' : 'none';
   if (faturamento) faturamento.style.display = 'none';
   if (faturamentoSd2) faturamentoSd2.style.display = tipo === 'faturamento' ? 'block' : 'none';
   if (inadimplencia) inadimplencia.style.display = tipo === 'inadimplencia' ? 'block' : 'none';
+  if (executivos) executivos.style.display = tipo === 'executivos' ? 'block' : 'none';
 
-  if (topBar) topBar.style.display = tipo === 'catalogo' ? 'none' : 'flex';
+  if (topBar) topBar.style.display = 'flex';
   if (btnVoltar) btnVoltar.style.display = 'none';
   acoesVisaoGeral.style.display = tipo === 'visao-geral' ? 'flex' : 'none';
   acoesContratos.style.display = tipo === 'contratos' ? 'flex' : 'none';
@@ -832,6 +848,7 @@ function abrirRelatorio(tipo = 'catalogo', options = {}) {
   if (acoesFaturamento) acoesFaturamento.style.display = 'none';
   if (acoesFaturamentoSd2) acoesFaturamentoSd2.style.display = tipo === 'faturamento' ? 'flex' : 'none';
   if (acoesInadimplencia) acoesInadimplencia.style.display = tipo === 'inadimplencia' ? 'flex' : 'none';
+  if (acoesExecutivos) acoesExecutivos.style.display = tipo === 'executivos' ? 'flex' : 'none';
 
   if (tipo === 'visao-geral') {
     titulo.textContent = 'Faturamento & Pipeline Comercial';
@@ -858,6 +875,11 @@ function abrirRelatorio(tipo = 'catalogo', options = {}) {
     desc.textContent = 'Carteira inadimplente (Protheus SE1010 + Margem D2_YMARGCT) com visão consolidada por Executivo, Margem A/B/C e exportação Excel.';
     if (breadcrumbAtual) breadcrumbAtual.textContent = 'Inadimplência';
     window.FarolReportsExtra?.openInadimplencia?.();
+  } else if (tipo === 'executivos') {
+    titulo.textContent = 'Painel Executivos';
+    desc.textContent = 'Acompanhamento individual do executivo: Faturamento, Meta de Faturamento, Cobertura de Carteira (SPA 1100) e Medições Pendentes.';
+    if (breadcrumbAtual) breadcrumbAtual.textContent = 'Painel Executivos';
+    window.FarolExecutivos?.open?.();
   } else {
     titulo.textContent = 'Central de Relatórios';
     desc.textContent = 'Escolha um painel corporativo conectado em tempo real ao Bitrix e ao Protheus.';
@@ -892,19 +914,25 @@ function configurarControlesRelatorios() {
     carregarRelatorios(true);
   });
 
-  document.getElementById('btnVoltarCatalogoRelatorios').addEventListener('click', () => abrirRelatorio('catalogo'));
-  document.getElementById('btnTopoVoltarCatalogo')?.addEventListener('click', () => abrirRelatorio('catalogo'));
-  document.getElementById('btnBreadcrumbCatalogo')?.addEventListener('click', () => abrirRelatorio('catalogo'));
+  document.getElementById('btnVoltarCatalogoRelatorios').addEventListener('click', () => switchTab('launcher'));
+  document.getElementById('btnTopoVoltarCatalogo')?.addEventListener('click', () => switchTab('launcher'));
+  document.getElementById('btnBreadcrumbCatalogo')?.addEventListener('click', () => switchTab('launcher'));
 
   document.querySelectorAll('[data-report-trigger]').forEach(btn => {
     btn.addEventListener('click', event => {
       event.stopPropagation();
-      abrirRelatorio(btn.dataset.reportTrigger);
+      if (!podeAcessarRelatorios(currentUser)) return;
+      relatorioAtivo = btn.dataset.reportTrigger || 'executivos';
+      switchTab('relatorios');
     });
   });
 
   document.querySelectorAll('.report-option-card[data-report]').forEach(card => {
-    card.addEventListener('click', () => abrirRelatorio(card.dataset.report));
+    card.addEventListener('click', () => {
+      if (!podeAcessarRelatorios(currentUser)) return;
+      relatorioAtivo = card.dataset.report || 'executivos';
+      switchTab('relatorios');
+    });
   });
 
   document.getElementById('btnAtualizarContratos').addEventListener('click', () => carregarContratos(true));
@@ -2355,6 +2383,8 @@ function showToast(mensagem, tipo = 'success') {
 
 window.FarolReportsCore = {
   podeAcessarRelatorios: () => podeAcessarRelatorios(currentUser),
+  isAdminMaster: () => isAdminMaster(currentUser?.email),
+  getCurrentUser: () => currentUser,
   fetchRelatorioAutenticado,
   enviarRelatorioAutenticado,
   formatarMoeda,

@@ -283,6 +283,8 @@ def import_workbook(xlsx_path: Path, json_path: Path) -> dict:
             "modalidade": clean_str(r.get("modalidade")) or "Contrato",
             "cliente": cliente,
             "unidade": clean_str(r.get("unidade")) or "—",
+            "executivo": clean_str(r.get("executivo")) or None,
+            "codVendedor": clean_str(r.get("cod_vendedor")) or None,
             "valor": round(val, 2),
             "aguardandoPedido": to_bool(r.get("aguardando_pedido")),
             "observacao": clean_str(r.get("observacao")),

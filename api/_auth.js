@@ -5,8 +5,12 @@ const ALLOWED_MASTER_EMAILS = new Set([
   'weverson.feitosa@cordeiroguindastes.com.br'
 ]);
 
+export function isAdminMasterEmail(email) {
+  return ALLOWED_MASTER_EMAILS.has(String(email || '').trim().toLowerCase());
+}
+
 async function hasDelegatedReportsPermission(email, bearerToken) {
-  const endpoint = `${SUPABASE_URL}/rest/v1/usuarios_nps?email=ilike.${encodeURIComponent(email)}&select=ativo,permissao_relatorios&limit=1`;
+  const endpoint = `${SUPABASE_URL}/rest/v1/usuarios_nps?email=ilike.${encodeURIComponent(email)}&select=ativo,permissao_relatorios,perfil_relatorios&limit=1`;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const authTokens = [serviceKey, bearerToken, SUPABASE_ANON_KEY].filter(Boolean);
 
@@ -25,16 +29,17 @@ async function hasDelegatedReportsPermission(email, bearerToken) {
       return {
         checked: true,
         allowed: Boolean(row && row.ativo !== false && row.permissao_relatorios === true),
-        ativo: row?.ativo !== false
+        ativo: row?.ativo !== false,
+        perfil: String(row?.perfil_relatorios || 'Visualizador').trim()
       };
     } catch {
       // Tenta próximo token de leitura autorizado
     }
   }
-  return { checked: false, allowed: false, ativo: false };
+  return { checked: false, allowed: false, ativo: false, perfil: '' };
 }
 
-export async function requireAdminMaster(req, res) {
+export async function requireAdminMaster(req, res, { allowExecutivo = false } = {}) {
   res.setHeader('Cache-Control', 'no-store');
 
   const authHeader = String(req.headers?.authorization || '');
@@ -81,6 +86,14 @@ export async function requireAdminMaster(req, res) {
               ? 'Seu usuário está inativo no Farol Comercial.'
               : 'Seu usuário não possui permissão de Relatórios liberada no banco.')
           : 'Não foi possível confirmar sua permissão de Relatórios no Supabase.'
+      });
+      return null;
+    }
+
+    if (!allowExecutivo && delegated.perfil.toLowerCase() === 'executivo') {
+      res.status(403).json({
+        ok: false,
+        error: 'Seu perfil possui acesso exclusivo ao Painel Executivos.'
       });
       return null;
     }
