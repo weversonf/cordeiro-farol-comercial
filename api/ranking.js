@@ -1,6 +1,19 @@
+import fs from 'fs';
+import path from 'path';
 import { getPool, toNumber } from './_db.js';
 import { requireAdminMaster } from './_auth.js';
-import { buildBillingBaseCte } from './_dw.js';
+import { buildBillingBaseCte, mapIndicadorUnitName } from './_dw.js';
+
+function loadRmrBaseOficial() {
+  try {
+    const pCwd = path.join(process.cwd(), 'data', 'rmr-base-oficial.json');
+    if (fs.existsSync(pCwd)) return JSON.parse(fs.readFileSync(pCwd, 'utf8'));
+    const fileUrl = new URL('../data/rmr-base-oficial.json', import.meta.url);
+    return JSON.parse(fs.readFileSync(fileUrl, 'utf8'));
+  } catch {
+    return { metasExecutivos: [] };
+  }
+}
 
 const EXECUTIVOS_RANKING = [
   { cod: '059', nome: 'Marcio Funghi', cor: '#A855F7', match: ['MARCIO', 'MÁRCIO'] },
@@ -41,18 +54,30 @@ export default async function handler(req, res) {
 
   try {
     const pool = getPool();
+    const baseOficial = loadRmrBaseOficial();
 
-    const [metasRes, bitrixRes, protheusRes] = await Promise.all([
+    const [metasRes, metasUnidRes, bitrixRes, protheusRes] = await Promise.all([
       pool.query(`
         SELECT
           TRIM(COALESCE(cod_vendedor::text, '')) AS cod_vendedor,
-          MAX(COALESCE(valor_alvo, 0))::numeric AS meta_ano,
-          (MAX(COALESCE(valor_alvo, 0)) / 12.0)::numeric AS meta_mes
+          MAX(COALESCE(valor_alvo, 0))::numeric AS meta_ano
         FROM comercial.dim_meta_vendedores
         WHERE EXTRACT(YEAR FROM data_referencia)::int = $1
           AND UPPER(COALESCE(descricao, '')) NOT LIKE '%NPS%'
         GROUP BY 1
       `, [year]),
+
+      pool.query(`
+        SELECT
+          TRIM(zi0_unidad) AS zi0_unidad,
+          LPAD(TRIM(zi1_mes), 2, '0') AS mes_num,
+          COALESCE(MAX(zi1_vlmalv), 0)::numeric AS meta_alvo
+        FROM comercial.indicador_unidade
+        WHERE zi0_ano = $1
+          AND zi0_metric = '000001'
+          AND zi0_status = 'A'
+        GROUP BY 1, 2
+      `, [String(year)]),
 
       pool.query(`
         SELECT
@@ -92,9 +117,48 @@ export default async function handler(req, res) {
       `, [startDate, endDate, mesIso])
     ]);
 
-    const metasMap = Object.fromEntries(
-      metasRes.rows.map(r => [r.cod_vendedor, { metaAno: toNumber(r.meta_ano), metaMes: toNumber(r.meta_mes) }])
+    const metaUnidadeAnualNorte = metasUnidRes.rows
+      .filter(r => mapIndicadorUnitName(r.zi0_unidad) === 'Norte')
+      .reduce((s, r) => s + toNumber(r.meta_alvo), 0);
+
+    const metaNorteYtd = metasUnidRes.rows
+      .filter(r => mapIndicadorUnitName(r.zi0_unidad) === 'Norte' && Number(r.mes_num) <= month)
+      .reduce((s, r) => s + toNumber(r.meta_alvo), 0);
+
+    const planMesMap = {};
+    const planYtdMap = {};
+    for (const r of baseOficial.metasExecutivos || []) {
+      if (Number(r.ano) !== year) continue;
+      const cod = String(r.codVendedor || '').trim();
+      if (!cod) continue;
+      if (Number(r.mes) === month) planMesMap[cod] = toNumber(r.metaMensal);
+      if (Number(r.mes) <= month) {
+        if (!planYtdMap[cod]) planYtdMap[cod] = { sum: 0, count: 0 };
+        planYtdMap[cod].sum += toNumber(r.metaMensal);
+        planYtdMap[cod].count += 1;
+      }
+    }
+
+    const metasDwMap = Object.fromEntries(
+      metasRes.rows.map(r => [r.cod_vendedor, toNumber(r.meta_ano)])
     );
+
+    function getMetasExec(cod) {
+      const metaAnualAlvo = cod === '000056' && metaUnidadeAnualNorte > 0
+        ? metaUnidadeAnualNorte
+        : (metasDwMap[cod] || 0);
+      const hasPlanMes = planMesMap[cod] !== undefined;
+      const metaMes = hasPlanMes
+        ? planMesMap[cod]
+        : (metaAnualAlvo > 0 ? metaAnualAlvo / 12 : 0);
+      const planYtd = planYtdMap[cod];
+      const metaYtd = cod === '000056' && metaNorteYtd > 0
+        ? metaNorteYtd
+        : (planYtd && planYtd.count >= month
+          ? planYtd.sum
+          : (metaAnualAlvo > 0 ? (metaAnualAlvo / 12) * month : (planYtd?.sum || 0)));
+      return { metaMes, metaYtd, metaAno: metaAnualAlvo };
+    }
 
     const bitrixMap = {};
     for (const r of bitrixRes.rows) {
@@ -120,9 +184,8 @@ export default async function handler(req, res) {
     );
 
     const vendido = EXECUTIVOS_RANKING.map(ex => {
-      const m = metasMap[ex.cod] || { metaAno: 0, metaMes: 0 };
+      const m = getMetasExec(ex.cod);
       const b = bitrixMap[ex.cod] || { qtdMes: 0, valMes: 0, qtdAno: 0, valAno: 0 };
-      const metaYtd = m.metaMes * month;
       return {
         cod: ex.cod,
         nome: ex.nome,
@@ -134,15 +197,14 @@ export default async function handler(req, res) {
         qtdAno: b.qtdAno,
         realizadoAno: Number(b.valAno.toFixed(2)),
         metaAno: Number(m.metaAno.toFixed(2)),
-        metaYtd: Number(metaYtd.toFixed(2)),
-        pctAno: metaYtd > 0 ? Number(((b.valAno / metaYtd) * 100).toFixed(1)) : 0
+        metaYtd: Number(m.metaYtd.toFixed(2)),
+        pctAno: m.metaYtd > 0 ? Number(((b.valAno / m.metaYtd) * 100).toFixed(1)) : 0
       };
     });
 
     const faturado = EXECUTIVOS_RANKING.map(ex => {
-      const m = metasMap[ex.cod] || { metaAno: 0, metaMes: 0 };
+      const m = getMetasExec(ex.cod);
       const p = protheusMap[ex.cod] || { notasMes: 0, valMes: 0, notasAno: 0, valAno: 0 };
-      const metaYtd = m.metaMes * month;
       return {
         cod: ex.cod,
         nome: ex.nome,
@@ -154,8 +216,8 @@ export default async function handler(req, res) {
         qtdAno: p.notasAno,
         realizadoAno: Number(p.valAno.toFixed(2)),
         metaAno: Number(m.metaAno.toFixed(2)),
-        metaYtd: Number(metaYtd.toFixed(2)),
-        pctAno: metaYtd > 0 ? Number(((p.valAno / metaYtd) * 100).toFixed(1)) : 0
+        metaYtd: Number(m.metaYtd.toFixed(2)),
+        pctAno: m.metaYtd > 0 ? Number(((p.valAno / m.metaYtd) * 100).toFixed(1)) : 0
       };
     });
 
