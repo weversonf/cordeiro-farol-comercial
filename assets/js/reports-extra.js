@@ -2180,23 +2180,117 @@
       core().showToast('Carregue o RMR Comercial antes de exportar.', 'warning');
       return;
     }
-    const headers = [
-      'Unidade', 'Realizado Mes', 'Meta Mes', 'Atingimento Mes %',
-      'Realizado YTD', 'Meta YTD', 'Atingimento YTD %', 'Meta Anual', 'Run-Rate Anual', 'Tipo'
+    if (typeof window.XLSX === 'undefined') {
+      core().showToast('Biblioteca de Excel ainda carregando. Tente novamente em instantes.', 'error');
+      return;
+    }
+    const XLSX = window.XLSX;
+    const wb = XLSX.utils.book_new();
+    const numVal = v => Number(Number(v || 0).toFixed(2));
+    const applyNumFmt = (ws, cols, startRow = 2) => {
+      if (!ws['!ref']) return;
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      for (let r = startRow - 1; r <= range.e.r; r++) {
+        for (const c of cols) {
+          const cell = ws[XLSX.utils.encode_cell({ r, c })];
+          if (cell && typeof cell.v === 'number') cell.z = '#,##0.00';
+        }
+      }
+    };
+
+    const unidAoa = [
+      ['Unidade', 'Realizado Mes (R$)', 'Meta Mes (R$)', 'Atingimento Mes %', 'Realizado YTD (R$)', 'Meta YTD (R$)', 'Atingimento YTD %', 'Meta Anual (R$)', 'Run-Rate Anual (R$)', 'Tipo'],
+      ...(rmrPayload.metasVsRealizado?.unidades || []).map(u => [
+        u.unidade || '',
+        numVal(u.realizadoMes),
+        numVal(u.metaMes),
+        u.atingimentoMesPct === null ? null : Number(Number(u.atingimentoMesPct).toFixed(1)),
+        numVal(u.realizadoYtd),
+        numVal(u.metaYtd),
+        u.atingimentoYtdPct === null ? null : Number(Number(u.atingimentoYtdPct).toFixed(1)),
+        numVal(u.metaAnual),
+        numVal(u.runRateAnual),
+        u.isExpurgoUnidade ? 'Expurgo/Rateio' : 'Comercial Core'
+      ])
     ];
-    const rows = (rmrPayload.metasVsRealizado?.unidades || []).map(u => [
-      u.unidade,
-      Number(u.realizadoMes || 0).toFixed(2).replace('.', ','),
-      Number(u.metaMes || 0).toFixed(2).replace('.', ','),
-      u.atingimentoMesPct === null ? '' : u.atingimentoMesPct.toFixed(1).replace('.', ','),
-      Number(u.realizadoYtd || 0).toFixed(2).replace('.', ','),
-      Number(u.metaYtd || 0).toFixed(2).replace('.', ','),
-      u.atingimentoYtdPct === null ? '' : u.atingimentoYtdPct.toFixed(1).replace('.', ','),
-      Number(u.metaAnual || 0).toFixed(2).replace('.', ','),
-      Number(u.runRateAnual || 0).toFixed(2).replace('.', ','),
-      u.isExpurgoUnidade ? 'Expurgo/Rateio' : 'Comercial Core'
-    ]);
-    baixarCsv(`rmr-comercial-${rmrPayload.parametros?.mesRefIso || 'ref'}.csv`, headers, rows);
+    const wsUnid = XLSX.utils.aoa_to_sheet(unidAoa);
+    wsUnid['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
+    applyNumFmt(wsUnid, [1, 2, 4, 5, 7, 8]);
+    XLSX.utils.book_append_sheet(wb, wsUnid, 'Unidades');
+
+    const execAoa = [
+      ['Executivo', 'Realizado Mes (R$)', 'Meta Mes (R$)', 'Atingimento Mes %', 'Realizado YTD (R$)', 'Meta YTD (R$)', 'Meta Anual (R$)'],
+      ...(rmrPayload.metasVsRealizado?.executivos || []).map(e => [
+        e.executivo || '',
+        numVal(e.realizadoMes),
+        numVal(e.metaMes),
+        e.atingimentoMesPct === null ? null : Number(Number(e.atingimentoMesPct).toFixed(1)),
+        numVal(e.realizadoYtd),
+        numVal(e.metaYtd),
+        numVal(e.metaAnualAlvo)
+      ])
+    ];
+    const wsExec = XLSX.utils.aoa_to_sheet(execAoa);
+    wsExec['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
+    applyNumFmt(wsExec, [1, 2, 4, 5, 6]);
+    XLSX.utils.book_append_sheet(wb, wsExec, 'Executivos');
+
+    const blAoa = [
+      ['Contrato', 'Cliente', 'Unidade', 'Executivo', 'Valor Global (R$)', 'Faturado (R$)', 'Saldo Contratual (R$)', 'Inicio', 'Fim'],
+      ...(rmrPayload.backlogMedicoes?.backlogProtheus?.contratos || []).map(c => [
+        c.contrato || '',
+        c.cliente || '',
+        c.unidade || '',
+        c.responsavel || '',
+        numVal(c.valorGlobal),
+        numVal(c.faturadoContrato),
+        numVal(c.saldoRestante),
+        c.dataInicio || '',
+        c.dataFim || ''
+      ])
+    ];
+    const wsBl = XLSX.utils.aoa_to_sheet(blAoa);
+    wsBl['!cols'] = [{ wch: 14 }, { wch: 36 }, { wch: 16 }, { wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 12 }, { wch: 12 }];
+    applyNumFmt(wsBl, [4, 5, 6]);
+    XLSX.utils.book_append_sheet(wb, wsBl, 'Backlog Protheus');
+
+    const fnAoa = [
+      ['ID', 'Negocio', 'Cliente', 'Unidade', 'Executivo', 'Etapa', 'Temperatura', 'Valor (R$)'],
+      ...(rmrPayload.projecoes?.pipelineAberto?.negociosAbertos || []).map(n => [
+        n.id || '',
+        n.negocio || '',
+        n.cliente || '',
+        n.unidade || '',
+        n.executivo || '',
+        n.etapa || '',
+        n.temperaturaLabel || 'Não informado',
+        numVal(n.valor)
+      ])
+    ];
+    const wsFn = XLSX.utils.aoa_to_sheet(fnAoa);
+    wsFn['!cols'] = [{ wch: 10 }, { wch: 42 }, { wch: 32 }, { wch: 16 }, { wch: 24 }, { wch: 24 }, { wch: 16 }, { wch: 18 }];
+    applyNumFmt(wsFn, [7]);
+    XLSX.utils.book_append_sheet(wb, wsFn, 'Funil C19');
+
+    const mcAoa = [
+      ['Nº Contrato', 'Cliente', 'Unidade', 'Executivo', 'Margem', 'Faturado no Mes (R$)'],
+      ...(rmrPayload.margemContribuicao?.contratos || []).map(c => [
+        c.numeroContrato || '',
+        c.cliente || '',
+        c.unidade || '',
+        c.executivo || '',
+        c.margem || '',
+        numVal(c.valorContrato)
+      ])
+    ];
+    const wsMc = XLSX.utils.aoa_to_sheet(mcAoa);
+    wsMc['!cols'] = [{ wch: 16 }, { wch: 36 }, { wch: 16 }, { wch: 24 }, { wch: 10 }, { wch: 20 }];
+    applyNumFmt(wsMc, [5]);
+    XLSX.utils.book_append_sheet(wb, wsMc, 'Margem A e B');
+
+    const nomeArq = `rmr-comercial-${rmrPayload.parametros?.mesRefIso || 'ref'}.xlsx`;
+    XLSX.writeFile(wb, nomeArq);
+    core().showToast(`Planilha ${nomeArq} exportada com sucesso!`, 'success');
   }
 
   /* ==============================================================
