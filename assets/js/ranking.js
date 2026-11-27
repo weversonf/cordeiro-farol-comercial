@@ -186,6 +186,14 @@
     btnFsInner?.addEventListener('click', toggleFullscreen);
     document.addEventListener('fullscreenchange', syncFsButtons);
 
+    // Atualização suave em segundo plano a cada 30s quando a aba Ranking estiver ativa
+    setInterval(() => {
+      const view = document.getElementById('viewRanking');
+      if (view && view.classList.contains('active') && !document.hidden) {
+        loadRanking(true);
+      }
+    }, 30000);
+
     if (selMes) {
       selMes.value = `${state.year}-${String(state.month).padStart(2, '0')}`;
       selMes.addEventListener('change', () => {
@@ -266,7 +274,12 @@
       fonteInfo.textContent = `${fonteDesc} • ${periodoDesc}`;
     }
 
-    pista.innerHTML = lista.map((v, i) => {
+    if (!pista.dataset.hasLanes) {
+      pista.innerHTML = '';
+      pista.dataset.hasLanes = '1';
+    }
+
+    lista.forEach((v, i) => {
       const equip = getEquipamento(i, lista.length);
       const batida = v.pct >= 100;
       const pos = batida
@@ -277,33 +290,84 @@
         ? (dif > 0 ? `Falta ${fmtCompact(dif)}` : `+${fmtCompact(Math.abs(dif))}`)
         : '';
 
-      return `
-        <div class="rk-faixa ${i === 0 ? 'lider' : ''}">
+      let faixa = pista.querySelector(`.rk-faixa[data-cod="${v.cod}"]`);
+      if (!faixa) {
+        faixa = document.createElement('div');
+        faixa.className = 'rk-faixa';
+        faixa.setAttribute('data-cod', v.cod);
+        faixa.innerHTML = `
           <div class="rk-faixa-top">
-            <span class="rk-pos">${i + 1}º</span>
-            <span class="rk-nome">${v.nome}</span>
-            <span class="rk-equip-badge">${equip.nome}</span>
-            ${i === 0 ? '<span class="rk-lider-badge">LÍDER</span>' : ''}
-            <span class="rk-pct-badge ${batida ? 'batida' : ''}">${v.pct.toFixed(1)}% da Meta</span>
+            <span class="rk-pos"></span>
+            <span class="rk-nome"></span>
+            <span class="rk-equip-badge"></span>
+            <span class="rk-lider-wrap"></span>
+            <span class="rk-pct-badge"></span>
             <div class="rk-meta-nums">
-              <span>Realizado: <b>${fmtCompact(v.realizado)}</b></span>
-              <span>Meta: <b>${v.meta > 0 ? fmtCompact(v.meta) : '—'}</b></span>
-              ${saldoTxt ? `<span class="${dif <= 0 ? 'rk-ok' : 'rk-falta'}">(${saldoTxt})</span>` : ''}
+              <span>Realizado: <b class="rk-val-real">—</b></span>
+              <span>Meta: <b class="rk-val-meta">—</b></span>
+              <span class="rk-val-saldo"></span>
             </div>
           </div>
           <div class="rk-trilho">
-            ${batida ? `<div class="rk-rastro" style="width:${Math.max(0, pos - 75).toFixed(1)}%"></div>` : ''}
+            <div class="rk-rastro" style="width:0;display:none;"></div>
             <div class="rk-marco">
+              <span class="rk-marco-flag" title="Linha de 100% da Meta">🏁</span>
               <div class="rk-marco-linha"></div>
               <span class="rk-marco-lbl">100% META</span>
             </div>
-            <div class="rk-caminhao" style="left:${pos.toFixed(1)}%">
-              ${guindasteSvg(equip.tipo, v.cor)}
+            <div class="rk-caminhao" style="left:4%">
+              <span class="rk-fumaca"></span>
+              <span class="rk-equip-svg"></span>
             </div>
+            <div class="rk-chegada-frente" title="Meta Superada!">🏁</div>
           </div>
-        </div>
-      `;
-    }).join('');
+        `;
+        pista.appendChild(faixa);
+      }
+
+      faixa.style.order = i;
+      faixa.className = 'rk-faixa' + (i === 0 ? ' lider' : '');
+      faixa.querySelector('.rk-pos').textContent = `${i + 1}º`;
+      faixa.querySelector('.rk-nome').textContent = v.nome;
+      faixa.querySelector('.rk-equip-badge').textContent = equip.nome;
+      faixa.querySelector('.rk-lider-wrap').innerHTML = i === 0 ? '<span class="rk-lider-badge">🏆 LÍDER</span>' : '';
+
+      const pctEl = faixa.querySelector('.rk-pct-badge');
+      pctEl.className = 'rk-pct-badge' + (batida ? ' batida' : '');
+      pctEl.textContent = `${batida ? '🏁 ' : ''}${v.pct.toFixed(1)}% da Meta`;
+
+      faixa.querySelector('.rk-val-real').textContent = fmtCompact(v.realizado);
+      faixa.querySelector('.rk-val-meta').textContent = v.meta > 0 ? fmtCompact(v.meta) : '—';
+
+      const saldoEl = faixa.querySelector('.rk-val-saldo');
+      if (saldoTxt) {
+        saldoEl.textContent = `(${saldoTxt})`;
+        saldoEl.className = 'rk-val-saldo ' + (dif <= 0 ? 'rk-ok' : 'rk-falta');
+        saldoEl.style.display = 'inline';
+      } else {
+        saldoEl.style.display = 'none';
+      }
+
+      if (faixa.dataset.equip !== equip.tipo) {
+        faixa.dataset.equip = equip.tipo;
+        const svgWrap = faixa.querySelector('.rk-equip-svg');
+        if (svgWrap) svgWrap.innerHTML = guindasteSvg(equip.tipo, v.cor);
+      }
+
+      const cam = faixa.querySelector('.rk-caminhao');
+      if (cam) cam.style.left = `${pos.toFixed(1)}%`;
+
+      const rastro = faixa.querySelector('.rk-rastro');
+      if (rastro) {
+        if (batida) {
+          rastro.style.display = 'block';
+          rastro.style.width = `${Math.max(0, pos - 75).toFixed(1)}%`;
+        } else {
+          rastro.style.display = 'none';
+          rastro.style.width = '0%';
+        }
+      }
+    });
 
     const qtdLabel = state.fonte === 'faturado' ? 'NFs' : 'Negócios';
     const thQtd = document.getElementById('rkThQtd');

@@ -3814,3 +3814,30 @@ tr.rmr-subrow-open > td {
   flex-direction: column;
   justify-content: center;
 }
+
+/* Animações ao vivo da Corrida dos Guindastes (igual tv-corrida.html) */
+@keyframes rk-asfalto { 0% { background-position: 0 center; } 100% { background-position: -44px center; } }
+@keyframes rk-quique { from { transform: translate(-14px, 0) rotate(0deg); } to { transform: translate(-14px, -2px) rotate(-1deg); } }
+@keyframes rk-fumaca { from { transform: scale(.5); opacity: .75; } to { transform: translateX(-18px) scale(1.6); opacity: 0; } }
+@keyframes rk-gira { to { transform: rotate(360deg); } }
+@keyframes rk-bandeira { to { transform: rotate(8deg) translateY(-2px); } }
+@keyframes rk-pulso { 50% { transform: scale(1.07); } }
+@keyframes rk-brilhoLider { 50% { box-shadow: 0 0 0 1px #0dcd3a inset, 0 0 28px rgba(13,205,58,.42); } }
+
+.rk-faixa { transition: order .4s cubic-bezier(.2,0,0,1), border-color .3s, box-shadow .3s; }
+.rk-faixa.lider { animation: rk-brilhoLider 2s ease-in-out infinite; }
+.rk-lider-badge { animation: rk-pulso 1.2s ease-in-out infinite; }
+.rk-pct-badge.batida { animation: rk-pulso 1.5s ease-in-out infinite; box-shadow: 0 0 10px rgba(13,205,58,.45); }
+.rk-trilho { animation: rk-asfalto .7s linear infinite; }
+.rk-marco-flag { position: absolute; top: -10px; font-size: 16px; animation: rk-bandeira 1s ease-in-out infinite alternate; }
+.rk-chegada-frente { position: absolute; right: 2px; top: -4px; font-size: 16px; animation: rk-bandeira 1s ease-in-out infinite alternate; z-index: 2; }
+.rk-caminhao { transition: left 1.4s cubic-bezier(.25,1,.5,1); animation: rk-quique .45s ease-in-out infinite alternate; will-change: left; }
+.rk-fumaca { position: absolute; left: -6px; bottom: 8px; width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.55); animation: rk-fumaca 1s ease-out infinite; pointer-events: none; }
+.rk-roda { transform-origin: center; transform-box: fill-box; animation: rk-gira .5s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rk-faixa.lider, .rk-lider-badge, .rk-pct-badge.batida, .rk-trilho,
+  .rk-marco-flag, .rk-chegada-frente, .rk-caminhao, .rk-fumaca, .rk-roda {
+    animation: none !important;
+  }
+}
