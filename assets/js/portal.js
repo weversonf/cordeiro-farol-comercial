@@ -428,13 +428,17 @@ function showAppScreen() {
   // Apenas Weverson Feitosa tem acesso à aba de Gestão de Perfis & Acessos
   const tabGestaoBtn = document.getElementById('tabGestaoBtn');
   const tabRelatoriosBtn = document.getElementById('tabRelatoriosBtn');
+  const tabRankingBtn = document.getElementById('tabRankingBtn');
   const cardRelatorios = document.getElementById('cardRelatorios');
+  const cardRanking = document.getElementById('cardRanking');
   const isMasterAdmin = isAdminMaster(currentUser.email);
   const podeRelatorios = podeAcessarRelatorios(currentUser);
 
   tabGestaoBtn.style.display = isMasterAdmin ? 'flex' : 'none';
   tabRelatoriosBtn.style.display = podeRelatorios ? 'flex' : 'none';
   cardRelatorios.style.display = podeRelatorios ? 'flex' : 'none';
+  if (tabRankingBtn) tabRankingBtn.style.display = isMasterAdmin ? 'flex' : 'none';
+  if (cardRanking) cardRanking.style.display = isMasterAdmin ? 'flex' : 'none';
 
   if (!isMasterAdmin && !podeRelatorios) {
     switchTab('launcher');
@@ -492,6 +496,16 @@ function setupEventListeners() {
   document.getElementById('btnOpenRelatorios').addEventListener('click', () => {
     if (podeAcessarRelatorios(currentUser)) {
       switchTab('relatorios');
+    }
+  });
+  document.getElementById('tabRankingBtn')?.addEventListener('click', () => {
+    if (isAdminMaster(currentUser?.email)) {
+      switchTab('ranking');
+    }
+  });
+  document.getElementById('btnOpenRanking')?.addEventListener('click', () => {
+    if (isAdminMaster(currentUser?.email)) {
+      switchTab('ranking');
     }
   });
   configurarControlesRelatorios();
@@ -732,6 +746,10 @@ function aplicarRotaUrlAtual(options = {}) {
     switchTab('gestao', options);
     return;
   }
+  if (path === '/ranking' && isAdminMaster(currentUser?.email)) {
+    switchTab('ranking', options);
+    return;
+  }
   const relatorioDaRota = ROTA_PARA_RELATORIO[path];
   if (relatorioDaRota && podeAcessarRelatorios(currentUser)) {
     relatorioAtivo = relatorioDaRota;
@@ -765,6 +783,13 @@ function switchTab(tab, options = {}) {
     document.getElementById('tabRelatoriosBtn').classList.add('active');
     document.getElementById('viewRelatorios').classList.add('active');
     abrirRelatorio(relatorioAtivo, options);
+  } else if (tab === 'ranking' && isAdminMaster(currentUser?.email)) {
+    telaAtualKey = 'ranking';
+    document.getElementById('tabRankingBtn')?.classList.add('active');
+    document.getElementById('viewRanking')?.classList.add('active');
+    renderizarRodapeSync();
+    sincronizarUrlNavegador('/ranking', options);
+    window.FarolRanking?.loadRanking();
   }
 }
 

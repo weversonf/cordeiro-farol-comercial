@@ -122,6 +122,11 @@
             <span>Relatórios</span>
             <span class="badge-private">Pessoal</span>
           </button>
+          <button type="button" id="tabRankingBtn" class="nav-tab-btn" style="display: none;">
+            <i class="ph ph-trophy"></i>
+            <span>Ranking</span>
+            <span class="badge-private">Pessoal</span>
+          </button>
         </nav>
       </div>
 
@@ -279,6 +284,90 @@
             </button>
           </div>
 
+          <!-- Card 5: Ranking de Executivos (exclusivo do Administrador Master) -->
+          <div id="cardRanking" class="app-card card-ranking" style="display: none;">
+            <div>
+              <div class="app-card-top">
+                <div class="app-icon-box">
+                  <i class="ph ph-trophy"></i>
+                </div>
+                <span class="badge-status-app exclusivo">
+                  <i class="ph ph-lock-key"></i> Exclusivo
+                </span>
+              </div>
+
+              <div class="app-card-body">
+                <h3>Ranking</h3>
+                <div class="app-subtitle">Executivos · Vendido &amp; Faturado</div>
+                <p>Corrida comercial exclusiva dos 6 executivos comparando contratos fechados no Bitrix e faturamento líquido Protheus SD2.</p>
+                <ul class="app-features-list">
+                  <li><i class="ph ph-check"></i> Vendido Bitrix (Vendas + Funil de vendas)</li>
+                  <li><i class="ph ph-check"></i> Faturado Protheus SD2 (pós-expurgos)</li>
+                  <li><i class="ph ph-check"></i> Guindaste dinâmico por posição</li>
+                </ul>
+              </div>
+            </div>
+
+            <button type="button" id="btnOpenRanking" class="btn-launch-app btn-primary-launch">
+              <span>Abrir Ranking</span>
+              <i class="ph ph-arrow-right"></i>
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           VISÃO: RANKING DOS EXECUTIVOS (EXCLUSIVO ADMIN MASTER)
+           ================================================================== -->
+      <section id="viewRanking" class="tab-view">
+        <div class="section-header">
+          <div>
+            <h2>Ranking dos Executivos</h2>
+            <p class="section-subtitle">Acompanhamento exclusivo de metas e realização por executivo (Bitrix24 &amp; Protheus SD2).</p>
+          </div>
+          <button type="button" id="rkBtnAtualizar" class="btn-novo-usuario">
+            <i class="ph ph-arrows-clockwise"></i>
+            <span>Atualizar</span>
+          </button>
+        </div>
+
+        <div class="rk-controls">
+          <div class="rk-controls-group">
+            <div class="rk-seg" role="group" aria-label="Fonte dos dados">
+              <button type="button" id="rkBtnVendido" class="rk-seg-btn active">
+                <i class="ph ph-handshake"></i> Vendido (Bitrix)
+              </button>
+              <button type="button" id="rkBtnFaturado" class="rk-seg-btn">
+                <i class="ph ph-receipt"></i> Faturado (Protheus)
+              </button>
+            </div>
+            <div class="rk-seg" role="group" aria-label="Período">
+              <button type="button" id="rkBtnMes" class="rk-seg-btn active">Mês Atual</button>
+              <button type="button" id="rkBtnAno" class="rk-seg-btn">Acumulado Ano</button>
+            </div>
+            <input type="month" id="rkSelectMes" class="rk-month-input" aria-label="Mês de referência">
+          </div>
+          <span id="rkFonteInfo" class="rk-fonte-info">—</span>
+        </div>
+
+        <div id="rkPista" class="rk-pista"></div>
+
+        <div class="tabela-card">
+          <table class="tabela-perfis">
+            <thead>
+              <tr>
+                <th style="width: 60px;">Pos.</th>
+                <th>Executivo</th>
+                <th>Equipamento</th>
+                <th id="rkThQtd" style="text-align: right;">Negócios</th>
+                <th style="text-align: right;">Realizado</th>
+                <th style="text-align: right;">Meta</th>
+                <th style="text-align: right;">Atingimento</th>
+              </tr>
+            </thead>
+            <tbody id="rkTbody"></tbody>
+          </table>
         </div>
       </section>
 
@@ -2649,5 +2738,6 @@
   <!-- Script Principal -->
   <script src="/assets/js/portal.js"></script>
   <script src="/assets/js/reports-extra.js?v=20261127c"></script>
+  <script src="/assets/js/ranking.js?v=20261127"></script>
 </body>
 </html>
