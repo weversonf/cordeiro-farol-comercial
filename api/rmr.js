@@ -6,10 +6,13 @@ import {
   buildBillingBaseCte,
   COMMERCIAL_TES,
   EXPURGO_FILIAIS,
+  EXPURGO_VENDEDORES,
   mapIndicadorUnitName,
   normalizeDealUnitSql,
+  PBIX_FILIAIS,
   REVENUE_CFOPS,
-  safeNumericDealSql
+  safeNumericDealSql,
+  UNIT_FROM_CC3_SQL
 } from './_dw.js';
 
 function loadRmrBaseOficial() {
@@ -2130,6 +2133,93 @@ function isExecutivoComercialOficial(nome) {
 
     const fresh = freshnessRes.rows[0] || {};
 
+    // --- Montagem 8: Margem de Contribuição (Protheus · Margens A e B) ---
+    let margemContribuicao = {
+      resumo: { totalContratos: 0, contratosA: 0, valorA: 0, contratosB: 0, valorB: 0, valorTotal: 0 },
+      contratos: []
+    };
+    try {
+      const margemFilialFilter = escopo === 'all' ? '' : 'AND TRIM(COALESCE(f.cod_filial::text, \'\')) = ANY($3)';
+      const margemExpurgoFilter = incluirExpurgos
+        ? ''
+        : `AND NOT (
+            TRIM(COALESCE(f.cod_filial::text, '')) = ANY($4)
+            OR TRIM(COALESCE(f.cod_vendedor::text, '')) = ANY($5)
+            OR LEFT(TRIM(COALESCE(f.cod_centro_custo::text, '')), 3) IN ('321', '330', '421')
+          )`;
+      const margemRes = await pool.query(`
+        WITH dim_cli AS (
+          SELECT DISTINCT ON (TRIM(cod_cliente))
+            TRIM(cod_cliente) AS cod_cliente,
+            NULLIF(TRIM(nome_cliente), '') AS nome_cliente
+          FROM comercial.dim_clientes
+          ORDER BY TRIM(cod_cliente), data_modificacao DESC NULLS LAST, id DESC
+        ),
+        dim_vend AS (
+          SELECT DISTINCT ON (TRIM(cod_vendedor))
+            TRIM(cod_vendedor) AS cod_vendedor,
+            NULLIF(TRIM(nome_vendedor), '') AS nome_vendedor
+          FROM comercial.dim_vendedor
+          ORDER BY TRIM(cod_vendedor), id DESC
+        )
+        SELECT
+          TRIM(f.numero_contrato::text) AS numero_contrato,
+          TRIM(f.margem::text) AS margem,
+          COALESCE(
+            MODE() WITHIN GROUP (ORDER BY c.nome_cliente),
+            MAX(TRIM(f.cod_cliente::text)),
+            'Cliente não identificado'
+          ) AS cliente,
+          COALESCE(
+            MODE() WITHIN GROUP (ORDER BY ${UNIT_FROM_CC3_SQL}),
+            'Outras / Controladoria'
+          ) AS unidade,
+          COALESCE(
+            MODE() WITHIN GROUP (ORDER BY v.nome_vendedor),
+            'Sem executivo'
+          ) AS executivo,
+          COALESCE(SUM(f.valor_total), 0)::numeric AS valor_contrato
+        FROM comercial.fato_itens_vendas f
+        LEFT JOIN dim_cli c ON c.cod_cliente = TRIM(COALESCE(f.cod_cliente::text, ''))
+        LEFT JOIN dim_vend v ON v.cod_vendedor = TRIM(COALESCE(f.cod_vendedor::text, ''))
+        WHERE f.emissao >= $1::date
+          AND f.emissao < $2::date
+          AND TRIM(COALESCE(f.margem::text, '')) IN ('A', 'B')
+          AND NULLIF(TRIM(COALESCE(f.numero_contrato::text, '')), '') IS NOT NULL
+          ${margemFilialFilter}
+          ${margemExpurgoFilter}
+        GROUP BY TRIM(f.numero_contrato::text), TRIM(f.margem::text)
+        HAVING COALESCE(SUM(f.valor_total), 0) > 0
+        ORDER BY valor_contrato DESC
+      `, [ytdRange.start, ytdRange.endExclusive, PBIX_FILIAIS, EXPURGO_FILIAIS, EXPURGO_VENDEDORES]);
+
+      const contratosMargem = (margemRes.rows || []).map(r => ({
+        numeroContrato: r.numero_contrato,
+        cliente: r.cliente || 'Cliente não identificado',
+        unidade: r.unidade || 'Outras / Controladoria',
+        executivo: r.executivo || 'Sem executivo',
+        margem: r.margem,
+        valorContrato: toNumber(r.valor_contrato)
+      }));
+      const listA = contratosMargem.filter(c => c.margem === 'A');
+      const listB = contratosMargem.filter(c => c.margem === 'B');
+      const valorA = listA.reduce((s, c) => s + c.valorContrato, 0);
+      const valorB = listB.reduce((s, c) => s + c.valorContrato, 0);
+      margemContribuicao = {
+        resumo: {
+          totalContratos: contratosMargem.length,
+          contratosA: listA.length,
+          valorA,
+          contratosB: listB.length,
+          valorB,
+          valorTotal: valorA + valorB
+        },
+        contratos: contratosMargem
+      };
+    } catch (eMargem) {
+      console.warn('Falha ao consultar Margem de Contribuição:', eMargem.message);
+    }
+
     return res.status(200).json({
       ok: true,
       geradoEm: new Date().toISOString(),
@@ -2166,7 +2256,8 @@ function isExecutivoComercialOficial(nome) {
       },
       projecoes,
       funilPerdas,
-      executivosFunilDetalhe
+      executivosFunilDetalhe,
+      margemContribuicao
     });
   } catch (error) {
     console.error('Falha ao consultar painel RMR Comercial:', error);

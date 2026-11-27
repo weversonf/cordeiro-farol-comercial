@@ -213,6 +213,7 @@
           funil: 'rmrPanelFunil',
           executivos: 'rmrPanelExecutivos',
           perdidos: 'rmrPanelPerdidos',
+          margem: 'rmrPanelMargem',
           clientes: 'rmrPanelClientes'
         };
         const target = document.getElementById(mapPanel[btn.dataset.rmrTab]);
@@ -2028,6 +2029,119 @@
       detailFn: m => `${fmtInt(m.qtd)} deals cancelados/declinados pelo cliente`,
       emptyMsg: 'Sem cancelamentos pelo cliente no período.'
     });
+
+    // Aba Margem de Contribuição (Protheus · Margens A e B)
+    const mc = d.margemContribuicao || {};
+    const mcRes = mc.resumo || {};
+    const mcContratos = mc.contratos || [];
+    const elMcTotVal = document.getElementById('rmrMargemTotalVal');
+    if (elMcTotVal) {
+      elMcTotVal.textContent = fmtMoeda(mcRes.valorTotal);
+      document.getElementById('rmrMargemTotalQtd').textContent = `${fmtInt(mcRes.totalContratos)} contratos (Margens A e B)`;
+      document.getElementById('rmrMargemAVal').textContent = fmtMoeda(mcRes.valorA);
+      document.getElementById('rmrMargemAQtd').textContent = `${fmtInt(mcRes.contratosA)} contratos Margem A`;
+      document.getElementById('rmrMargemBVal').textContent = fmtMoeda(mcRes.valorB);
+      document.getElementById('rmrMargemBQtd').textContent = `${fmtInt(mcRes.contratosB)} contratos Margem B`;
+
+      const selTipo = document.getElementById('rmrMargemFiltroTipo');
+      const selUnid = document.getElementById('rmrMargemFiltroUnidade');
+      const selExec = document.getElementById('rmrMargemFiltroExec');
+      const inpBusca = document.getElementById('rmrMargemBusca');
+
+      if (selUnid) {
+        const prevU = selUnid.value || 'todas';
+        const unids = [...new Set(mcContratos.map(c => c.unidade).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        selUnid.innerHTML = '<option value="todas">Todas as unidades</option>' +
+          unids.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
+        selUnid.value = unids.includes(prevU) ? prevU : 'todas';
+      }
+      if (selExec) {
+        const prevE = selExec.value || 'todos';
+        const execs = [...new Set(mcContratos.map(c => c.executivo).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        selExec.innerHTML = '<option value="todos">Todos os executivos</option>' +
+          execs.map(e => `<option value="${esc(e)}">${esc(e)}</option>`).join('');
+        selExec.value = execs.includes(prevE) ? prevE : 'todos';
+      }
+
+      const renderTabelaMargem = () => {
+        const tipo = selTipo ? selTipo.value : 'todas';
+        const unid = selUnid ? selUnid.value : 'todas';
+        const exec = selExec ? selExec.value : 'todos';
+        const q = (inpBusca ? inpBusca.value : '').trim().toLowerCase();
+
+        const cardA = document.getElementById('rmrCardMargemA');
+        const cardB = document.getElementById('rmrCardMargemB');
+        if (cardA) cardA.style.outline = tipo === 'A' ? '2px solid #0284c7' : '';
+        if (cardB) cardB.style.outline = tipo === 'B' ? '2px solid #0284c7' : '';
+
+        const filtrados = mcContratos.filter(c => {
+          if (tipo !== 'todas' && c.margem !== tipo) return false;
+          if (unid !== 'todas' && c.unidade !== unid) return false;
+          if (exec !== 'todos' && c.executivo !== exec) return false;
+          if (q) {
+            const hay = `${c.numeroContrato} ${c.cliente} ${c.executivo} ${c.unidade}`.toLowerCase();
+            if (!hay.includes(q)) return false;
+          }
+          return true;
+        });
+
+        const elTag = document.getElementById('rmrMargemTag');
+        if (elTag) elTag.textContent = `Protheus · ${fmtInt(filtrados.length)} contratos exibidos`;
+
+        const elTbody = document.getElementById('tbodyRmrMargem');
+        if (elTbody) {
+          elTbody.innerHTML = filtrados.length
+            ? filtrados.map(c => {
+                const badgeStyle = c.margem === 'A'
+                  ? 'background:#dcfce7;color:#166534;border:1px solid #86efac;'
+                  : 'background:#fef3c7;color:#92400e;border:1px solid #fcd34d;';
+                return `
+                  <tr>
+                    <td><strong>${esc(c.numeroContrato)}</strong></td>
+                    <td>${esc(c.cliente)}</td>
+                    <td>${esc(c.unidade)}</td>
+                    <td>${esc(c.executivo)}</td>
+                    <td style="text-align:center;"><span style="display:inline-block;min-width:28px;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:700;${badgeStyle}">${esc(c.margem)}</span></td>
+                    <td class="num"><strong>${fmtMoedaExata(c.valorContrato)}</strong></td>
+                  </tr>`;
+              }).join('')
+            : '<tr><td colspan="6" class="contracts-empty">Nenhum contrato encontrado para os filtros selecionados.</td></tr>';
+        }
+      };
+
+      [selTipo, selUnid, selExec].forEach(el => {
+        if (el && !el._boundMargem) {
+          el._boundMargem = true;
+          el.addEventListener('change', renderTabelaMargem);
+        }
+      });
+      if (inpBusca && !inpBusca._boundMargem) {
+        inpBusca._boundMargem = true;
+        inpBusca.addEventListener('input', renderTabelaMargem);
+      }
+      const cardA = document.getElementById('rmrCardMargemA');
+      if (cardA && !cardA._boundMargem) {
+        cardA._boundMargem = true;
+        cardA.addEventListener('click', () => {
+          if (selTipo) {
+            selTipo.value = selTipo.value === 'A' ? 'todas' : 'A';
+            renderTabelaMargem();
+          }
+        });
+      }
+      const cardB = document.getElementById('rmrCardMargemB');
+      if (cardB && !cardB._boundMargem) {
+        cardB._boundMargem = true;
+        cardB.addEventListener('click', () => {
+          if (selTipo) {
+            selTipo.value = selTipo.value === 'B' ? 'todas' : 'B';
+            renderTabelaMargem();
+          }
+        });
+      }
+
+      renderTabelaMargem();
+    }
   }
 
   function exportarRmrCsv() {
