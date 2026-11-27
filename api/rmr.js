@@ -2133,14 +2133,37 @@ function isExecutivoComercialOficial(nome) {
 
     const fresh = freshnessRes.rows[0] || {};
 
-    // --- Montagem 8: Margem de Contribuição (Protheus · Margens A e B) ---
+    // --- Montagem 8: Margem de Contribuição (Protheus SD2 · d2_ymargct Margens A e B) ---
     let margemContribuicao = {
       resumo: { totalContratos: 0, contratosA: 0, valorA: 0, contratosB: 0, valorB: 0, valorTotal: 0 },
       contratos: []
     };
     try {
+      const unitFromSd2Cc3Sql = UNIT_FROM_CC3_SQL.replace(/f\.cod_centro_custo/g, 'sd.d2_ccusto');
+      const sdStart = String(ytdRange.start || '').replace(/-/g, '');
+      const sdEnd = String(ytdRange.endExclusive || '').replace(/-/g, '');
       const margemRes = await pool.query(`
-        WITH dim_cli AS (
+        WITH fiv_vend_nf AS (
+          SELECT DISTINCT ON (
+            TRIM(COALESCE(cod_filial::text, '')),
+            TRIM(COALESCE(numero_documento::text, '')),
+            TRIM(COALESCE(serie::text, ''))
+          )
+            TRIM(COALESCE(cod_filial::text, '')) AS cod_filial,
+            TRIM(COALESCE(numero_documento::text, '')) AS numero_documento,
+            TRIM(COALESCE(serie::text, '')) AS serie,
+            TRIM(COALESCE(cod_vendedor::text, '')) AS cod_vendedor
+          FROM comercial.fato_itens_vendas
+          WHERE emissao >= $1::date
+            AND emissao < $2::date
+          ORDER BY
+            TRIM(COALESCE(cod_filial::text, '')),
+            TRIM(COALESCE(numero_documento::text, '')),
+            TRIM(COALESCE(serie::text, '')),
+            data_criacao DESC NULLS LAST,
+            id DESC
+        ),
+        dim_cli AS (
           SELECT DISTINCT ON (TRIM(cod_cliente))
             TRIM(cod_cliente) AS cod_cliente,
             NULLIF(TRIM(nome_cliente), '') AS nome_cliente
@@ -2155,42 +2178,61 @@ function isExecutivoComercialOficial(nome) {
           ORDER BY TRIM(cod_vendedor), id DESC
         )
         SELECT
-          TRIM(f.numero_contrato::text) AS numero_contrato,
-          TRIM(f.margem::text) AS margem,
+          TRIM(sd.d2_ynumctr::text) AS numero_contrato,
+          TRIM(sd.d2_ymargct::text) AS margem,
           COALESCE(
             MODE() WITHIN GROUP (ORDER BY c.nome_cliente),
-            MAX(TRIM(f.cod_cliente::text)),
+            MAX(TRIM(sd.d2_cliente::text)),
             'Cliente não identificado'
           ) AS cliente,
           COALESCE(
-            MODE() WITHIN GROUP (ORDER BY ${UNIT_FROM_CC3_SQL}),
+            MODE() WITHIN GROUP (ORDER BY ${unitFromSd2Cc3Sql}),
             'Outras / Controladoria'
           ) AS unidade,
           COALESCE(
             MODE() WITHIN GROUP (ORDER BY v.nome_vendedor),
             'Sem executivo'
           ) AS executivo,
-          COALESCE(SUM(f.valor_total), 0)::numeric AS valor_contrato
-        FROM comercial.fato_itens_vendas f
-        LEFT JOIN dim_cli c ON c.cod_cliente = TRIM(COALESCE(f.cod_cliente::text, ''))
-        LEFT JOIN dim_vend v ON v.cod_vendedor = TRIM(COALESCE(f.cod_vendedor::text, ''))
-        WHERE f.emissao >= $1::date
-          AND f.emissao < $2::date
-          AND TRIM(COALESCE(f.margem::text, '')) IN ('A', 'B')
-          AND NULLIF(TRIM(COALESCE(f.numero_contrato::text, '')), '') IS NOT NULL
-          AND ($3::boolean OR TRIM(COALESCE(f.cod_filial::text, '')) = ANY($4))
+          COALESCE(SUM(COALESCE(sd.d2_total::numeric, 0)), 0)::numeric AS valor_contrato
+        FROM stage_protheus.sd2010 sd
+        LEFT JOIN fiv_vend_nf fv
+          ON fv.cod_filial = TRIM(COALESCE(sd.d2_filial::text, ''))
+         AND fv.numero_documento = TRIM(COALESCE(sd.d2_doc::text, ''))
+         AND fv.serie = TRIM(COALESCE(sd.d2_serie::text, ''))
+        LEFT JOIN dim_cli c ON c.cod_cliente = TRIM(COALESCE(sd.d2_cliente::text, ''))
+        LEFT JOIN dim_vend v ON v.cod_vendedor = fv.cod_vendedor
+        WHERE TRIM(COALESCE(sd.d_e_l_e_t_, '')) = ''
+          AND sd.d2_emissao >= $3
+          AND sd.d2_emissao < $4
+          AND TRIM(COALESCE(sd.d2_ymargct::text, '')) IN ('A', 'B')
+          AND NULLIF(TRIM(COALESCE(sd.d2_ynumctr::text, '')), '') IS NOT NULL
+          AND TRIM(COALESCE(sd.d2_tes::text, '')) = ANY($5)
+          AND TRIM(COALESCE(sd.d2_cf::text, '')) = ANY($6)
+          AND ($7::boolean OR TRIM(COALESCE(sd.d2_filial::text, '')) = ANY($8))
           AND (
-            $5::boolean
+            $9::boolean
             OR NOT (
-              TRIM(COALESCE(f.cod_filial::text, '')) = ANY($6)
-              OR TRIM(COALESCE(f.cod_vendedor::text, '')) = ANY($7)
-              OR LEFT(TRIM(COALESCE(f.cod_centro_custo::text, '')), 3) IN ('321', '330', '421')
+              TRIM(COALESCE(sd.d2_filial::text, '')) = ANY($10)
+              OR TRIM(COALESCE(fv.cod_vendedor, '')) = ANY($11)
+              OR LEFT(TRIM(COALESCE(sd.d2_ccusto::text, '')), 3) IN ('321', '330', '421')
             )
           )
-        GROUP BY TRIM(f.numero_contrato::text), TRIM(f.margem::text)
-        HAVING COALESCE(SUM(f.valor_total), 0) > 0
+        GROUP BY TRIM(sd.d2_ynumctr::text), TRIM(sd.d2_ymargct::text)
+        HAVING COALESCE(SUM(COALESCE(sd.d2_total::numeric, 0)), 0) > 0
         ORDER BY valor_contrato DESC
-      `, [ytdRange.start, ytdRange.endExclusive, escopo === 'all', PBIX_FILIAIS, incluirExpurgos, EXPURGO_FILIAIS, EXPURGO_VENDEDORES]);
+      `, [
+        ytdRange.start,
+        ytdRange.endExclusive,
+        sdStart,
+        sdEnd,
+        COMMERCIAL_TES,
+        REVENUE_CFOPS,
+        escopo === 'all',
+        PBIX_FILIAIS,
+        incluirExpurgos,
+        EXPURGO_FILIAIS,
+        EXPURGO_VENDEDORES
+      ]);
 
       const contratosMargem = (margemRes.rows || []).map(r => ({
         numeroContrato: r.numero_contrato,
