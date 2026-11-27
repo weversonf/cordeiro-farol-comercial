@@ -827,22 +827,39 @@
 
       const allBlContracts = blProth.contratos || [];
       const selBlUnid = document.getElementById('rmrBlUnidadeFilter');
-      if (selBlUnid) {
-        const curU = selBlUnid.value || 'ALL';
-        const unids = [...new Set(allBlContracts.map(c => c.unidade).filter(u => UNIDS_OFICIAIS_BL.includes(u)))].sort();
-        selBlUnid.innerHTML = '<option value="ALL">Todas as unidades</option>' +
-          unids.map(u => `<option value="${esc(u)}"${u === curU ? ' selected' : ''}>${esc(u)}</option>`).join('');
-      }
       const selBlExec = document.getElementById('rmrBlExecutivoFilter');
-      if (selBlExec) {
-        const curE = selBlExec.value || 'ALL';
-        const execs = [...new Set(allBlContracts.map(c => c.responsavel).filter(isExecOficialBl))].sort();
-        selBlExec.innerHTML = '<option value="ALL">Todos os executivos</option>' +
-          execs.map(e => `<option value="${esc(e)}"${e === curE ? ' selected' : ''}>${esc(fmtTitleCase(e))}</option>`).join('');
-      }
 
-      initRmrCustomDd(selBlUnid, 'ph-buildings', esc);
-      initRmrCustomDd(selBlExec, 'ph-user', esc);
+      const syncBacklogSelects = () => {
+        const uMultiCur = selBlUnid?._multiVals || [];
+        const eMultiCur = selBlExec?._multiVals || [];
+        if (selBlUnid) {
+          const validUnids = [...new Set(
+            allBlContracts
+              .filter(c => UNIDS_OFICIAIS_BL.includes(c.unidade) && (eMultiCur.length === 0 || eMultiCur.includes(c.responsavel)))
+              .map(c => c.unidade)
+          )].sort();
+          selBlUnid._multiVals = uMultiCur.filter(v => validUnids.includes(v));
+          const curU = selBlUnid._multiVals[0] || 'ALL';
+          selBlUnid.innerHTML = '<option value="ALL">Todas as unidades</option>' +
+            validUnids.map(u => `<option value="${esc(u)}"${u === curU ? ' selected' : ''}>${esc(u)}</option>`).join('');
+          initRmrCustomDd(selBlUnid, 'ph-buildings', esc);
+        }
+        if (selBlExec) {
+          const uAfter = selBlUnid?._multiVals || [];
+          const validExecs = [...new Set(
+            allBlContracts
+              .filter(c => isExecOficialBl(c.responsavel) && (uAfter.length === 0 || uAfter.includes(c.unidade)))
+              .map(c => c.responsavel)
+          )].sort();
+          selBlExec._multiVals = eMultiCur.filter(v => validExecs.includes(v));
+          const curE = selBlExec._multiVals[0] || 'ALL';
+          selBlExec.innerHTML = '<option value="ALL">Todos os executivos</option>' +
+            validExecs.map(e => `<option value="${esc(e)}"${e === curE ? ' selected' : ''}>${esc(fmtTitleCase(e))}</option>`).join('');
+          initRmrCustomDd(selBlExec, 'ph-user', esc);
+        }
+      };
+
+      syncBacklogSelects();
 
       const renderBacklogProtheusView = () => {
         const uMulti = selBlUnid?._multiVals || [];
@@ -851,8 +868,8 @@
         if (clearBtn) {
           clearBtn.style.display = (uMulti.length > 0 || eMulti.length > 0) ? 'inline-flex' : 'none';
         }
-        const viewBtn = document.querySelector('.rmr-bl-view-btn.is-active');
-        const viewMode = viewBtn?.dataset.blView || 'ambos';
+        const viewBtn = document.querySelector('.rmr-bl-view-btn[data-bl-view].is-active');
+        const viewMode = viewBtn?.dataset.blView || 'timeline';
         const list = allBlContracts.filter(c =>
           (uMulti.length === 0 || uMulti.includes(c.unidade)) &&
           (eMulti.length === 0 || eMulti.includes(c.responsavel))
@@ -954,14 +971,14 @@
       if (selBlUnid && !selBlUnid._bound) {
         selBlUnid._bound = true;
         selBlUnid.addEventListener('change', () => {
-          initCustomDd(selBlUnid, 'ph-buildings');
+          syncBacklogSelects();
           renderBacklogProtheusView();
         });
       }
       if (selBlExec && !selBlExec._bound) {
         selBlExec._bound = true;
         selBlExec.addEventListener('change', () => {
-          initCustomDd(selBlExec, 'ph-user');
+          syncBacklogSelects();
           renderBacklogProtheusView();
         });
       }
@@ -971,16 +988,15 @@
         btnBlClear.addEventListener('click', () => {
           if (selBlUnid) { selBlUnid.value = 'ALL'; selBlUnid._multiVals = []; }
           if (selBlExec) { selBlExec.value = 'ALL'; selBlExec._multiVals = []; }
-          initCustomDd(selBlUnid, 'ph-buildings');
-          initCustomDd(selBlExec, 'ph-user');
+          syncBacklogSelects();
           renderBacklogProtheusView();
         });
       }
-      document.querySelectorAll('.rmr-bl-view-btn').forEach(btn => {
+      document.querySelectorAll('.rmr-bl-view-btn[data-bl-view]').forEach(btn => {
         if (!btn._bound) {
           btn._bound = true;
           btn.addEventListener('click', () => {
-            document.querySelectorAll('.rmr-bl-view-btn').forEach(b => b.classList.remove('is-active'));
+            document.querySelectorAll('.rmr-bl-view-btn[data-bl-view]').forEach(b => b.classList.remove('is-active'));
             btn.classList.add('is-active');
             renderBacklogProtheusView();
           });
@@ -2050,25 +2066,45 @@
       const btnClearMc = document.getElementById('rmrMargemClearBtn');
       const btnsMcTipo = document.querySelectorAll('[data-mc-tipo]');
 
-      if (selUnid) {
-        const unids = [...new Set(mcContratos.map(c => c.unidade).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-        selUnid.innerHTML = '<option value="ALL">Todas as unidades</option>' +
-          unids.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
-        selUnid._multiVals = (selUnid._multiVals || []).filter(v => unids.includes(v));
-        initRmrCustomDd(selUnid, 'ph-buildings', esc);
-      }
-      if (selExec) {
-        const execs = [...new Set(mcContratos.map(c => c.executivo).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-        selExec.innerHTML = '<option value="ALL">Todos os executivos</option>' +
-          execs.map(e => `<option value="${esc(e)}">${esc(e)}</option>`).join('');
-        selExec._multiVals = (selExec._multiVals || []).filter(v => execs.includes(v));
-        initRmrCustomDd(selExec, 'ph-user', esc);
-      }
-
       const getMcTipo = () => document.querySelector('[data-mc-tipo].is-active')?.getAttribute('data-mc-tipo') || 'ALL';
       const setMcTipo = tipo => {
         btnsMcTipo.forEach(b => b.classList.toggle('is-active', b.getAttribute('data-mc-tipo') === tipo));
       };
+
+      const syncMargemSelects = () => {
+        const tipo = getMcTipo();
+        const uMultiCur = selUnid?._multiVals || [];
+        const eMultiCur = selExec?._multiVals || [];
+        if (selUnid) {
+          const validUnids = [...new Set(
+            mcContratos
+              .filter(c => (tipo === 'ALL' || c.margem === tipo) && (eMultiCur.length === 0 || eMultiCur.includes(c.executivo)))
+              .map(c => c.unidade)
+              .filter(Boolean)
+          )].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+          selUnid._multiVals = uMultiCur.filter(v => validUnids.includes(v));
+          const curU = selUnid._multiVals[0] || 'ALL';
+          selUnid.innerHTML = '<option value="ALL">Todas as unidades</option>' +
+            validUnids.map(u => `<option value="${esc(u)}"${u === curU ? ' selected' : ''}>${esc(u)}</option>`).join('');
+          initRmrCustomDd(selUnid, 'ph-buildings', esc);
+        }
+        if (selExec) {
+          const uAfter = selUnid?._multiVals || [];
+          const validExecs = [...new Set(
+            mcContratos
+              .filter(c => (tipo === 'ALL' || c.margem === tipo) && (uAfter.length === 0 || uAfter.includes(c.unidade)))
+              .map(c => c.executivo)
+              .filter(Boolean)
+          )].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+          selExec._multiVals = eMultiCur.filter(v => validExecs.includes(v));
+          const curE = selExec._multiVals[0] || 'ALL';
+          selExec.innerHTML = '<option value="ALL">Todos os executivos</option>' +
+            validExecs.map(e => `<option value="${esc(e)}"${e === curE ? ' selected' : ''}>${esc(e)}</option>`).join('');
+          initRmrCustomDd(selExec, 'ph-user', esc);
+        }
+      };
+
+      syncMargemSelects();
 
       const renderTabelaMargem = () => {
         const tipo = getMcTipo();
@@ -2123,14 +2159,14 @@
       if (selUnid && !selUnid._boundMargem) {
         selUnid._boundMargem = true;
         selUnid.addEventListener('change', () => {
-          initRmrCustomDd(selUnid, 'ph-buildings', esc);
+          syncMargemSelects();
           renderTabelaMargem();
         });
       }
       if (selExec && !selExec._boundMargem) {
         selExec._boundMargem = true;
         selExec.addEventListener('change', () => {
-          initRmrCustomDd(selExec, 'ph-user', esc);
+          syncMargemSelects();
           renderTabelaMargem();
         });
       }
@@ -2143,6 +2179,7 @@
           btn._boundMargem = true;
           btn.addEventListener('click', () => {
             setMcTipo(btn.getAttribute('data-mc-tipo') || 'ALL');
+            syncMargemSelects();
             renderTabelaMargem();
           });
         }
@@ -2151,9 +2188,10 @@
         btnClearMc._boundMargem = true;
         btnClearMc.addEventListener('click', () => {
           setMcTipo('ALL');
-          if (selUnid) { selUnid._multiVals = []; selUnid.value = 'ALL'; initRmrCustomDd(selUnid, 'ph-buildings', esc); }
-          if (selExec) { selExec._multiVals = []; selExec.value = 'ALL'; initRmrCustomDd(selExec, 'ph-user', esc); }
+          if (selUnid) { selUnid._multiVals = []; selUnid.value = 'ALL'; }
+          if (selExec) { selExec._multiVals = []; selExec.value = 'ALL'; }
           if (inpBusca) inpBusca.value = '';
+          syncMargemSelects();
           renderTabelaMargem();
         });
       }
@@ -2162,6 +2200,7 @@
         cardA._boundMargem = true;
         cardA.addEventListener('click', () => {
           setMcTipo(getMcTipo() === 'A' ? 'ALL' : 'A');
+          syncMargemSelects();
           renderTabelaMargem();
         });
       }
@@ -2170,6 +2209,7 @@
         cardB._boundMargem = true;
         cardB.addEventListener('click', () => {
           setMcTipo(getMcTipo() === 'B' ? 'ALL' : 'B');
+          syncMargemSelects();
           renderTabelaMargem();
         });
       }

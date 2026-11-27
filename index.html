@@ -2359,6 +2359,229 @@
             </div>
           </div>
         </div>
+
+        <!-- Painel 6: Painel Executivos -->
+        <div id="relatorioExecutivos" style="display: none;">
+          <div id="execPerfilBar" class="exec-profile-bar"></div>
+
+          <div id="execLoading" class="reports-loading-state" style="display: none;">
+            <i class="ph ph-spinner-gap animate-spin"></i>
+            <span>Consolidando indicadores do Executivo (Protheus + Bitrix)...</span>
+          </div>
+
+          <div id="execErro" class="reports-error-state" style="display: none;"></div>
+
+          <div id="execConteudo" style="display: none;">
+            <div class="reports-source-bar">
+              <span><i class="ph ph-receipt"></i> Protheus SD2 (Faturamento &amp; Metas)</span>
+              <span><i class="ph ph-users-three"></i> Bitrix24 SPA 1100 (Cobertura A/B)</span>
+              <span><i class="ph ph-hourglass-high"></i> Medições Pendentes RMR</span>
+              <span id="execAtualizadoEm" class="reports-updated-at"></span>
+            </div>
+
+            <div id="execStatusBanners" class="exec-banners-stack"></div>
+
+            <!-- Visão Comparativa (Exclusiva Admin Master quando "Todos" selecionado) -->
+            <div id="execComparativoView" style="display: none;">
+              <div class="report-kpi-grid is-4cols">
+                <article class="report-kpi-card">
+                  <span>Faturamento Mês (Equipe)</span>
+                  <strong id="execCompFatMes">—</strong>
+                  <small id="execCompFatMesSub">—</small>
+                </article>
+                <article class="report-kpi-card">
+                  <span>Meta Mês &amp; Atingimento</span>
+                  <strong id="execCompMetaMes">—</strong>
+                  <small id="execCompMetaMesSub">—</small>
+                </article>
+                <article class="report-kpi-card">
+                  <span>Cobertura de Carteira A/B</span>
+                  <strong id="execCompCobPct">—</strong>
+                  <small id="execCompCobSub">—</small>
+                </article>
+                <article class="report-kpi-card">
+                  <span>Medições Pendentes</span>
+                  <strong id="execCompMedVal">—</strong>
+                  <small id="execCompMedSub">—</small>
+                </article>
+              </div>
+
+              <div class="reports-grid">
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <div>
+                      <h3>Placar Comparativo dos Executivos</h3>
+                      <p class="report-panel-sub">Clique em qualquer executivo para abrir o painel individual completo.</p>
+                    </div>
+                    <span class="report-panel-tag" id="execCompTag">—</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Executivo</th>
+                          <th>Unidade Ref.</th>
+                          <th class="num">Faturado Mês</th>
+                          <th class="num">Meta Mês</th>
+                          <th class="num">Ating. Mês</th>
+                          <th class="num">Faturado YTD</th>
+                          <th class="num">Meta YTD</th>
+                          <th class="num">Cobertura A/B</th>
+                          <th class="num">Medições Pend.</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyExecComparativo"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <!-- Visão Individual do Executivo -->
+            <div id="execIndividualView" style="display: none;">
+              <div class="report-kpi-grid is-4cols">
+                <article class="report-kpi-card exec-kpi-fat">
+                  <span>Faturamento (Mês)</span>
+                  <strong id="execKpiFatMes">—</strong>
+                  <small id="execKpiFatSub">—</small>
+                </article>
+                <article class="report-kpi-card exec-kpi-meta">
+                  <span>Meta de Faturamento</span>
+                  <strong id="execKpiMetaMes">—</strong>
+                  <small id="execKpiMetaSub">—</small>
+                  <div class="exec-progress-track" aria-hidden="true"><span id="execKpiMetaBar" style="width:0%"></span></div>
+                </article>
+                <article class="report-kpi-card exec-kpi-cob">
+                  <span>Cobertura de Carteira (A/B)</span>
+                  <strong id="execKpiCobPct">—</strong>
+                  <small id="execKpiCobSub">—</small>
+                  <div class="exec-progress-track" aria-hidden="true"><span id="execKpiCobBar" style="width:0%"></span></div>
+                </article>
+                <article class="report-kpi-card exec-kpi-med">
+                  <span>Medições Pendentes</span>
+                  <strong id="execKpiMedVal">—</strong>
+                  <small id="execKpiMedSub">—</small>
+                </article>
+              </div>
+
+              <div class="reports-grid is-2cols">
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <div>
+                      <h3>Faturamento Mensal vs. Meta</h3>
+                      <p class="report-panel-sub" id="execChartFatSub">Realizado Protheus SD2 contra meta mensal do executivo</p>
+                    </div>
+                    <span class="report-panel-tag" id="execChartFatTag">—</span>
+                  </div>
+                  <div class="chart-box-tall"><canvas id="chartExecFatMeta"></canvas></div>
+                </article>
+
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <div>
+                      <h3>Cobertura de Carteira por Ranking</h3>
+                      <p class="report-panel-sub">Clientes únicos A/B contatados no SPA 1100 no mês (meta: 100%)</p>
+                    </div>
+                    <span class="report-panel-tag" id="execChartCobTag">—</span>
+                  </div>
+                  <div class="exec-cob-summary-grid" id="execCobBreakdown"></div>
+                  <div class="chart-box-tall" style="height:220px;"><canvas id="chartExecCobertura"></canvas></div>
+                </article>
+              </div>
+
+              <div class="reports-grid">
+                <article class="report-panel wide">
+                  <div class="report-panel-header">
+                    <div>
+                      <h3>Cobertura de Carteira — Lista de Clientes (A/B)</h3>
+                      <p class="report-panel-sub">Clientes pendentes aparecem primeiro para priorização de contato no mês.</p>
+                    </div>
+                    <span class="report-panel-tag" id="execCobListaTag">0 clientes</span>
+                  </div>
+                  <div class="exec-inline-filters">
+                    <div class="exec-filter-pills" id="execCobStatusFilter">
+                      <button type="button" class="exec-pill-btn is-active" data-cob-status="todos">Todos</button>
+                      <button type="button" class="exec-pill-btn" data-cob-status="pendente">Pendentes</button>
+                      <button type="button" class="exec-pill-btn" data-cob-status="coberto">Cobertos</button>
+                    </div>
+                    <div class="exec-filter-pills" id="execCobRankingFilter">
+                      <button type="button" class="exec-pill-btn is-active" data-cob-rank="todos">Ranking A + B</button>
+                      <button type="button" class="exec-pill-btn" data-cob-rank="A">Apenas A</button>
+                      <button type="button" class="exec-pill-btn" data-cob-rank="B">Apenas B</button>
+                    </div>
+                    <input type="text" id="execCobBusca" class="exec-search-input" placeholder="Buscar cliente na carteira...">
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Cliente</th>
+                          <th>Ranking</th>
+                          <th>Status Cobertura</th>
+                          <th>Meio de Contato</th>
+                          <th>Último Contato</th>
+                          <th class="num">Contatos no Mês</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyExecCoberturaClientes"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+
+              <div class="reports-grid is-2cols">
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <div>
+                      <h3>Medições Pendentes Atribuídas</h3>
+                      <p class="report-panel-sub" id="execMedSub">Boletins pendentes vinculados por cliente ou unidade</p>
+                    </div>
+                    <span class="report-panel-tag" id="execMedTag">0 itens</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Modalidade</th>
+                          <th>Cliente</th>
+                          <th>Situação</th>
+                          <th>Vínculo</th>
+                          <th class="num">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyExecMedicoes"></tbody>
+                    </table>
+                  </div>
+                </article>
+
+                <article class="report-panel">
+                  <div class="report-panel-header">
+                    <div>
+                      <h3>Faturamento por Cliente &amp; Contrato</h3>
+                      <p class="report-panel-sub">Top clientes e contratos faturados pelo executivo no ano (Protheus SD2)</p>
+                    </div>
+                    <span class="report-panel-tag" id="execFatCliTag">0 registros</span>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="contracts-table">
+                      <thead>
+                        <tr>
+                          <th>Cliente</th>
+                          <th>Contrato</th>
+                          <th>Unidade</th>
+                          <th class="num">NFs YTD</th>
+                          <th class="num">Faturado Mês</th>
+                          <th class="num">Faturado YTD</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbodyExecFatClientes"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <footer id="farolGlobalFooter" class="farol-sync-footer" aria-live="polite">
@@ -2582,6 +2805,7 @@
             <div class="perm-card-bottom">
               <label for="novoPerfilRelatorios">Nível de Permissão:</label>
               <select id="novoPerfilRelatorios" class="select-role-custom" disabled>
+                <option value="Executivo">Executivo (Painel Executivos)</option>
                 <option value="Visualizador">Visualizador</option>
                 <option value="Gestor">Gestor / Diretoria</option>
                 <option value="Admin">Administrador Master</option>
@@ -2735,6 +2959,7 @@
             <div class="perm-card-bottom">
               <label for="editPerfilRelatorios">Nível de Acesso:</label>
               <select id="editPerfilRelatorios" class="select-role-custom">
+                <option value="Executivo">Executivo (Painel Executivos)</option>
                 <option value="Visualizador">Visualizador</option>
                 <option value="Gestor">Gestor / Diretoria</option>
                 <option value="Admin">Administrador Master</option>
@@ -2784,8 +3009,9 @@
   <div id="toastContainer" class="toast-container"></div>
 
   <!-- Script Principal -->
-  <script src="/assets/js/portal.js?v=20261127h"></script>
-  <script src="/assets/js/reports-extra.js?v=20261127i"></script>
+  <script src="/assets/js/portal.js?v=20261127i"></script>
+  <script src="/assets/js/reports-extra.js?v=20261127j"></script>
+  <script src="/assets/js/executivos.js?v=20261127a"></script>
   <script src="/assets/js/ranking.js?v=20261127d"></script>
 </body>
 </html>
