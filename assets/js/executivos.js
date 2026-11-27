@@ -502,7 +502,7 @@
       renderIndividual(data);
     }
 
-    core().registrarAtualizacaoTela('relatorios:executivos', {
+    core().registrarAtualizacaoTela('executivos', {
       updatedAt: data.geradoEm || Date.now(),
       sourceInfo: data.fontes?.cobertura?.aoVivo ? 'Protheus SD2 + Bitrix SPA 1100' : 'Protheus SD2 + Snapshot Cobertura',
       autoRefresh: true

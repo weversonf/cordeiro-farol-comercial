@@ -3854,6 +3854,14 @@ tr.rmr-subrow-open > td {
 /* ================================================================
    PAINEL EXECUTIVOS (/relatorios/painel-executivos)
    ================================================================ */
+/* Card & Visão Painel Executivos (Raiz /painel-executivos) */
+.app-card.card-executivos::before {
+  background: linear-gradient(90deg, #0d9488, #0f766e);
+}
+.card-executivos .app-icon-box { background: #e6f4f1; color: #0f766e; border-color: #bfe3dc; }
+.card-executivos .btn-launch-app.btn-primary-launch { background: #0f766e; }
+.card-executivos .btn-launch-app.btn-primary-launch:hover { background: #0c5f58; }
+
 .report-option-icon.icon-executivos {
   background: #e6f4f1;
   color: #0f766e;

@@ -3,7 +3,9 @@
     { "source": "/relatorios", "destination": "/index.html" },
     { "source": "/relatorios/:path*", "destination": "/index.html" },
     { "source": "/gestao", "destination": "/index.html" },
-    { "source": "/ranking", "destination": "/index.html" }
+    { "source": "/ranking", "destination": "/index.html" },
+    { "source": "/painel-executivos", "destination": "/index.html" },
+    { "source": "/executivos", "destination": "/index.html" }
   ],
   "crons": [
     { "path": "/api/inadimplencia-fechamento?modo=cron", "schedule": "55 2 * * *" }
