@@ -2583,7 +2583,7 @@ body {
 
 .reports-kpis {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 14px;
   margin-bottom: 16px;
 }
@@ -2869,11 +2869,6 @@ tr.rmr-subrow-open > td {
     animation: none !important;
     transition: none !important;
   }
-}
-#rmrPanelFunil .reports-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-#rmrPanelExecutivos .reports-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-@media (max-width: 1100px) {
-  #rmrPanelFunil .reports-kpis { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 }
 .contracts-table tr.row-highlight td { background: #f3f9f6; }
 .contracts-table tr.row-muted td { color: #7b8c9d; }
