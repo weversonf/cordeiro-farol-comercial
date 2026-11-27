@@ -275,6 +275,96 @@
     }
   }
 
+  function initRmrCustomDd(selectEl, iconCls, escFn) {
+    if (!selectEl) return;
+    const esc = escFn || (v => String(v ?? ''));
+    const fieldWrap = selectEl.closest('.rmr-bl-field');
+    if (!fieldWrap) return;
+    let dd = fieldWrap.nextElementSibling;
+    if (!dd || !dd.classList.contains('rmr-dd')) {
+      fieldWrap.style.display = 'none';
+      dd = document.createElement('div');
+      dd.className = 'rmr-dd';
+      fieldWrap.insertAdjacentElement('afterend', dd);
+    }
+    if (!Array.isArray(selectEl._multiVals)) {
+      selectEl._multiVals = selectEl.value && selectEl.value !== 'ALL' ? [selectEl.value] : [];
+    }
+    const multi = selectEl._multiVals;
+    const isFiltered = multi.length > 0;
+    let triggerLabel = selectEl.options[0]?.textContent || '';
+    if (multi.length === 1) {
+      const optMatch = Array.from(selectEl.options).find(o => o.value === multi[0]);
+      triggerLabel = optMatch ? optMatch.textContent : multi[0];
+    } else if (multi.length > 1) {
+      const labels = multi.map(v => {
+        const optMatch = Array.from(selectEl.options).find(o => o.value === v);
+        return optMatch ? optMatch.textContent : v;
+      });
+      triggerLabel = `${multi.length} selecionados (${labels.join(', ')})`;
+    }
+
+    const wasOpenBefore = dd.classList.contains('is-open');
+    dd.innerHTML = `
+      <button type="button" class="rmr-dd-trigger ${isFiltered ? 'is-filtered' : ''}" title="${esc(triggerLabel)} · Segure Ctrl para selecionar mais de uma">
+        <i class="ph ${iconCls}"></i>
+        <span style="max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(triggerLabel)}</span>
+        <i class="ph ph-caret-down" style="font-size:12px;opacity:.7;"></i>
+      </button>
+      <div class="rmr-dd-menu">
+        ${Array.from(selectEl.options).map(opt => {
+          const selected = opt.value === 'ALL' ? multi.length === 0 : multi.includes(opt.value);
+          return `
+          <button type="button" class="rmr-dd-item ${selected ? 'is-selected' : ''}" data-val="${esc(opt.value)}">
+            <span>${esc(opt.textContent)}</span>
+            ${selected ? '<i class="ph ph-check" style="font-size:13px;"></i>' : ''}
+          </button>`;
+        }).join('')}
+        <div style="font-size:10px;color:#64748b;padding:5px 8px 2px;border-top:1px solid #f1f5f9;margin-top:4px;">
+          Dica: segure <strong>Ctrl</strong> para marcar vários
+        </div>
+      </div>`;
+    if (wasOpenBefore) dd.classList.add('is-open');
+
+    const trig = dd.querySelector('.rmr-dd-trigger');
+    trig.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const wasOpen = dd.classList.contains('is-open');
+      document.querySelectorAll('.rmr-dd.is-open').forEach(x => x.classList.remove('is-open'));
+      if (!wasOpen) dd.classList.add('is-open');
+    });
+    dd.querySelectorAll('.rmr-dd-item').forEach(item => {
+      item.addEventListener('click', ev => {
+        ev.stopPropagation();
+        const val = item.getAttribute('data-val');
+        const isCtrl = ev.ctrlKey || ev.metaKey;
+        if (val === 'ALL') {
+          selectEl._multiVals = [];
+          selectEl.value = 'ALL';
+          dd.classList.remove('is-open');
+        } else if (isCtrl) {
+          const cur = [...(selectEl._multiVals || [])];
+          const idx = cur.indexOf(val);
+          if (idx >= 0) cur.splice(idx, 1);
+          else cur.push(val);
+          selectEl._multiVals = cur;
+          selectEl.value = cur.length === 1 ? cur[0] : (cur.length === 0 ? 'ALL' : cur[0]);
+        } else {
+          selectEl._multiVals = [val];
+          selectEl.value = val;
+          dd.classList.remove('is-open');
+        }
+        selectEl.dispatchEvent(new Event('change'));
+      });
+    });
+    if (!document._rmrDdOutsideBound) {
+      document._rmrDdOutsideBound = true;
+      document.addEventListener('click', () => {
+        document.querySelectorAll('.rmr-dd.is-open').forEach(x => x.classList.remove('is-open'));
+      });
+    }
+  }
+
   function renderizarRmr(d) {
     const ex = d.executivo || {};
     const mesObj = ex.mes || {};
