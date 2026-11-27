@@ -158,6 +158,33 @@
     const btnAno = document.getElementById('rkBtnAno');
     const selMes = document.getElementById('rkSelectMes');
     const btnAtualizar = document.getElementById('rkBtnAtualizar');
+    const btnFsOuter = document.getElementById('rkBtnTelaCheia');
+    const btnFsInner = document.getElementById('rkBtnTelaCheiaInner');
+    const wrap = document.getElementById('rkCorridaWrap');
+
+    function toggleFullscreen() {
+      if (!wrap) return;
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.();
+      } else {
+        wrap.requestFullscreen?.();
+      }
+    }
+
+    function syncFsButtons() {
+      const isFs = Boolean(document.fullscreenElement);
+      [btnFsOuter, btnFsInner].forEach(btn => {
+        if (!btn) return;
+        const icon = btn.querySelector('i');
+        const span = btn.querySelector('span');
+        if (icon) icon.className = isFs ? 'ph ph-arrows-in' : 'ph ph-arrows-out';
+        if (span) span.textContent = isFs ? 'Sair Tela Cheia' : 'Tela Cheia';
+      });
+    }
+
+    btnFsOuter?.addEventListener('click', toggleFullscreen);
+    btnFsInner?.addEventListener('click', toggleFullscreen);
+    document.addEventListener('fullscreenchange', syncFsButtons);
 
     if (selMes) {
       selMes.value = `${state.year}-${String(state.month).padStart(2, '0')}`;

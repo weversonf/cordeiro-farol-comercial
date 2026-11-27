@@ -326,32 +326,46 @@
             <h2>Ranking dos Executivos</h2>
             <p class="section-subtitle">Acompanhamento exclusivo de metas e realização por executivo (Bitrix24 &amp; Protheus SD2).</p>
           </div>
-          <button type="button" id="rkBtnAtualizar" class="btn-novo-usuario">
-            <i class="ph ph-arrows-clockwise"></i>
-            <span>Atualizar</span>
-          </button>
-        </div>
-
-        <div class="rk-controls">
-          <div class="rk-controls-group">
-            <div class="rk-seg" role="group" aria-label="Fonte dos dados">
-              <button type="button" id="rkBtnVendido" class="rk-seg-btn active">
-                <i class="ph ph-handshake"></i> Vendido (Bitrix)
-              </button>
-              <button type="button" id="rkBtnFaturado" class="rk-seg-btn">
-                <i class="ph ph-receipt"></i> Faturado (Protheus)
-              </button>
-            </div>
-            <div class="rk-seg" role="group" aria-label="Período">
-              <button type="button" id="rkBtnMes" class="rk-seg-btn active">Mês Atual</button>
-              <button type="button" id="rkBtnAno" class="rk-seg-btn">Acumulado Ano</button>
-            </div>
-            <input type="month" id="rkSelectMes" class="rk-month-input" aria-label="Mês de referência">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button type="button" id="rkBtnTelaCheia" class="btn-novo-usuario" style="background:#1e3a5f;">
+              <i class="ph ph-arrows-out"></i>
+              <span>Tela Cheia</span>
+            </button>
+            <button type="button" id="rkBtnAtualizar" class="btn-novo-usuario">
+              <i class="ph ph-arrows-clockwise"></i>
+              <span>Atualizar</span>
+            </button>
           </div>
-          <span id="rkFonteInfo" class="rk-fonte-info">—</span>
         </div>
 
-        <div id="rkPista" class="rk-pista"></div>
+        <div id="rkCorridaWrap" class="rk-corrida-wrap">
+          <div class="rk-controls">
+            <div class="rk-controls-group">
+              <div class="rk-seg" role="group" aria-label="Fonte dos dados">
+                <button type="button" id="rkBtnVendido" class="rk-seg-btn active">
+                  <i class="ph ph-handshake"></i> Vendido (Bitrix)
+                </button>
+                <button type="button" id="rkBtnFaturado" class="rk-seg-btn">
+                  <i class="ph ph-receipt"></i> Faturado (Protheus)
+                </button>
+              </div>
+              <div class="rk-seg" role="group" aria-label="Período">
+                <button type="button" id="rkBtnMes" class="rk-seg-btn active">Mês Atual</button>
+                <button type="button" id="rkBtnAno" class="rk-seg-btn">Acumulado Ano</button>
+              </div>
+              <input type="month" id="rkSelectMes" class="rk-month-input" aria-label="Mês de referência">
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span id="rkFonteInfo" class="rk-fonte-info">—</span>
+              <button type="button" id="rkBtnTelaCheiaInner" class="rk-fs-btn" title="Alternar Tela Cheia">
+                <i class="ph ph-arrows-out"></i>
+                <span>Tela Cheia</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="rkPista" class="rk-pista"></div>
+        </div>
 
         <div class="tabela-card">
           <table class="tabela-perfis">
