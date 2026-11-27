@@ -1552,8 +1552,8 @@
       const elUnidTag = document.getElementById('rmrFunilUnidadeTag');
       if (elUnidTag) {
         elUnidTag.textContent = rmrFunilTempFiltro
-          ? `Pipeline Funil de Vendas (Bitrix C4) · ${TEMP_META[rmrFunilTempFiltro]?.label || rmrFunilTempFiltro}`
-          : 'Pipeline Funil de Vendas (Bitrix C4)';
+          ? `Pipeline Funil de Vendas (Bitrix C19) · ${TEMP_META[rmrFunilTempFiltro]?.label || rmrFunilTempFiltro}`
+          : 'Pipeline Funil de Vendas (Bitrix C19)';
       }
 
       if (elFunilUnids) {
@@ -1656,7 +1656,7 @@
           const meta = TEMP_META[rmrFunilTempFiltro] || { label: rmrFunilTempFiltro, plural: rmrFunilTempFiltro };
           const filtrados = (pipeAb.negociosAbertos || []).filter(n => n.temperatura === rmrFunilTempFiltro);
           if (elTabTitle) elTabTitle.textContent = `Negócios ${meta.plural} no Funil`;
-          if (elTabTag) elTabTag.textContent = `Bitrix Funil de Vendas (C4) · ${fmtInt(filtrados.length)} negócios`;
+          if (elTabTag) elTabTag.textContent = `Bitrix Funil de Vendas (C19) · ${fmtInt(filtrados.length)} negócios`;
           if (elThead) {
             elThead.innerHTML = '<tr><th>Negócio</th><th>Cliente</th><th>Unidade</th><th>Executivo</th><th>Etapa</th><th class="num">Valor</th></tr>';
           }
@@ -1673,7 +1673,7 @@
             : `<tr><td colspan="6" class="contracts-empty">Nenhum negócio ${esc(meta.label.toLowerCase())} aberto no Funil de Vendas.</td></tr>`;
         } else {
           if (elTabTitle) elTabTitle.textContent = 'Principais Negócios Ganhos no Período';
-          if (elTabTag) elTabTag.textContent = 'Bitrix Funil de Vendas (C4) · Top 15';
+          if (elTabTag) elTabTag.textContent = 'Bitrix Funil de Vendas (C19) · Top 15';
           if (elThead) {
             elThead.innerHTML = '<tr><th>Negócio</th><th>Cliente</th><th>Unidade</th><th>Executivo</th><th>Data</th><th class="num">Valor</th></tr>';
           }

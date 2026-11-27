@@ -38,7 +38,7 @@ async function getBitrixTemperaturasC4() {
   try {
     let start = 0;
     while (true) {
-      const url = `${webhook.replace(/\/$/, '')}/crm.deal.list.json?filter[CATEGORY_ID]=4&filter[STAGE_SEMANTIC_ID]=P&select[]=ID&select[]=UF_CRM_1793185794697&start=${start}`;
+      const url = `${webhook.replace(/\/$/, '')}/crm.deal.list.json?filter[CATEGORY_ID]=19&filter[STAGE_SEMANTIC_ID]=P&select[]=ID&select[]=UF_CRM_1793185794697&start=${start}`;
       const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) break;
       const data = await res.json();
@@ -980,8 +980,8 @@ export default async function handler(req, res) {
           LEFT JOIN stage_bitrix.b_crm_company c ON c."ID"::text = d."COMPANY_ID"::text
           LEFT JOIN stage_bitrix.b_crm_status st
             ON st."STATUS_ID"::text = d."STAGE_ID"::text
-           AND st."ENTITY_ID" = 'DEAL_STAGE_4'
-          WHERE d."CATEGORY_ID" = '4'
+           AND st."ENTITY_ID" = 'DEAL_STAGE_19'
+          WHERE d."CATEGORY_ID" = '19'
             AND d."STAGE_SEMANTIC_ID" = 'P'
             AND COALESCE(d."TITLE", '') NOT ILIKE '%ORÇAMENTO ORIENTATIVO%'
             AND COALESCE(d."TITLE", '') NOT ILIKE '%ORCAMENTO ORIENTATIVO%'
@@ -1035,7 +1035,7 @@ export default async function handler(req, res) {
           LEFT JOIN stage_bitrix.b_user u ON u."ID"::text = d."ASSIGNED_BY_ID"::text
           LEFT JOIN stage_bitrix.b_crm_company c ON c."ID"::text = d."COMPANY_ID"::text
           ${permNegocios.canSelect ? 'LEFT JOIN comercial.fato_negocios fn ON fn.id_negocio::text = d."ID"::text' : ''}
-          WHERE d."CATEGORY_ID" = '4'
+          WHERE d."CATEGORY_ID" = '19'
             AND d."STAGE_SEMANTIC_ID" IN ('S', 'F')
             AND LEFT(COALESCE(d."CLOSEDATE"::text, d."MOVED_TIME"::text, ''), 4) = $1
             AND LEFT(COALESCE(d."CLOSEDATE"::text, d."MOVED_TIME"::text, ''), 7) <= $2
@@ -1049,7 +1049,7 @@ export default async function handler(req, res) {
                 ROUND(AVG(COALESCE(dias_na_etapa, 0))::numeric, 1) AS media_dias
               FROM comercial.fato_tempo_etapa_negocio
               WHERE EXTRACT(YEAR FROM data_entrada)::int = $1
-                AND id_categoria_funil = 4
+                AND id_categoria_funil = 19
               GROUP BY 1, 2
               ORDER BY passagens DESC
               LIMIT 12
@@ -1066,7 +1066,7 @@ export default async function handler(req, res) {
           JOIN stage_bitrix.b_crm_deal d ON d."ID"::text = pr."OWNER_ID"::text
           LEFT JOIN stage_bitrix.b_user u ON u."ID"::text = d."ASSIGNED_BY_ID"::text
           WHERE pr."OWNER_TYPE" = 'D'
-            AND d."CATEGORY_ID" = '4'
+            AND d."CATEGORY_ID" = '19'
             AND d."STAGE_SEMANTIC_ID" = 'P'
             AND COALESCE(d."TITLE", '') NOT ILIKE '%ORÇAMENTO ORIENTATIVO%'
             AND COALESCE(d."TITLE", '') NOT ILIKE '%ORCAMENTO ORIENTATIVO%'
