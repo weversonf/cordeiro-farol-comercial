@@ -2311,8 +2311,13 @@ body {
   padding-right: 4px;
 }
 .rmr-bl-field select { cursor: pointer; }
-.rmr-bl-field input { min-width: 190px; font-weight: 500; }
+.rmr-bl-field input { width: 150px; min-width: 120px; font-weight: 500; }
 .rmr-bl-field input::placeholder { color: #94a3b8; font-weight: 500; }
+#rmrPanelMargem .report-panel-header { flex-wrap: nowrap; gap: 14px; }
+#rmrPanelMargem .rmr-bl-toolbar { flex-shrink: 0; gap: 8px; }
+@media (max-width: 1180px) {
+  #rmrPanelMargem .report-panel-header { flex-wrap: wrap; }
+}
 .rmr-dd {
   position: relative;
   display: inline-block;

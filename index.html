@@ -21,7 +21,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   
   <!-- Estilos Principais -->
-  <link rel="stylesheet" href="/assets/css/portal.css?v=20261127f">
+  <link rel="stylesheet" href="/assets/css/portal.css?v=20261127g">
 </head>
 <body>
 
@@ -1186,10 +1186,10 @@
               </div>
               <div class="reports-grid">
                 <article class="report-panel wide">
-                  <div class="report-panel-header" style="flex-wrap:wrap;gap:12px;">
-                    <div>
+                  <div class="report-panel-header">
+                    <div style="min-width:0;">
                       <h3>Contratos por Margem de Contribuição (Margens A e B)</h3>
-                      <span id="rmrMargemTag" class="report-panel-tag">Protheus SD2 (D2_YMARGCT) · Faturamento do Mês</span>
+                      <span id="rmrMargemTag" class="report-panel-tag" style="display:inline-block;margin-top:4px;">Protheus SD2 (D2_YMARGCT) · Faturamento do Mês</span>
                     </div>
                     <div class="rmr-bl-toolbar">
                       <div class="rmr-bl-filters">
@@ -1207,7 +1207,7 @@
                         </label>
                         <label class="rmr-bl-field" title="Buscar contrato ou cliente">
                           <i class="ph ph-magnifying-glass"></i>
-                          <input type="search" id="rmrMargemBusca" placeholder="Buscar contrato ou cliente..." />
+                          <input type="search" id="rmrMargemBusca" placeholder="Buscar..." />
                         </label>
                         <button type="button" id="rmrMargemClearBtn" class="rmr-bl-clear-btn" style="display:none;"><i class="ph ph-x"></i> Limpar</button>
                       </div>
