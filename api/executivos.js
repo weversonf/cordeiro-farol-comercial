@@ -115,16 +115,39 @@ function findExecByName(name) {
   return EXECUTIVOS_CATALOGO.find(e => e.match.some(m => n.includes(normText(m)))) || null;
 }
 
-function readJsonSafe(relPath, fallback) {
+function readJsonFile(relPathStr, fileUrl, fallback) {
   try {
-    const pCwd = path.join(process.cwd(), ...relPath);
+    const pCwd = path.join(process.cwd(), ...relPathStr.split('/'));
     if (fs.existsSync(pCwd)) return JSON.parse(fs.readFileSync(pCwd, 'utf8'));
-    const fileUrl = new URL(`../${relPath.join('/')}`, import.meta.url);
     if (fs.existsSync(fileUrl)) return JSON.parse(fs.readFileSync(fileUrl, 'utf8'));
   } catch {
     // Fallback abaixo
   }
   return fallback;
+}
+
+function loadRmrBaseOficial() {
+  return readJsonFile(
+    'data/rmr-base-oficial.json',
+    new URL('../data/rmr-base-oficial.json', import.meta.url),
+    { metasExecutivos: [], unidadesRmr: [], medicoesPendentes: [] }
+  );
+}
+
+function loadContratosPlanilha() {
+  return readJsonFile(
+    'data/contratos-planilha.json',
+    new URL('../data/contratos-planilha.json', import.meta.url),
+    { contratos: [] }
+  );
+}
+
+function loadCoberturaSnapshot() {
+  return readJsonFile(
+    'data/cobertura-carteira-snapshot.json',
+    new URL('../data/cobertura-carteira-snapshot.json', import.meta.url),
+    { competencias: {} }
+  );
 }
 
 async function bitrixCall(hook, metodo, parametros = {}) {
@@ -322,7 +345,7 @@ async function obterCoberturaCarteira(year, month, mesRefIso, targetExecs) {
     }
   }
 
-  const snapshot = readJsonSafe(['data', 'cobertura-carteira-snapshot.json'], { competencias: {} });
+  const snapshot = loadCoberturaSnapshot();
   const compData = snapshot.competencias?.[mesRefIso];
   if (compData && compData.executivos) {
     return {
@@ -546,12 +569,8 @@ export default async function handler(req, res) {
 
   try {
     const pool = getPool();
-    const baseOficial = readJsonSafe(['data', 'rmr-base-oficial.json'], {
-      metasExecutivos: [],
-      unidadesRmr: [],
-      medicoesPendentes: []
-    });
-    const contratosPlanilha = readJsonSafe(['data', 'contratos-planilha.json'], { contratos: [] });
+    const baseOficial = loadRmrBaseOficial();
+    const contratosPlanilha = loadContratosPlanilha();
 
     const [
       metasDwRes,
