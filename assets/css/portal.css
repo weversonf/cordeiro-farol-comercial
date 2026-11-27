@@ -2473,11 +2473,11 @@ body {
 @keyframes rmrDonutPop {
   0% {
     opacity: 0.35;
-    transform: translate(-50%, -50%) scale(0.92);
+    transform: scale(0.92);
   }
   100% {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: scale(1);
   }
 }
 .rmr-anim-filter-in {
