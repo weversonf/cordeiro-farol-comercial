@@ -1037,9 +1037,8 @@ export default async function handler(req, res) {
           ${permNegocios.canSelect ? 'LEFT JOIN comercial.fato_negocios fn ON fn.id_negocio::text = d."ID"::text' : ''}
           WHERE d."CATEGORY_ID" = '19'
             AND d."STAGE_SEMANTIC_ID" IN ('S', 'F')
-            AND LEFT(COALESCE(d."CLOSEDATE"::text, d."MOVED_TIME"::text, ''), 4) = $1
-            AND LEFT(COALESCE(d."CLOSEDATE"::text, d."MOVED_TIME"::text, ''), 7) <= $2
-        `, [String(year), mesRefIso]),
+            AND LEFT(COALESCE(d."CLOSEDATE"::text, d."MOVED_TIME"::text, ''), 7) = $1
+        `, [mesRefIso]),
         permTempoEtapa.canSelect
           ? pool.query(`
               SELECT
