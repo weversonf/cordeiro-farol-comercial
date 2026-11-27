@@ -825,7 +825,7 @@ function abrirRelatorio(tipo = 'catalogo', options = {}) {
   if (inadimplencia) inadimplencia.style.display = tipo === 'inadimplencia' ? 'block' : 'none';
 
   if (topBar) topBar.style.display = tipo === 'catalogo' ? 'none' : 'flex';
-  btnVoltar.style.display = tipo === 'catalogo' ? 'none' : 'inline-flex';
+  if (btnVoltar) btnVoltar.style.display = 'none';
   acoesVisaoGeral.style.display = tipo === 'visao-geral' ? 'flex' : 'none';
   acoesContratos.style.display = tipo === 'contratos' ? 'flex' : 'none';
   if (acoesRmr) acoesRmr.style.display = tipo === 'rmr' ? 'flex' : 'none';

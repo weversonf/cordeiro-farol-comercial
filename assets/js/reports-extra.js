@@ -175,28 +175,19 @@
     const defMonth = curMonth;
     const defYear = curYear;
 
-    const selAno = document.getElementById('rmrAnoSelect');
-    const selMes = document.getElementById('rmrMesSelect');
+    const selPeriodo = document.getElementById('rmrPeriodoSelect');
 
-    if (selAno && !selAno.options.length) {
+    if (selPeriodo && !selPeriodo.options.length) {
       for (let y = curYear; y >= 2023; y -= 1) {
-        const opt = document.createElement('option');
-        opt.value = String(y);
-        opt.textContent = String(y);
-        if (y === defYear) opt.selected = true;
-        selAno.appendChild(opt);
+        const maxM = y === curYear ? curMonth : 12;
+        for (let m = maxM; m >= 1; m -= 1) {
+          const opt = document.createElement('option');
+          opt.value = `${y}-${m}`;
+          opt.textContent = `${MESES_PT[m - 1]} / ${y}`;
+          if (y === defYear && m === defMonth) opt.selected = true;
+          selPeriodo.appendChild(opt);
+        }
       }
-    }
-
-    if (selMes && !selMes.options.length) {
-      MESES_PT.forEach((nome, idx) => {
-        const m = idx + 1;
-        const opt = document.createElement('option');
-        opt.value = String(m);
-        opt.textContent = `Ref: ${nome}`;
-        if (m === defMonth) opt.selected = true;
-        selMes.appendChild(opt);
-      });
     }
 
     document.querySelectorAll('[data-rmr-tab]').forEach(btn => {
@@ -222,8 +213,7 @@
     });
 
     const reload = () => carregarRmr(true);
-    selAno?.addEventListener('change', reload);
-    selMes?.addEventListener('change', reload);
+    selPeriodo?.addEventListener('change', reload);
     document.getElementById('rmrIncluirExpurgos')?.addEventListener('change', reload);
     document.getElementById('btnAtualizarRmr')?.addEventListener('click', reload);
     document.getElementById('btnExportarRmrCsv')?.addEventListener('click', exportarRmrCsv);
@@ -234,8 +224,8 @@
     if (!core().podeAcessarRelatorios()) return;
 
     const nowD = new Date();
-    const year = document.getElementById('rmrAnoSelect')?.value || String(nowD.getFullYear());
-    const month = document.getElementById('rmrMesSelect')?.value || String(nowD.getMonth() + 1);
+    const periodoVal = document.getElementById('rmrPeriodoSelect')?.value || `${nowD.getFullYear()}-${nowD.getMonth() + 1}`;
+    const [year, month] = periodoVal.split('-');
     const escopo = 'pbix';
     const incluirExpurgos = document.getElementById('rmrIncluirExpurgos')?.checked ? '1' : '0';
     const reqKey = `${year}-${month}-${escopo}-${incluirExpurgos}`;
@@ -465,10 +455,10 @@
     renderMonthlyComparisonBars('rmrGraficoMensal', d.serieMensal || [], {
       activeMes: ex.mesReferencia,
       onClick: mesIso => {
-        const mNum = String(Number(mesIso.slice(-2)));
-        const selMes = document.getElementById('rmrMesSelect');
-        if (selMes && selMes.value !== mNum) {
-          selMes.value = mNum;
+        const pVal = `${Number(mesIso.slice(0, 4))}-${Number(mesIso.slice(-2))}`;
+        const selPeriodo = document.getElementById('rmrPeriodoSelect');
+        if (selPeriodo && selPeriodo.value !== pVal) {
+          selPeriodo.value = pVal;
           carregarRmr(true);
         }
       }

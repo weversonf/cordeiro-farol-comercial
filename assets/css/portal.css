@@ -1558,8 +1558,9 @@ body {
 .reports-empty-state p { color: var(--ink-soft); font-size: 13px; max-width: 440px; margin: 0 auto; }
 
 /* Painéis conectados aos dados corporativos */
-.reports-header { flex-wrap: wrap; gap: 14px; }
-.reports-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: flex-end; }
+.reports-header { flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 20px; }
+.reports-header > div:first-child { flex: 1; min-width: 0; }
+.reports-actions { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; justify-content: flex-end; flex-shrink: 0; }
 #rmrConteudo, #fatConteudo { transition: opacity .15s ease; }
 #rmrConteudo.is-reloading, #fatConteudo.is-reloading { opacity: .62; pointer-events: none; }
 .reports-year-select, .btn-refresh-reports {

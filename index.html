@@ -21,7 +21,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   
   <!-- Estilos Principais -->
-  <link rel="stylesheet" href="/assets/css/portal.css?v=20261127e">
+  <link rel="stylesheet" href="/assets/css/portal.css?v=20261127f">
 </head>
 <body>
 
@@ -464,8 +464,10 @@
             </div>
 
             <div id="acoesRmr" class="reports-actions" style="display: none;">
-              <select id="rmrAnoSelect" class="reports-year-select" aria-label="Ano RMR"></select>
-              <select id="rmrMesSelect" class="reports-year-select" aria-label="Mês de referência RMR"></select>
+              <label class="rmr-bl-field" style="height:38px;border-radius:6px;" title="Selecionar competência (Mês / Ano)">
+                <i class="ph ph-calendar-blank"></i>
+                <select id="rmrPeriodoSelect" aria-label="Competência RMR (Mês/Ano)"></select>
+              </label>
               <label class="report-inline-toggle" style="display: none;">
                 <input type="checkbox" id="rmrIncluirExpurgos" />
                 <span>Incluir expurgos (Bruto)</span>
@@ -2756,8 +2758,8 @@
   <div id="toastContainer" class="toast-container"></div>
 
   <!-- Script Principal -->
-  <script src="/assets/js/portal.js"></script>
-  <script src="/assets/js/reports-extra.js?v=20261127e"></script>
+  <script src="/assets/js/portal.js?v=20261127f"></script>
+  <script src="/assets/js/reports-extra.js?v=20261127f"></script>
   <script src="/assets/js/ranking.js?v=20261127d"></script>
 </body>
 </html>
