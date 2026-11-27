@@ -21,7 +21,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   
   <!-- Estilos Principais -->
-  <link rel="stylesheet" href="/assets/css/portal.css">
+  <link rel="stylesheet" href="/assets/css/portal.css?v=20261127c">
 </head>
 <body>
 
@@ -1453,65 +1453,6 @@
                 </article>
               </div>
             </div>
-            <!-- Aba Margem de Contribuição (Protheus · Margens A e B) -->
-            <div id="rmrPanelMargem" class="rmr-panel-section">
-              <div class="reports-kpis">
-                <article class="kpi-card highlight">
-                  <span class="kpi-label">Contratos Margem A + B</span>
-                  <strong id="rmrMargemTotalVal" class="kpi-value">—</strong>
-                  <span id="rmrMargemTotalQtd" class="kpi-note">—</span>
-                </article>
-                <article class="kpi-card" id="rmrCardMargemA" style="cursor:pointer;" title="Clique para filtrar Margem A">
-                  <span class="kpi-label">Margem A</span>
-                  <strong id="rmrMargemAVal" class="kpi-value">—</strong>
-                  <span id="rmrMargemAQtd" class="kpi-note">—</span>
-                </article>
-                <article class="kpi-card" id="rmrCardMargemB" style="cursor:pointer;" title="Clique para filtrar Margem B">
-                  <span class="kpi-label">Margem B</span>
-                  <strong id="rmrMargemBVal" class="kpi-value">—</strong>
-                  <span id="rmrMargemBQtd" class="kpi-note">—</span>
-                </article>
-              </div>
-              <div class="reports-grid">
-                <article class="report-panel wide">
-                  <div class="report-panel-header" style="flex-wrap:wrap;gap:10px;">
-                    <div>
-                      <h3>Contratos por Margem de Contribuição (Margens A e B)</h3>
-                      <span id="rmrMargemTag" class="report-panel-tag">Protheus · YTD até competência</span>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                      <select id="rmrMargemFiltroTipo" class="filter-select" aria-label="Filtrar Margem">
-                        <option value="todas">Margens A e B</option>
-                        <option value="A">Somente Margem A</option>
-                        <option value="B">Somente Margem B</option>
-                      </select>
-                      <select id="rmrMargemFiltroUnidade" class="filter-select" aria-label="Filtrar Unidade">
-                        <option value="todas">Todas as unidades</option>
-                      </select>
-                      <select id="rmrMargemFiltroExec" class="filter-select" aria-label="Filtrar Executivo">
-                        <option value="todos">Todos os executivos</option>
-                      </select>
-                      <input type="search" id="rmrMargemBusca" class="filter-input" placeholder="Buscar contrato ou cliente..." style="min-width:200px;" />
-                    </div>
-                  </div>
-                  <div class="table-responsive">
-                    <table class="contracts-table">
-                      <thead>
-                        <tr>
-                          <th>Nº Contrato</th>
-                          <th>Nome do Cliente</th>
-                          <th>Unidade</th>
-                          <th>Nome do Executivo</th>
-                          <th style="text-align:center;">Margem</th>
-                          <th class="num">Valor do Contrato</th>
-                        </tr>
-                      </thead>
-                      <tbody id="tbodyRmrMargem"></tbody>
-                    </table>
-                  </div>
-                </article>
-              </div>
-            </div>
             <!-- Aba 4: Contratos & Resultados por Cliente -->
             <div id="rmrPanelClientes" class="rmr-panel-section">
               <div class="reports-grid">
@@ -2707,6 +2648,6 @@
 
   <!-- Script Principal -->
   <script src="/assets/js/portal.js"></script>
-  <script src="/assets/js/reports-extra.js"></script>
+  <script src="/assets/js/reports-extra.js?v=20261127c"></script>
 </body>
 </html>

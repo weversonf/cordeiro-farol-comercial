@@ -2139,14 +2139,6 @@ function isExecutivoComercialOficial(nome) {
       contratos: []
     };
     try {
-      const margemFilialFilter = escopo === 'all' ? '' : 'AND TRIM(COALESCE(f.cod_filial::text, \'\')) = ANY($3)';
-      const margemExpurgoFilter = incluirExpurgos
-        ? ''
-        : `AND NOT (
-            TRIM(COALESCE(f.cod_filial::text, '')) = ANY($4)
-            OR TRIM(COALESCE(f.cod_vendedor::text, '')) = ANY($5)
-            OR LEFT(TRIM(COALESCE(f.cod_centro_custo::text, '')), 3) IN ('321', '330', '421')
-          )`;
       const margemRes = await pool.query(`
         WITH dim_cli AS (
           SELECT DISTINCT ON (TRIM(cod_cliente))
@@ -2186,12 +2178,19 @@ function isExecutivoComercialOficial(nome) {
           AND f.emissao < $2::date
           AND TRIM(COALESCE(f.margem::text, '')) IN ('A', 'B')
           AND NULLIF(TRIM(COALESCE(f.numero_contrato::text, '')), '') IS NOT NULL
-          ${margemFilialFilter}
-          ${margemExpurgoFilter}
+          AND ($3::boolean OR TRIM(COALESCE(f.cod_filial::text, '')) = ANY($4))
+          AND (
+            $5::boolean
+            OR NOT (
+              TRIM(COALESCE(f.cod_filial::text, '')) = ANY($6)
+              OR TRIM(COALESCE(f.cod_vendedor::text, '')) = ANY($7)
+              OR LEFT(TRIM(COALESCE(f.cod_centro_custo::text, '')), 3) IN ('321', '330', '421')
+            )
+          )
         GROUP BY TRIM(f.numero_contrato::text), TRIM(f.margem::text)
         HAVING COALESCE(SUM(f.valor_total), 0) > 0
         ORDER BY valor_contrato DESC
-      `, [ytdRange.start, ytdRange.endExclusive, PBIX_FILIAIS, EXPURGO_FILIAIS, EXPURGO_VENDEDORES]);
+      `, [ytdRange.start, ytdRange.endExclusive, escopo === 'all', PBIX_FILIAIS, incluirExpurgos, EXPURGO_FILIAIS, EXPURGO_VENDEDORES]);
 
       const contratosMargem = (margemRes.rows || []).map(r => ({
         numeroContrato: r.numero_contrato,
