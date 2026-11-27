@@ -1038,6 +1038,7 @@ export default async function handler(req, res) {
           WHERE d."CATEGORY_ID" IN ('4', '19')
             AND d."STAGE_SEMANTIC_ID" IN ('S', 'F')
             AND LEFT(COALESCE(d."CLOSEDATE"::text, d."MOVED_TIME"::text, ''), 7) = $1
+            AND TRIM(CONCAT(COALESCE(u."NAME", ''), ' ', COALESCE(u."LAST_NAME", ''))) NOT ILIKE '%Weverson%'
         `, [mesRefIso]),
         permTempoEtapa.canSelect
           ? pool.query(`
@@ -1905,7 +1906,7 @@ function isExecutivoComercialOficial(nome) {
         wonDeals.push(d);
       } else {
         const motivo = String(d.motivo_perda || 'Não informado').trim();
-        const isClientCancel = isCanceladoOuDeclinado(motivo);
+        const isClientCancel = isCanceladoOuDeclinado(`${motivo} ${d.negocio || ''}`);
         if (isClientCancel) {
           lostClientQtd += 1;
           lostClientVal += val;
