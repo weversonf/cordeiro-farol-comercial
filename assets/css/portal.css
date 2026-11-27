@@ -2228,18 +2228,26 @@ body {
 
 .rmr-subtabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
   margin-bottom: 16px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.rmr-subtabs::-webkit-scrollbar { display: none; }
 .rmr-subtab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  flex: 1 1 auto;
+  white-space: nowrap;
+  gap: 5px;
   height: 36px;
-  padding: 0 14px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid #d5dfe7;
   background: #fff;
